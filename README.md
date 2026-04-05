@@ -7,9 +7,9 @@ Based on [aerokube/selenoid](https://github.com/aerokube/selenoid) — Apache 2.
 ### One-command Installation
 Start browser automation in minutes by downloading [Configuration Manager](TBA) binary and running just **one command**:
 ```
-$ ./cm selenoid start --vnc --tmpfs 128
+$ ./cm selenwright start --vnc --tmpfs 128
 ```
-**That's it!** You can now use Selenoid instead of Selenium server. Specify the following Selenium URL in tests:
+**That's it!** You can now use Selenwright instead of Selenium server. Specify the following Selenium URL in tests:
 ```
 http://localhost:4444/wd/hub
 ```
@@ -33,16 +33,16 @@ This is native Playwright support, not Selenium Grid compatibility mode. Configu
 
 ### Video Recording
 * Any browser session can be saved to [H.264](https://en.wikipedia.org/wiki/H.264/MPEG-4_AVC) video ([example](https://www.youtube.com/watch?v=maB298oO5cI))
-* An API to list, download and delete recorded video files
+* An API to list, download, and delete recorded video files
 
 ### Convenient Logging
 
 * Any browser session logs are automatically saved to files - one per session
-* An API to list, download and delete saved log files
+* An API to list, download, and delete saved log files
 
 ### Lightweight and Lightning Fast
 Suitable for personal usage and in big clusters:
-* Consumes **10 times** less memory than Java-based Selenium server under the same load
+* Consumes **10 times** less memory than the Java-based Selenium server under the same load
 * **Small 6 Mb binary** with no external dependencies (no need to install Java)
 * **Browser consumption API** working out of the box
 * Ability to send browser logs to **centralized log storage** (e.g. to the [ELK-stack](https://logz.io/learn/complete-guide-elk-stack/))
