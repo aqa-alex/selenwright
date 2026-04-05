@@ -21,8 +21,7 @@ No need to manually install browsers or dive into WebDriver documentation. Avail
 New images are added right after official releases. You can create your custom images with browsers. 
 
 ### Live Browser Screen and Logs
-New **[rich user interface]((https://github.com/aerokube/selenoid-ui))** showing browser screen and Selenium session logs:
-![Selenoid UI](docs/img/selenoid-ui.png)
+New showing browser screen and Selenium session logs
 
 ### Native Playwright WebSocket Support
 Selenoid can proxy native Playwright connections through a dedicated WebSocket endpoint:
