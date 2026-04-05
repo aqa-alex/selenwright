@@ -1,3 +1,5 @@
+// Modified by [Aleksander R], 2026: added Playwright protocol support
+
 package main
 
 import (
@@ -15,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aerokube/selenoid/protect"
-	"github.com/aerokube/selenoid/service"
-	"github.com/aerokube/selenoid/session"
+	"github.com/aqa-alex/selenwright/protect"
+	"github.com/aqa-alex/selenwright/service"
+	"github.com/aqa-alex/selenwright/session"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	assert "github.com/stretchr/testify/require"

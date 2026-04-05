@@ -1,4 +1,4 @@
-module github.com/aerokube/selenoid
+module github.com/aqa-alex/selenwright
 
 go 1.22
 

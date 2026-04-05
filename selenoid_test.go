@@ -1,3 +1,5 @@
+// Modified by [Aleksander R], 2026: added Playwright protocol support
+
 package main
 
 import (
@@ -15,8 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aqa-alex/selenwright/config"
 	ggr "github.com/aerokube/ggr/config"
-	"github.com/aerokube/selenoid/config"
 	"github.com/gorilla/websocket"
 	"github.com/mafredri/cdp"
 	"github.com/mafredri/cdp/rpcc"

@@ -1,3 +1,5 @@
+// Modified by [Aleksander R], 2026: added Playwright protocol support
+
 package main
 
 import (
@@ -8,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aerokube/selenoid/info"
+	"github.com/aqa-alex/selenwright/info"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/pkg/stdcopy"
 	"golang.org/x/net/websocket"

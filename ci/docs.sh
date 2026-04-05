@@ -2,9 +2,9 @@
 
 set -e
 TAGNAME=$1
-GH_REF=github.com/aerokube/selenoid.git
+GH_REF=github.com/aqa-alex/selenwright.git
 git config user.name "${GITHUB_REPOSITORY}"
-git config user.email "aerokube@aerokube.github.com"
+git config user.email "github-actions[bot]@users.noreply.github.com"
 git remote add upstream "https://${GITHUB_TOKEN}@${GH_REF}"
 git fetch upstream
 

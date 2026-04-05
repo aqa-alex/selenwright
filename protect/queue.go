@@ -2,13 +2,13 @@ package protect
 
 import (
 	"errors"
-	"github.com/aerokube/selenoid/info"
+	"github.com/aqa-alex/selenwright/info"
 	"log"
 	"math"
 	"net/http"
 	"time"
 
-	"github.com/aerokube/selenoid/jsonerror"
+	"github.com/aqa-alex/selenwright/jsonerror"
 )
 
 // Queue - struct to hold a number of sessions

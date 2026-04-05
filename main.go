@@ -1,3 +1,5 @@
+// Modified by [Aleksander R], 2026: added Playwright protocol support
+
 package main
 
 import (
@@ -5,8 +7,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/aerokube/selenoid/info"
-	"github.com/docker/docker/api"
 	"log"
 	"net"
 	"net/http"
@@ -19,13 +19,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aqa-alex/selenwright/info"
+	"github.com/docker/docker/api"
+
 	ggr "github.com/aerokube/ggr/config"
-	"github.com/aerokube/selenoid/config"
-	"github.com/aerokube/selenoid/jsonerror"
-	"github.com/aerokube/selenoid/protect"
-	"github.com/aerokube/selenoid/service"
-	"github.com/aerokube/selenoid/session"
-	"github.com/aerokube/selenoid/upload"
+	"github.com/aqa-alex/selenwright/config"
+	"github.com/aqa-alex/selenwright/jsonerror"
+	"github.com/aqa-alex/selenwright/protect"
+	"github.com/aqa-alex/selenwright/service"
+	"github.com/aqa-alex/selenwright/session"
+	"github.com/aqa-alex/selenwright/upload"
 	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"golang.org/x/net/websocket"

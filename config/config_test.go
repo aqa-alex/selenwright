@@ -1,3 +1,5 @@
+// Modified by [Aleksander R], 2026: added Playwright protocol support
+
 package config
 
 import (

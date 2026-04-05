@@ -1,3 +1,5 @@
+// Modified by [Aleksander R], 2026: added Playwright protocol support
+
 package service
 
 import (
@@ -12,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aerokube/selenoid/config"
-	"github.com/aerokube/selenoid/info"
-	"github.com/aerokube/selenoid/session"
+	"github.com/aqa-alex/selenwright/config"
+	"github.com/aqa-alex/selenwright/info"
+	"github.com/aqa-alex/selenwright/session"
 	"github.com/docker/docker/api/types"
 	ctr "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"

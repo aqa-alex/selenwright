@@ -1,3 +1,5 @@
+// Modified by [Aleksander R], 2026: added Playwright protocol support
+
 package main
 
 import (
@@ -14,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aerokube/selenoid/event"
-	"github.com/aerokube/selenoid/info"
-	"github.com/aerokube/selenoid/jsonerror"
-	"github.com/aerokube/selenoid/session"
+	"github.com/aqa-alex/selenwright/event"
+	"github.com/aqa-alex/selenwright/info"
+	"github.com/aqa-alex/selenwright/jsonerror"
+	"github.com/aqa-alex/selenwright/session"
 	gwebsocket "github.com/gorilla/websocket"
 )
 

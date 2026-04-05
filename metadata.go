@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/aerokube/selenoid/event"
-	"github.com/aerokube/selenoid/session"
+	"github.com/aqa-alex/selenwright/event"
+	"github.com/aqa-alex/selenwright/session"
 )
 
 const metadataFileExtension = ".json"

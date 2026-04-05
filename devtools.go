@@ -1,3 +1,5 @@
+// Modified by [Aleksander R], 2026: added Playwright protocol support
+
 package main
 
 import (
@@ -5,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/aerokube/selenoid/session"
+	"github.com/aqa-alex/selenwright/session"
 )
 
 func handleDevtoolsWebSocket(w http.ResponseWriter, r *http.Request, requestId uint64, sid string, remainingPath string, sess *session.Session) {
