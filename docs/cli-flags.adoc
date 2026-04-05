@@ -1,10 +1,10 @@
-== Selenoid CLI Flags
+== Selenwright CLI Flags
 
-The following flags are supported by `selenoid` command:
+The following flags are supported by `selenwright` command:
 
 ----
 -capture-driver-logs
-    Whether to add driver process logs to Selenoid output
+    Whether to add driver process logs to Selenwright output
 -conf string
     Browsers configuration file (default "config/browsers.json")
 -container-network string
@@ -50,27 +50,27 @@ The following flags are supported by `selenoid` command:
 -video-output-dir string
     Directory to save recorded video to (default "video")
 -video-recorder-image string
-    Image to use as video recorder (default "selenoid/video-recorder:latest-release")
+    Image to use as video recorder (default "selenwright/video-recorder:latest-release")
 ----
 
 For example:
 ```
-$ ./selenoid -conf ~/.aerokube/selenoid/browsers.json -limit 10
+$ ./selenwright -conf ~/.aqa-alex/selenwright/browsers.json -limit 10
 ```
-When using Selenoid inside Docker container these flags are passed like the following:
+When using Selenwright inside Docker container these flags are passed like the following:
 
 [source,bash,subs="attributes+"]
 ----
-# docker run -d --name selenoid                     \
+# docker run -d --name selenwright                     \
     -p 4444:4444                                    \
-    -v ~/.aerokube/selenoid/:/etc/selenoid/:ro      \
+    -v ~/.aqa-alex/selenwright/:/etc/selenwright/:ro      \
     -v /var/run/docker.sock:/var/run/docker.sock    \
-    aerokube/selenoid:latest-release                \
-    -conf /etc/selenoid/browsers.json -limit 10 -video-output-dir /opt/selenoid/video/
+    aqa-alex/selenwright:latest-release                \
+    -conf /etc/selenwright/browsers.json -limit 10 -video-output-dir /opt/selenwright/video/
 ----
 
 === S3 CLI Flags
-The following flags are supported by `selenoid` command when compiled with S3 support:
+The following flags are supported by `selenwright` command when compiled with S3 support:
 
 ```
 -s3-access-key string

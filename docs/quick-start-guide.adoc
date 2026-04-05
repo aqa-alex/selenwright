@@ -1,20 +1,20 @@
 == Quick Start Guide
 
-=== Start Selenoid
+=== Start Selenwright
 
 . Make sure you have recent https://www.docker.com/[Docker] version installed.
-. Download http://aerokube.com/cm/latest/[Configuration Manager] (Selenoid quick installation binary) for your platform from https://github.com/aerokube/cm/releases/latest[releases] page.
+. Download https://github.com/aerokube/cm/releases/latest[Configuration Manager] (Selenwright quick installation binary) for your platform from https://github.com/aerokube/cm/releases/latest[releases] page.
 . On Linux or Mac give execution permissions to binary:
 
     $ chmod +x cm
 
-. Run one command to start Selenoid:
+. Run one command to start Selenwright:
 
-    $ ./cm selenoid start --vnc
+    $ ./cm selenwright start --vnc
 +
 [WARNING]
 ====
-Running this command with `sudo` can lead to broken installation. Recommended way is running Selenoid as regular user. On Linux to have permissions to access Docker you may need to add your user to `docker` group:
+Running this command with `sudo` can lead to broken installation. Recommended way is running Selenwright as regular user. On Linux to have permissions to access Docker you may need to add your user to `docker` group:
 [source,bash]
 ----
 $ sudo usermod -aG docker $USER
@@ -22,29 +22,29 @@ $ sudo usermod -aG docker $USER
 ====
 +
 
-. Optionally run one more command to start Selenoid UI:
+. Optionally run one more command to start Selenwright UI:
 
-    $ ./cm selenoid-ui start
+    $ ./cm selenwright-ui start
 
 === Run Your Tests
 
-. Run your tests against Selenoid like you do with regular Selenium hub:
+. Run your tests against Selenwright like you do with regular Selenium hub:
 +
 .Tests Endpoint
 ----
 http://localhost:4444/wd/hub
 ----
 +
-If something does not work, you can easily check that Selenoid is running with opening *status* url:
+If something does not work, you can easily check that Selenwright is running with opening *status* url:
 +
-.Current Selenoid Status
+.Current Selenwright Status
 ----
 http://localhost:4444/status
 ----
 +
 A successful request should return a JSON with browser usage statistics.
 
-. To open Selenoid UI navigate to the following page in your browser:
+. To open Selenwright UI navigate to the following page in your browser:
 +
 .UI Default URL
 ----

@@ -1,6 +1,6 @@
 == Browsers Configuration File
 
-Selenoid requires a simple JSON configuration file of the following format:
+Selenwright requires a simple JSON configuration file of the following format:
 
 .browsers.json
 [source,javascript]
@@ -10,7 +10,7 @@ Selenoid requires a simple JSON configuration file of the following format:
       "default": "46.0",                             <2>
       "versions": {                                  <3>
         "46.0": {                                    <4>
-          "image": "selenoid/firefox:46.0",          <5>
+          "image": "selenwright/firefox:46.0",          <5>
           "port": "4444",                            <6>
           "tmpfs": {"/tmp": "size=512m"},            <7>
           "path" : "/wd/hub",                        <8>
@@ -54,7 +54,7 @@ This file represents a mapping between a list of supported browser versions and 
 ====
 To use custom browsers configuration file - use `-conf` flag:
 
-    $ ./selenoid -conf /path/to/browsers.json
+    $ ./selenwright -conf /path/to/browsers.json
 ====
 
 === Browser Name and Version
@@ -100,11 +100,11 @@ Image must be already pulled. https://github.com/aerokube/cm[Configuration Manag
 ====
 Pulled from internal docker registry:
 
-`my-internal-docker-hub.example.com/selenoid/firefox:46.0`
+`my-internal-docker-hub.example.com/selenwright/firefox:46.0`
 
 Pulled from hub.docker.com
 
-`selenoid/firefox:46.0`
+`selenwright/firefox:46.0`
 ====
 
 ==== Standalone Binary
@@ -116,7 +116,7 @@ If you wish to use a standalone binary instead of Docker container, then image f
     "port": "4444"
 },
 ----
-Selenoid proxies connections to either Selenium server or standalone driver binary. Depending on operating system both can be packaged inside Docker container.
+Selenwright proxies connections to either Selenium server or standalone driver binary. Depending on operating system both can be packaged inside Docker container.
 
 === Other Optional Fields
 
@@ -137,12 +137,12 @@ Selenoid proxies connections to either Selenium server or standalone driver bina
 },
 ----
 
-* *port* (_only for containers_) - You should use `port` field to specify the real port inside container that container process (Selenium server, Selenoid or driver) will listen on.
+* *port* (_only for containers_) - You should use `port` field to specify the real port inside container that container process (Selenium server, Selenwright or driver) will listen on.
   For native Playwright images set this to the Playwright server listener port.
 
 * *tmpfs* (_optional_) - You may probably know that moving browser cache to in-memory filesystem (https://en.wikipedia.org/wiki/Tmpfs[Tmpfs])
 can dramatically improve its performance.
-Selenoid can automatically attach one or more in-memory filesystems as volumes to Docker container being run.
+Selenwright can automatically attach one or more in-memory filesystems as volumes to Docker container being run.
 To achieve this define one or more mount points and their respective sizes in optional `tmpfs` field.
 
 * *path* (_optional_) - `path` field is needed to specify relative path to the URL where a new session is created (default is `/`).
@@ -152,7 +152,7 @@ Chrome and Opera containers use web driver binary as entrypoint application whic
 Playwright images also default to `/` when the field is omitted, and the selected WebSocket path should stay fixed for a given image.
 We recommend to use our https://github.com/aerokube/cm[configuration tool] to avoid errors with this field.
 
-* *protocol* (_optional_) - `protocol` selects the upstream contract used by Selenoid.
+* *protocol* (_optional_) - `protocol` selects the upstream contract used by Selenwright.
   Leave it empty for WebDriver-compatible Selenium servers and drivers.
   Set it to `playwright` when the image runs a Playwright server instead of Selenium.
 
@@ -169,21 +169,21 @@ We recommend to use our https://github.com/aerokube/cm[configuration tool] to av
 * *shmSize* (_optional_) - Use it to override shared memory size for browser container.
 
 === Syncing Browser Images from Existing File
-In some usage scenarios you may want to store browsers configuration file under version control and initialize Selenoid from this file. For example this is true if you wish to have consistently reproducing infrastructure and using such tools as https://aws.amazon.com/cloudformation/[Amazon Cloud Formation].
+In some usage scenarios you may want to store browsers configuration file under version control and initialize Selenwright from this file. For example this is true if you wish to have consistently reproducing infrastructure and using such tools as https://aws.amazon.com/cloudformation/[Amazon Cloud Formation].
 
-NOTE: Why this is not the part of Selenoid? Well, this is easy to implement, but under heavy load the result can be unpredictable.
-For example after updating the file and reloading Selenoid it should pull new images. How long will you wait for new sessions then?
+NOTE: Why this is not the part of Selenwright? Well, this is easy to implement, but under heavy load the result can be unpredictable.
+For example after updating the file and reloading Selenwright it should pull new images. How long will you wait for new sessions then?
 What to do if Docker Registry is inaccessible? So for maintenance reasons it is easier to delegate such simple logic to external script.
 
 In order to pull browser images use on of the following options:
 
 *Option 1: using CM*
 
-Recent https://github.com/aerokube/cm[CM] tool versions are able to configure Selenoid from existing `browsers.json` file as follows:
+Recent https://github.com/aerokube/cm[CM] tool versions are able to configure Selenwright from existing `browsers.json` file as follows:
 
-    # ./cm selenoid start --browsers-json /path/to/your/browsers.json
+    # ./cm selenwright start --browsers-json /path/to/your/browsers.json
 
-This way is mainly useful when installing Selenoid from scratch or updating it i.e. as a part of CI build job.
+This way is mainly useful when installing Selenwright from scratch or updating it i.e. as a part of CI build job.
 
 *Option 2: using jq*
 

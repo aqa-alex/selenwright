@@ -3,7 +3,7 @@
         "default": "57.0",
         "versions": {
             "53.0": {
-                "image": "selenoid/chrome:53.0",
+                "image": "selenwright/chrome:53.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -11,7 +11,7 @@
                 }
             },
             "54.0": {
-                "image": "selenoid/chrome:54.0",
+                "image": "selenwright/chrome:54.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -19,7 +19,7 @@
                 }
             },
             "55.0": {
-                "image": "selenoid/chrome:55.0",
+                "image": "selenwright/chrome:55.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -27,7 +27,7 @@
                 }
             },
             "56.0": {
-                "image": "selenoid/chrome:56.0",
+                "image": "selenwright/chrome:56.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -35,7 +35,7 @@
                 }
             },
             "57.0": {
-                "image": "selenoid/chrome:57.0",
+                "image": "selenwright/chrome:57.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -48,7 +48,7 @@
         "default": "53.0",
         "versions": {
             "48.0": {
-                "image": "selenoid/firefox:48.0",
+                "image": "selenwright/firefox:48.0",
                 "port": "4444",
                 "path": "/wd/hub",
                 "tmpfs": {
@@ -56,7 +56,7 @@
                 }
             },
             "49.0": {
-                "image": "selenoid/firefox:49.0",
+                "image": "selenwright/firefox:49.0",
                 "port": "4444",
                 "path": "/wd/hub",
                 "tmpfs": {
@@ -64,7 +64,7 @@
                 }
             },
             "50.0": {
-                "image": "selenoid/firefox:50.0",
+                "image": "selenwright/firefox:50.0",
                 "port": "4444",
                 "path": "/wd/hub",
                 "tmpfs": {
@@ -72,7 +72,7 @@
                 }
             },
             "51.0": {
-                "image": "selenoid/firefox:51.0",
+                "image": "selenwright/firefox:51.0",
                 "port": "4444",
                 "path": "/wd/hub",
                 "tmpfs": {
@@ -80,7 +80,7 @@
                 }
             },
             "52.0": {
-                "image": "selenoid/firefox:52.0",
+                "image": "selenwright/firefox:52.0",
                 "port": "4444",
                 "path": "/wd/hub",
                 "tmpfs": {
@@ -88,7 +88,7 @@
                 }
             },
             "53.0": {
-                "image": "selenoid/firefox:53.0",
+                "image": "selenwright/firefox:53.0",
                 "port": "4444",
                 "path": "/wd/hub",
                 "tmpfs": {
@@ -101,7 +101,7 @@
         "default": "44.0",
         "versions": {
             "40.0": {
-                "image": "selenoid/opera:40.0",
+                "image": "selenwright/opera:40.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -109,7 +109,7 @@
                 }
             },
             "41.0": {
-                "image": "selenoid/opera:41.0",
+                "image": "selenwright/opera:41.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -117,7 +117,7 @@
                 }
             },
             "42.0": {
-                "image": "selenoid/opera:42.0",
+                "image": "selenwright/opera:42.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -125,7 +125,7 @@
                 }
             },
             "43.0": {
-                "image": "selenoid/opera:43.0",
+                "image": "selenwright/opera:43.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {
@@ -133,7 +133,7 @@
                 }
             },
             "44.0": {
-                "image": "selenoid/opera:44.0",
+                "image": "selenwright/opera:44.0",
                 "port": "4444",
                 "path": "/",
                 "tmpfs": {

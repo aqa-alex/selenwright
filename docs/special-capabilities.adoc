@@ -1,12 +1,12 @@
 == Special Capabilities
 
-Selenoid can improve some automation aspects with custom capabilities.
+Selenwright can improve some automation aspects with custom capabilities.
 You can pass it in tests to enable/disable some features.
 
 
 === Live Browser Screen: enableVNC
 
-Selenoid supports showing browser screen during test execution.
+Selenwright supports showing browser screen during test execution.
 This works with containers having https://en.wikipedia.org/wiki/Virtual_Network_Computing[VNC] server installed (VNC column of <<Browser Image information>>).
 To see browser screen:
 
@@ -15,13 +15,13 @@ To see browser screen:
 enableVNC: true
 ----
 
-Then launch http://aerokube.com/selenoid-ui/latest/[Selenoid UI] to see the screen.
+Then launch https://github.com/aqa-alex/selenwright-ui[Selenwright UI] to see the screen.
 
 This works by proxying VNC port from started container to `http://localhost:4444/vnc/<session-id>` to WebSocket, where `<session-id>` is Selenium session ID.
 
 === Custom Screen Resolution: screenResolution
 
-Selenoid allows you to set custom screen resolution in containers being run:
+Selenwright allows you to set custom screen resolution in containers being run:
 
 .Type: string, format: <width>x<height>x<colors-depth>
 ----
@@ -75,7 +75,7 @@ videoScreenSize: "1024x768"
 videoFrameRate: 24
 ----
 
-* By default Selenoid is using `libx264` codec for video output. If this codec is consuming too much CPU, you can change it using `videoCodec` capability:
+* By default Selenwright is using `libx264` codec for video output. If this codec is consuming too much CPU, you can change it using `videoCodec` capability:
 +
 .Type: string
 ----
@@ -85,7 +85,7 @@ videoCodec: "mpeg4"
 To obtain the full list of https://stackoverflow.com/questions/3377300/what-are-all-codecs-and-formats-supported-by-ffmpeg[supported values]:
 +
 ```
-$ docker run -it --rm --entrypoint /usr/bin/ffmpeg selenoid/video-recorder -codecs
+$ docker run -it --rm --entrypoint /usr/bin/ffmpeg selenwright/video-recorder -codecs
 ```
 
 === Saving Session Logs: enableLog, logName
@@ -99,7 +99,7 @@ To enable saving logs for a session, add:
 enableLog: true
 ----
 
-If you wish to automatically save logs for all sessions, you can enable this behavior globally with Selenoid `-save-all-logs` flag.
+If you wish to automatically save logs for all sessions, you can enable this behavior globally with Selenwright `-save-all-logs` flag.
 
 By default saved log files are named `<session-id>.log` where `<session-id>` is a unique identifier of Selenium session.
 To provide custom log file name specify:
@@ -114,7 +114,7 @@ WARNING: It is important to add `log` file extension.
 === Custom Test Name: name
 
 For debugging purposes it is often useful to give a distinct name to every test case.
-When working with Selenoid you can set test case name by passing the following capability:
+When working with Selenwright you can set test case name by passing the following capability:
 
 .Type: string
 ----
@@ -137,7 +137,7 @@ Timeout is specified Golang duration format e.g. `30m` or `10s` or `1h5m` and ca
 === Per-session Time Zone: timeZone
 
 Some tests require particular time zone to be set in operating system.
-To achieve this with Selenoid use:
+To achieve this with Selenwright use:
 
 .Type: string
 ----
@@ -145,7 +145,7 @@ timeZone: "Europe/Moscow"
 ----
 
 You can find most of available time zones https://en.wikipedia.org/wiki/List_of_tz_database_time_zones[here].
-Without this capability launched browser containers will have the same timezone as Selenoid one.
+Without this capability launched browser containers will have the same timezone as Selenwright one.
 
 === Per-session Environment Variables: env
 
@@ -184,7 +184,7 @@ Thus entries from capabilities override entries from configuration file if some 
 
 === Custom DNS Servers: dnsServers
 
-By default Selenoid browser containers are using global DNS settings of Docker daemon. Sometimes you may need to override used DNS servers list for particular test cases. This can be easily achieved with:
+By default Selenwright browser containers are using global DNS settings of Docker daemon. Sometimes you may need to override used DNS servers list for particular test cases. This can be easily achieved with:
 
 .Type: array, format: <dns-ip-address>
 ----
@@ -193,7 +193,7 @@ dnsServers: ["192.168.0.1", "192.168.0.2"]
 
 === More Docker Networks: additionalNetworks
 
-By default Selenoid browser containers are started in Docker network specified by `-container-network` flag. If you tested application is running in another network you may need to connect browser container to this network:
+By default Selenwright browser containers are started in Docker network specified by `-container-network` flag. If you tested application is running in another network you may need to connect browser container to this network:
 
 .Type: array, format: <network-name>
 ----
@@ -258,14 +258,14 @@ The same key placeholders are supported. Please refer to <<Uploading Files To S3
 
 === Specifying Capabilities via Protocol Extensions
 
-Some Selenium clients allow passing only a limited number of capabilities specified in https://w3c.github.io/webdriver/webdriver-spec.html[WebDriver specification]. For such cases Selenoid supports reading capabilities using https://w3c.github.io/webdriver/webdriver-spec.html#protocol-extensions[WebDriver protocol extensions] feature. The following two examples deliver the same result. Usually capabilities are passed like this:
+Some Selenium clients allow passing only a limited number of capabilities specified in https://w3c.github.io/webdriver/webdriver-spec.html[WebDriver specification]. For such cases Selenwright supports reading capabilities using https://w3c.github.io/webdriver/webdriver-spec.html#protocol-extensions[WebDriver protocol extensions] feature. The following two examples deliver the same result. Usually capabilities are passed like this:
 
 .Passing Capabilities as Usually
 ----
 {"browserName": "firefox", "version": "57.0", "screenResolution": "1280x1024x24"}
 ----
 
-Selenoid is using `selenoid:options` key to read protocol extension capabilities:
+Selenwright is using `selenoid:options` key to read protocol extension capabilities:
 
 .Passing Capabilities using Protocol Extensions
 ----

@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aqa-alex/selenwright/config"
 	ggr "github.com/aerokube/ggr/config"
+	"github.com/aqa-alex/selenwright/config"
 	"github.com/gorilla/websocket"
 	"github.com/mafredri/cdp"
 	"github.com/mafredri/cdp/rpcc"
@@ -36,8 +36,8 @@ var (
 
 func init() {
 	enableFileUpload = true
-	videoOutputDir, _ = os.MkdirTemp("", "selenoid-test")
-	logOutputDir, _ = os.MkdirTemp("", "selenoid-test")
+	videoOutputDir, _ = os.MkdirTemp("", "selenwright-test")
+	logOutputDir, _ = os.MkdirTemp("", "selenwright-test")
 	saveAllLogs = true
 	gitRevision = "test-revision"
 	ggrHost = &ggr.Host{
