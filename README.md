@@ -5,7 +5,7 @@ Based on [aerokube/selenoid](https://github.com/aerokube/selenoid) — Apache 2.
 ## Features
 
 ### One-command Installation
-Start browser automation in minutes by downloading [Configuration Manager](https://github.com/aerokube/cm/releases) binary and running just **one command**:
+Start browser automation in minutes by downloading [Configuration Manager](TBA) binary and running just **one command**:
 ```
 $ ./cm selenoid start --vnc --tmpfs 128
 ```
