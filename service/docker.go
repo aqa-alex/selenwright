@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/aerokube/selenoid/info"
-	"github.com/docker/docker/api/types"
 	"log"
 	"net"
 	"net/url"
@@ -15,7 +13,9 @@ import (
 	"time"
 
 	"github.com/aerokube/selenoid/config"
+	"github.com/aerokube/selenoid/info"
 	"github.com/aerokube/selenoid/session"
+	"github.com/docker/docker/api/types"
 	ctr "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/strslice"
@@ -28,6 +28,8 @@ import (
 const (
 	sysAdmin               = "SYS_ADMIN"
 	overrideVideoOutputDir = "OVERRIDE_VIDEO_OUTPUT_DIR"
+	healthStatusHealthy    = "healthy"
+	healthStatusUnhealthy  = "unhealthy"
 )
 
 var ports = struct {
@@ -81,7 +83,7 @@ type Docker struct {
 }
 
 type portConfig struct {
-	SeleniumPort   nat.Port
+	ServicePort    nat.Port
 	FileserverPort nat.Port
 	ClipboardPort  nat.Port
 	DevtoolsPort   nat.Port
@@ -104,7 +106,7 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid CPU limit: %v", err)
 	}
-	selenium := portConfig.SeleniumPort
+	servicePort := portConfig.ServicePort
 	fileserver := portConfig.FileserverPort
 	clipboard := portConfig.ClipboardPort
 	vnc := portConfig.VNCPort
@@ -175,31 +177,31 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 		for _, networkName := range d.AdditionalNetworks {
 			err = cl.NetworkConnect(ctx, networkName, browserContainerId, nil)
 			if err != nil {
+				removeContainer(ctx, cl, requestId, browserContainerId)
 				return nil, fmt.Errorf("failed to connect container %s to network %s: %v", browserContainerId, networkName, err)
 			}
 		}
 	}
 
-	stat, err := cl.ContainerInspect(ctx, browserContainerId)
+	stat, err := inspectContainer(ctx, cl, browserContainerId, d.StartupTimeout)
 	if err != nil {
 		removeContainer(ctx, cl, requestId, browserContainerId)
 		return nil, fmt.Errorf("inspect container %s: %s", browserContainerId, err)
 	}
-	_, ok := stat.NetworkSettings.Ports[selenium]
+	_, ok := stat.NetworkSettings.Ports[servicePort]
 	if !ok {
 		removeContainer(ctx, cl, requestId, browserContainerId)
-		return nil, fmt.Errorf("no bindings available for %v", selenium)
+		return nil, fmt.Errorf("no bindings available for %v", servicePort)
 	}
-	servicePort := d.Service.Port
 	pc := map[string]nat.Port{
-		servicePort:      selenium,
+		d.Service.Port:   servicePort,
 		ports.VNC:        vnc,
 		ports.Devtools:   devtools,
 		ports.Fileserver: fileserver,
 		ports.Clipboard:  clipboard,
 	}
-	hostPort := getHostPort(d.Environment, servicePort, d.Caps, stat, pc)
-	u := &url.URL{Scheme: "http", Host: hostPort.Selenium, Path: d.Service.Path}
+	hostPort := getHostPort(d.Environment, d.Service.Port, d.Caps, stat, pc)
+	webdriverURL, playwrightURL := buildServiceURLs(d.Service, hostPort)
 
 	if d.Video {
 		videoContainerId, err = startVideoContainer(ctx, cl, requestId, stat, d.Environment, d.ServiceBase, d.Caps)
@@ -209,7 +211,7 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 	}
 
 	serviceStartTime := time.Now()
-	err = wait(u.String(), d.StartupTimeout)
+	err = waitUntilReady(ctx, cl, browserContainerId, stat, d.Service, webdriverURL, playwrightURL, d.StartupTimeout)
 	if err != nil {
 		if videoContainerId != "" {
 			stopVideoContainer(ctx, cl, requestId, videoContainerId, d.Environment)
@@ -218,7 +220,12 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 		return nil, fmt.Errorf("wait: %v", err)
 	}
 	log.Printf("[%d] [SERVICE_STARTED] [%s] [%s] [%.2fs]", requestId, image, browserContainerId, info.SecondsSince(serviceStartTime))
-	log.Printf("[%d] [PROXY_TO] [%s] [%s]", requestId, browserContainerId, u.String())
+	if webdriverURL != nil {
+		log.Printf("[%d] [PROXY_TO] [%s] [%s]", requestId, browserContainerId, webdriverURL.String())
+	}
+	if playwrightURL != nil {
+		log.Printf("[%d] [PLAYWRIGHT_UPSTREAM] [%s] [%s]", requestId, browserContainerId, playwrightURL.String())
+	}
 
 	var publishedPortsInfo map[string]string
 	if d.Service.PublishAllPorts {
@@ -231,7 +238,8 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 	}
 
 	s := StartedService{
-		Url: u,
+		Url:           webdriverURL,
+		PlaywrightURL: playwrightURL,
 		Container: &session.Container{
 			ID:        browserContainerId,
 			IPAddress: getContainerIP(d.Environment.Network, stat),
@@ -272,10 +280,81 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 	return &s, nil
 }
 
+func buildServiceURLs(service *config.Browser, hostPort session.HostPort) (*url.URL, *url.URL) {
+	path := servicePath(service)
+	switch serviceProtocol(service) {
+	case protocolPlaywright:
+		return nil, &url.URL{Scheme: "ws", Host: hostPort.Selenium, Path: path}
+	default:
+		return &url.URL{Scheme: "http", Host: hostPort.Selenium, Path: path}, nil
+	}
+}
+
+func waitUntilReady(ctx context.Context, cl *client.Client, containerID string, stat types.ContainerJSON, service *config.Browser, webdriverURL, playwrightURL *url.URL, timeout time.Duration) error {
+	if status, ok := getHealthStatus(stat); ok {
+		return waitForHealthy(ctx, cl, containerID, status, timeout)
+	}
+	switch serviceProtocol(service) {
+	case protocolPlaywright:
+		if playwrightURL == nil {
+			return fmt.Errorf("playwright upstream url is not configured")
+		}
+		return waitTCP(playwrightURL.Host, timeout)
+	default:
+		if webdriverURL == nil {
+			return fmt.Errorf("webdriver upstream url is not configured")
+		}
+		return waitHTTP(webdriverURL.String(), timeout)
+	}
+}
+
+func getHealthStatus(stat types.ContainerJSON) (string, bool) {
+	if stat.State == nil || stat.State.Health == nil || stat.State.Health.Status == "" {
+		return "", false
+	}
+	return stat.State.Health.Status, true
+}
+
+func waitForHealthy(ctx context.Context, cl *client.Client, containerID, status string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		switch status {
+		case healthStatusHealthy:
+			return nil
+		case healthStatusUnhealthy:
+			return fmt.Errorf("container %s became unhealthy", containerID)
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return fmt.Errorf("container %s did not become healthy in %v", containerID, timeout)
+		}
+		sleep := readinessProbeInterval
+		if remaining < sleep {
+			sleep = remaining
+		}
+		time.Sleep(sleep)
+		stat, err := inspectContainer(ctx, cl, containerID, remaining)
+		if err != nil {
+			return fmt.Errorf("inspect container %s: %w", containerID, err)
+		}
+		var ok bool
+		status, ok = getHealthStatus(stat)
+		if !ok {
+			return fmt.Errorf("container %s health status is unavailable", containerID)
+		}
+	}
+}
+
+func inspectContainer(ctx context.Context, cl *client.Client, containerID string, timeout time.Duration) (types.ContainerJSON, error) {
+	inspectCtx, cancel := context.WithTimeout(ctx, probeTimeout(timeout))
+	defer cancel()
+	return cl.ContainerInspect(inspectCtx, containerID)
+}
+
 func getPortConfig(service *config.Browser, caps session.Caps, env Environment) (*portConfig, error) {
-	selenium, err := nat.NewPort("tcp", service.Port)
+	servicePort, err := nat.NewPort("tcp", service.Port)
 	if err != nil {
-		return nil, fmt.Errorf("new selenium port: %v", err)
+		return nil, fmt.Errorf("new service port: %v", err)
 	}
 	fileserver, err := nat.NewPort("tcp", ports.Fileserver)
 	if err != nil {
@@ -285,7 +364,7 @@ func getPortConfig(service *config.Browser, caps session.Caps, env Environment) 
 	if err != nil {
 		return nil, fmt.Errorf("new clipboard port: %v", err)
 	}
-	exposedPorts := map[nat.Port]struct{}{selenium: {}, fileserver: {}, clipboard: {}}
+	exposedPorts := map[nat.Port]struct{}{servicePort: {}, fileserver: {}, clipboard: {}}
 	var vnc nat.Port
 	if caps.VNC {
 		vnc, err = nat.NewPort("tcp", ports.VNC)
@@ -302,7 +381,7 @@ func getPortConfig(service *config.Browser, caps session.Caps, env Environment) 
 
 	portBindings := nat.PortMap{}
 	if env.IP != "" || !env.InDocker {
-		portBindings[selenium] = []nat.PortBinding{{HostIP: "0.0.0.0"}}
+		portBindings[servicePort] = []nat.PortBinding{{HostIP: "0.0.0.0"}}
 		portBindings[fileserver] = []nat.PortBinding{{HostIP: "0.0.0.0"}}
 		portBindings[clipboard] = []nat.PortBinding{{HostIP: "0.0.0.0"}}
 		portBindings[devtools] = []nat.PortBinding{{HostIP: "0.0.0.0"}}
@@ -311,7 +390,7 @@ func getPortConfig(service *config.Browser, caps session.Caps, env Environment) 
 		}
 	}
 	return &portConfig{
-		SeleniumPort:   selenium,
+		ServicePort:    servicePort,
 		FileserverPort: fileserver,
 		ClipboardPort:  clipboard,
 		VNCPort:        vnc,

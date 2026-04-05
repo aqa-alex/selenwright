@@ -3,8 +3,10 @@ package service
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/aerokube/selenoid/config"
@@ -32,6 +34,10 @@ type Environment struct {
 
 const (
 	DefaultContainerNetwork = "default"
+	readinessProbeInterval  = 50 * time.Millisecond
+	readinessProbeTimeout   = time.Second
+	protocolWebDriver       = "webdriver"
+	protocolPlaywright      = "playwright"
 )
 
 // ServiceBase - stores fields required by all services
@@ -42,11 +48,12 @@ type ServiceBase struct {
 
 // StartedService - all started service properties
 type StartedService struct {
-	Url       *url.URL
-	Container *session.Container
-	HostPort  session.HostPort
-	Origin    string
-	Cancel    func()
+	Url           *url.URL
+	PlaywrightURL *url.URL
+	Container     *session.Container
+	HostPort      session.HostPort
+	Origin        string
+	Cancel        func()
 }
 
 // Starter - interface to create session with cancellation ability
@@ -95,35 +102,88 @@ func (m *DefaultManager) Find(caps session.Caps, requestId uint64) (Starter, boo
 	return nil, false
 }
 
+func serviceProtocol(service *config.Browser) string {
+	if service == nil {
+		return protocolWebDriver
+	}
+	switch strings.ToLower(service.Protocol) {
+	case protocolPlaywright:
+		return protocolPlaywright
+	default:
+		return protocolWebDriver
+	}
+}
+
+func servicePath(service *config.Browser) string {
+	if serviceProtocol(service) == protocolPlaywright && service.Path == "" {
+		return "/"
+	}
+	if service == nil {
+		return ""
+	}
+	return service.Path
+}
+
 func wait(u string, t time.Duration) error {
-	up := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			default:
-			}
+	return waitHTTP(u, t)
+}
+
+func waitHTTP(u string, t time.Duration) error {
+	return waitFor(
+		t,
+		func(timeout time.Duration) error {
 			req, _ := http.NewRequest(http.MethodHead, u, nil)
 			req.Close = true
-			resp, err := http.DefaultClient.Do(req)
+			client := &http.Client{Timeout: timeout}
+			resp, err := client.Do(req)
 			if resp != nil {
 				_ = resp.Body.Close()
 			}
+			return err
+		},
+		func() error {
+			return fmt.Errorf("%s does not respond in %v", u, t)
+		},
+	)
+}
+
+func waitTCP(address string, t time.Duration) error {
+	return waitFor(
+		t,
+		func(timeout time.Duration) error {
+			conn, err := net.DialTimeout("tcp", address, timeout)
 			if err != nil {
-				<-time.After(50 * time.Millisecond)
-				continue
+				return err
 			}
-			up <- struct{}{}
-			return
+			return conn.Close()
+		},
+		func() error {
+			return fmt.Errorf("%s does not respond in %v", address, t)
+		},
+	)
+}
+
+func waitFor(timeout time.Duration, probe func(time.Duration) error, timeoutErr func() error) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return timeoutErr()
 		}
-	}()
-	select {
-	case <-time.After(t):
-		close(done)
-		return fmt.Errorf("%s does not respond in %v", u, t)
-	case <-up:
+		if err := probe(probeTimeout(remaining)); err == nil {
+			return nil
+		}
+		sleep := readinessProbeInterval
+		if remaining < sleep {
+			sleep = remaining
+		}
+		time.Sleep(sleep)
 	}
-	return nil
+}
+
+func probeTimeout(timeout time.Duration) time.Duration {
+	if timeout > 0 && timeout < readinessProbeTimeout {
+		return timeout
+	}
+	return readinessProbeTimeout
 }

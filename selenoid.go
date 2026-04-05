@@ -29,10 +29,7 @@ import (
 	"github.com/aerokube/selenoid/jsonerror"
 	"github.com/aerokube/selenoid/service"
 	"github.com/aerokube/selenoid/session"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/imdario/mergo"
-	"golang.org/x/net/websocket"
 )
 
 const slash = "/"
@@ -318,10 +315,11 @@ func create(w http.ResponseWriter, r *http.Request) {
 		HostPort:  startedService.HostPort,
 		Origin:    startedService.Origin,
 		Timeout:   sessionTimeout,
-		TimeoutCh: onTimeout(sessionTimeout, func() {
+		Watchdog: session.NewWatchdog(sessionTimeout, func() {
 			request{r}.session(s.ID).Delete(requestId)
 		}),
-		Started: time.Now()}
+		Started: time.Now(),
+	}
 	cancelAndRenameFiles := func() {
 		cancel()
 		sessionId := preprocessSessionId(s.ID)
@@ -556,23 +554,17 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 				}
 				sess.Lock.Lock()
 				defer sess.Lock.Unlock()
-				select {
-				case <-sess.TimeoutCh:
-				default:
-					close(sess.TimeoutCh)
-				}
 				if r.Method == http.MethodDelete && len(fragments) == 3 {
 					if enableFileUpload {
 						_ = os.RemoveAll(filepath.Join(os.TempDir(), id))
 					}
+					stopWatchdog(sess)
 					cancel = sess.Cancel
 					sessions.Remove(id)
 					queue.Release()
 					log.Printf("[%d] [SESSION_DELETED] [%s]", requestId, id)
 				} else {
-					sess.TimeoutCh = onTimeout(sess.Timeout, func() {
-						request{r}.session(id).Delete(requestId)
-					})
+					touchWatchdog(sess)
 					if len(fragments) == 4 && fragments[len(fragments)-1] == "file" && enableFileUpload {
 						r.Header.Set("X-Selenoid-File", filepath.Join(os.TempDir(), id))
 						r.URL.Path = "/file"
@@ -610,14 +602,11 @@ func reverseProxy(hostFn func(sess *session.Session) string, status string) func
 		sid, remainingPath := splitRequestPath(r.URL.Path)
 		sess, ok := sessions.Get(sid)
 		if ok {
-			select {
-			case <-sess.TimeoutCh:
-			default:
-				close(sess.TimeoutCh)
+			if isDevtoolsWebSocketRequest(r) {
+				handleDevtoolsWebSocket(w, r, requestId, sid, remainingPath, sess)
+				return
 			}
-			sess.TimeoutCh = onTimeout(sess.Timeout, func() {
-				request{r}.session(sid).Delete(requestId)
-			})
+			touchWatchdog(sess)
 			(&httputil.ReverseProxy{
 				Director: func(r *http.Request) {
 					r.URL.Scheme = "http"
@@ -637,6 +626,20 @@ func reverseProxy(hostFn func(sess *session.Session) string, status string) func
 func splitRequestPath(p string) (string, string) {
 	fragments := strings.Split(p, slash)
 	return fragments[2], slash + strings.Join(fragments[3:], slash)
+}
+
+func touchWatchdog(sess *session.Session) {
+	if sess == nil || sess.Watchdog == nil {
+		return
+	}
+	_ = sess.Watchdog.Touch()
+}
+
+func stopWatchdog(sess *session.Session) {
+	if sess == nil || sess.Watchdog == nil {
+		return
+	}
+	_ = sess.Watchdog.Stop()
 }
 
 func fileUpload(w http.ResponseWriter, r *http.Request) {
@@ -692,103 +695,6 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(reply)
 }
 
-func vnc(wsconn *websocket.Conn) {
-	defer wsconn.Close()
-	requestId := serial()
-	sid, _ := splitRequestPath(wsconn.Request().URL.Path)
-	sess, ok := sessions.Get(sid)
-	if ok {
-		vncHostPort := sess.HostPort.VNC
-		if vncHostPort != "" {
-			log.Printf("[%d] [VNC_ENABLED] [%s]", requestId, sid)
-			var d net.Dialer
-			conn, err := d.DialContext(wsconn.Request().Context(), "tcp", vncHostPort)
-			if err != nil {
-				log.Printf("[%d] [VNC_ERROR] [%v]", requestId, err)
-				return
-			}
-			defer conn.Close()
-			wsconn.PayloadType = websocket.BinaryFrame
-			go func() {
-				_, _ = io.Copy(wsconn, conn)
-				_ = wsconn.Close()
-				log.Printf("[%d] [VNC_SESSION_CLOSED] [%s]", requestId, sid)
-			}()
-			_, _ = io.Copy(conn, wsconn)
-			log.Printf("[%d] [VNC_CLIENT_DISCONNECTED] [%s]", requestId, sid)
-		} else {
-			log.Printf("[%d] [VNC_NOT_ENABLED] [%s]", requestId, sid)
-		}
-	} else {
-		log.Printf("[%d] [SESSION_NOT_FOUND] [%s]", requestId, sid)
-	}
-}
-
-const (
-	jsonParam = "json"
-)
-
-func logs(w http.ResponseWriter, r *http.Request) {
-	requestId := serial()
-	fileNameOrSessionID := strings.TrimPrefix(r.URL.Path, paths.Logs)
-	if logOutputDir != "" && (fileNameOrSessionID == "" || strings.HasSuffix(fileNameOrSessionID, logFileExtension)) {
-		if r.Method == http.MethodDelete {
-			deleteFileIfExists(requestId, w, r, logOutputDir, paths.Logs, "DELETED_LOG_FILE")
-			return
-		}
-		user, remote := info.RequestInfo(r)
-		if _, ok := r.URL.Query()[jsonParam]; ok {
-			listFilesAsJson(requestId, w, logOutputDir, "LOG_ERROR")
-			return
-		}
-		log.Printf("[%d] [LOG_LISTING] [%s] [%s]", requestId, user, remote)
-		fileServer := http.StripPrefix(paths.Logs, http.FileServer(http.Dir(logOutputDir)))
-		fileServer.ServeHTTP(w, r)
-		return
-	}
-	websocket.Handler(streamLogs).ServeHTTP(w, r)
-}
-
-func listFilesAsJson(requestId uint64, w http.ResponseWriter, dir string, errStatus string) {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		log.Printf("[%d] [%s] [%s]", requestId, errStatus, fmt.Sprintf("Failed to list directory %s: %v", logOutputDir, err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	var ret []string
-	for _, f := range files {
-		ret = append(ret, f.Name())
-	}
-	w.Header().Add("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(ret)
-}
-
-func streamLogs(wsconn *websocket.Conn) {
-	defer wsconn.Close()
-	requestId := serial()
-	sid, _ := splitRequestPath(wsconn.Request().URL.Path)
-	sess, ok := sessions.Get(sid)
-	if ok && sess.Container != nil {
-		log.Printf("[%d] [CONTAINER_LOGS] [%s]", requestId, sess.Container.ID)
-		r, err := cli.ContainerLogs(wsconn.Request().Context(), sess.Container.ID, container.LogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Follow:     true,
-		})
-		if err != nil {
-			log.Printf("[%d] [CONTAINER_LOGS_ERROR] [%v]", requestId, err)
-			return
-		}
-		defer r.Close()
-		wsconn.PayloadType = websocket.BinaryFrame
-		_, _ = stdcopy.StdCopy(wsconn, wsconn, r)
-		log.Printf("[%d] [CONTAINER_LOGS_DISCONNECTED] [%s]", requestId, sid)
-	} else {
-		log.Printf("[%d] [SESSION_NOT_FOUND] [%s]", requestId, sid)
-	}
-}
-
 func status(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	ready := limit > sessions.Len()
@@ -804,16 +710,4 @@ func status(w http.ResponseWriter, _ *http.Request) {
 func welcome(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(fmt.Sprintf("You are using Selenoid %s!", gitRevision)))
-}
-
-func onTimeout(t time.Duration, f func()) chan struct{} {
-	cancel := make(chan struct{})
-	go func(cancel chan struct{}) {
-		select {
-		case <-time.After(t):
-			f()
-		case <-cancel:
-		}
-	}(cancel)
-	return cancel
 }

@@ -273,7 +273,7 @@ func parseGgrHost(s string) *ggr.Host {
 }
 
 func onSIGHUP(fn func()) {
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)
 	go func() {
 		for {
@@ -302,6 +302,16 @@ func selenium() http.Handler {
 func post(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		next.ServeHTTP(w, r)
+	}
+}
+
+func get(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -353,20 +363,21 @@ func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request
 }
 
 var paths = struct {
-	Video, VNC, Logs, Devtools, Download, Clipboard, File, Ping, Status, Error, WdHub, Welcome string
+	Video, VNC, Logs, Devtools, Playwright, Download, Clipboard, File, Ping, Status, Error, WdHub, Welcome string
 }{
-	Video:     "/video/",
-	VNC:       "/vnc/",
-	Logs:      "/logs/",
-	Devtools:  "/devtools/",
-	Download:  "/download/",
-	Clipboard: "/clipboard/",
-	Status:    "/status",
-	File:      "/file",
-	Ping:      "/ping",
-	Error:     "/error",
-	WdHub:     "/wd/hub",
-	Welcome:   "/",
+	Video:      "/video/",
+	VNC:        "/vnc/",
+	Logs:       "/logs/",
+	Devtools:   "/devtools/",
+	Playwright: "/playwright/",
+	Download:   "/download/",
+	Clipboard:  "/clipboard/",
+	Status:     "/status",
+	File:       "/file",
+	Ping:       "/ping",
+	Error:      "/error",
+	WdHub:      "/wd/hub",
+	Welcome:    "/",
 }
 
 func handler() http.Handler {
@@ -392,6 +403,7 @@ func handler() http.Handler {
 	root.HandleFunc(paths.Download, reverseProxy(func(sess *session.Session) string { return sess.HostPort.Fileserver }, "DOWNLOADING_FILE"))
 	root.HandleFunc(paths.Clipboard, reverseProxy(func(sess *session.Session) string { return sess.HostPort.Clipboard }, "CLIPBOARD"))
 	root.HandleFunc(paths.Devtools, reverseProxy(func(sess *session.Session) string { return sess.HostPort.Devtools }, "DEVTOOLS"))
+	root.HandleFunc(paths.Playwright, get(queue.Try(queue.Check(queue.Protect(playwright)))))
 	if enableFileUpload {
 		root.HandleFunc(paths.File, fileUpload)
 	}
@@ -408,7 +420,7 @@ func main() {
 	log.Printf("[-] [INIT] [Timezone: %s]", time.Local)
 	log.Printf("[-] [INIT] [Listening on %s]", listen)
 
-	stop := make(chan os.Signal)
+	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 	server := &http.Server{
@@ -432,12 +444,23 @@ func main() {
 		log.Fatalf("[-] [SHUTTING_DOWN] [Failed to shut down: %v]", err)
 	}
 
+	type activeSession struct {
+		id      string
+		session *session.Session
+	}
+	activeSessions := make([]activeSession, 0, sessions.Len())
 	sessions.Each(func(k string, s *session.Session) {
-		if enableFileUpload {
-			_ = os.RemoveAll(path.Join(os.TempDir(), k))
-		}
-		s.Cancel()
+		activeSessions = append(activeSessions, activeSession{id: k, session: s})
 	})
+
+	for _, activeSession := range activeSessions {
+		if enableFileUpload {
+			_ = os.RemoveAll(path.Join(os.TempDir(), activeSession.id))
+		}
+		if activeSession.session != nil && activeSession.session.Cancel != nil {
+			activeSession.session.Cancel()
+		}
+	}
 
 	if !disableDocker {
 		err := cli.Close()

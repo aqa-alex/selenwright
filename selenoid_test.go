@@ -17,6 +17,7 @@ import (
 
 	ggr "github.com/aerokube/ggr/config"
 	"github.com/aerokube/selenoid/config"
+	"github.com/gorilla/websocket"
 	"github.com/mafredri/cdp"
 	"github.com/mafredri/cdp/rpcc"
 	assert "github.com/stretchr/testify/require"
@@ -925,6 +926,62 @@ func TestDevtools(t *testing.T) {
 
 	sessions.Remove(sess["sessionId"])
 	queue.Release()
+}
+
+func TestDevtoolsConnectionRefreshesWatchdog(t *testing.T) {
+	cancelCh := make(chan bool, 1)
+	manager = &HTTPTest{
+		Handler: Selenium(),
+		Cancel:  cancelCh,
+	}
+
+	previousTimeout := timeout
+	timeout = 80 * time.Millisecond
+	t.Cleanup(func() {
+		timeout = previousTimeout
+	})
+
+	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
+	assert.NoError(t, err)
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
+
+	var sess map[string]string
+	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
+	sessionID := sess["sessionId"]
+
+	t.Cleanup(func() {
+		if _, ok := sessions.Get(sessionID); ok {
+			sessions.Remove(sessionID)
+			if queue.Used() > 0 {
+				queue.Release()
+			}
+		}
+	})
+
+	time.Sleep(60 * time.Millisecond)
+
+	u := fmt.Sprintf("ws://%s/devtools/%s", srv.Listener.Addr().String(), sessionID)
+	conn, _, err := websocket.DefaultDialer.Dial(u, nil)
+	assert.NoError(t, err)
+	defer conn.Close()
+
+	time.Sleep(30 * time.Millisecond)
+	_, ok := sessions.Get(sessionID)
+	assert.True(t, ok)
+
+	assert.Eventually(t, func() bool {
+		_, ok := sessions.Get(sessionID)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
+
+	select {
+	case canceled := <-cancelCh:
+		assert.True(t, canceled)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for session cleanup")
+	}
+
+	assert.Equal(t, 0, queue.Used())
 }
 
 func TestAddedSeCdpCapability(t *testing.T) {

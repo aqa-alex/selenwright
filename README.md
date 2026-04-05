@@ -33,6 +33,13 @@ New images are added right after official releases. You can create your custom i
 New **[rich user interface]((https://github.com/aerokube/selenoid-ui))** showing browser screen and Selenium session logs:
 ![Selenoid UI](docs/img/selenoid-ui.png)
 
+### Native Playwright WebSocket Support
+Selenoid can proxy native Playwright connections through a dedicated WebSocket endpoint:
+```
+ws://<host>:4444/playwright/<browser>/<playwright-version>
+```
+This is native Playwright support, not Selenium Grid compatibility mode. Configure a browser version with `protocol: "playwright"` and point it to a companion image running Playwright server instead of Selenium. Companion Playwright images are external to this repository; see the [Playwright guide](docs/playwright.adoc) for the runtime contract, version matching rules, and example configuration.
+
 ### Video Recording
 * Any browser session can be saved to [H.264](https://en.wikipedia.org/wiki/H.264/MPEG-4_AVC) video ([example](https://www.youtube.com/watch?v=maB298oO5cI))
 * An API to list, download and delete recorded video files
@@ -69,4 +76,3 @@ Selenoid was initially created to be deployed on hardware servers or virtual mac
 ## Known Users
 
 [![JetBrains](docs/img/logo/jetbrains.png)](http://jetbrains.com/) [![Yandex](docs/img/logo/yandex.png)](https://yandex.com/company/) [![Sberbank Technology](docs/img/logo/sbertech.png)](http://sber-tech.com/) [![ThoughtWorks](docs/img/logo/thoughtworks.png)](https://thoughtworks.com/) [![VK.com](docs/img/logo/vk.png)](https://vk.com/) [![SuperJob](docs/img/logo/superjob.png)](http://superjob.ru/) [![PropellerAds](docs/img/logo/propellerads.png)](http://propellerads.com/) [![AlfaBank](docs/img/logo/alfabank.png)](https://alfabank.com/) [![3CX](docs/img/logo/3cx.png)](https://www.3cx.com/) [![IQ Option](docs/img/logo/iq_option.png)](https://iqoption.com/) [![Mail.Ru Group](docs/img/logo/mail_ru.png)](https://corp.mail.ru/en/) [![Newegg.Com](docs/img/logo/newegg.png)](https://newegg.com/) [![Badoo](docs/img/logo/badoo.png)](https://badoo.com/team/) [![BCS](docs/img/logo/bcs.png)](https://bcs.ru/) [![Quality Lab](docs/img/logo/quality-lab.png)](https://quality-lab.ru) [![AT Consulting](docs/img/logo/at-consulting.png)](https://www.at-consulting.ru/) [![Royal Caribbean International](docs/img/logo/royal-caribbean.png)](https://www.royalcaribbean.com/) [![Sixt](docs/img/logo/sixt.png)](https://sixt.com/) [![Testjar](docs/img/logo/testjar.png)](http://www.testjar.com/) [![Flipdish](docs/img/logo/flipdish.png)](https://www.flipdish.com/) [![RiAdvice](docs/img/logo/riadvice.png)](https://riadvice.tn/)
-

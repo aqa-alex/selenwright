@@ -97,6 +97,190 @@ func (r With) Path(p string) string {
 	return fmt.Sprintf("%s%s", r, p)
 }
 
+type StaticService struct {
+	StartedService service.StartedService
+	StartError     error
+	Available      bool
+}
+
+func (m *StaticService) StartWithCancel() (*service.StartedService, error) {
+	if m.StartError != nil {
+		return nil, m.StartError
+	}
+
+	startedService := m.StartedService
+	return &startedService, nil
+}
+
+func (m *StaticService) Find(caps session.Caps, requestId uint64) (service.Starter, bool) {
+	if !m.Available {
+		return nil, false
+	}
+	return m, true
+}
+
+type mockPlaywrightOptions struct {
+	Echo             bool
+	PeriodicPayload  []byte
+	PeriodicInterval time.Duration
+}
+
+type mockPlaywrightServer struct {
+	server          *httptest.Server
+	websocketURL    *url.URL
+	forceDisconnect chan struct{}
+	connected       chan struct{}
+	disconnected    chan struct{}
+}
+
+func newMockPlaywrightServer(t *testing.T, opts mockPlaywrightOptions) *mockPlaywrightServer {
+	t.Helper()
+
+	mock := &mockPlaywrightServer{
+		forceDisconnect: make(chan struct{}),
+		connected:       make(chan struct{}, 1),
+		disconnected:    make(chan struct{}, 1),
+	}
+
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(_ *http.Request) bool {
+			return true
+		},
+	}
+
+	mock.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		select {
+		case mock.connected <- struct{}{}:
+		default:
+		}
+
+		done := make(chan struct{})
+		var closeOnce sync.Once
+		closeConn := func() {
+			closeOnce.Do(func() {
+				close(done)
+				_ = conn.Close()
+				select {
+				case mock.disconnected <- struct{}{}:
+				default:
+				}
+			})
+		}
+		defer closeConn()
+
+		go func() {
+			select {
+			case <-mock.forceDisconnect:
+				closeConn()
+			case <-done:
+			}
+		}()
+
+		var writeLock sync.Mutex
+		if opts.PeriodicInterval > 0 {
+			payload := opts.PeriodicPayload
+			if len(payload) == 0 {
+				payload = []byte("tick")
+			}
+			ticker := time.NewTicker(opts.PeriodicInterval)
+			defer ticker.Stop()
+
+			go func() {
+				for {
+					select {
+					case <-ticker.C:
+						writeLock.Lock()
+						err := conn.WriteMessage(websocket.TextMessage, payload)
+						writeLock.Unlock()
+						if err != nil {
+							closeConn()
+							return
+						}
+					case <-done:
+						return
+					}
+				}
+			}()
+		}
+
+		for {
+			messageType, payload, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			if !opts.Echo {
+				continue
+			}
+
+			writeLock.Lock()
+			err = conn.WriteMessage(messageType, payload)
+			writeLock.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}))
+	mock.websocketURL = mustParseWebSocketURL(mock.server.URL)
+
+	t.Cleanup(func() {
+		mock.Close()
+	})
+
+	return mock
+}
+
+func (m *mockPlaywrightServer) URL() *url.URL {
+	if m == nil || m.websocketURL == nil {
+		return nil
+	}
+
+	cloned := *m.websocketURL
+	return &cloned
+}
+
+func (m *mockPlaywrightServer) Disconnect() {
+	if m == nil {
+		return
+	}
+
+	select {
+	case <-m.forceDisconnect:
+	default:
+		close(m.forceDisconnect)
+	}
+}
+
+func (m *mockPlaywrightServer) Close() {
+	if m == nil {
+		return
+	}
+
+	m.Disconnect()
+	if m.server != nil {
+		m.server.Close()
+	}
+}
+
+func mustParseWebSocketURL(rawURL string) *url.URL {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		panic(err)
+	}
+	switch parsed.Scheme {
+	case "http":
+		parsed.Scheme = "ws"
+	case "https":
+		parsed.Scheme = "wss"
+	}
+	return parsed
+}
+
 func Selenium(nsp ...func(map[string]interface{})) http.Handler {
 	var lock sync.RWMutex
 	sessions := make(map[string]struct{})

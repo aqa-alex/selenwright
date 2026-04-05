@@ -1,0 +1,103 @@
+== Native Playwright Support
+
+Selenoid can proxy native Playwright WebSocket connections through a dedicated endpoint. This support is for direct Playwright clients and companion Playwright server images. It is not Selenium Grid compatibility mode.
+
+=== What Selenoid Supports
+
+* One Playwright WebSocket connection maps to one Selenoid-managed browser session.
+* Selenoid starts the configured browser container, connects the client to the Playwright server running inside it, and tracks the session in the same queue and `/status` model as existing sessions.
+* Idle timeout and disconnect cleanup stop the container and remove the session from Selenoid state.
+
+=== Endpoint Format
+
+Use the following endpoint:
+
+----
+ws://<host>:4444/playwright/<browser>/<playwright-version>
+----
+
+Where:
+
+* `<browser>` matches a top-level browser name in `browsers.json`, for example `chromium`.
+* `<playwright-version>` matches the configured browser version entry.
+
+This route accepts WebSocket connections only.
+
+=== Session Lifecycle And Cleanup
+
+When a client connects to `/playwright/<browser>/<playwright-version>`, Selenoid resolves the matching browser entry, starts the container, and registers a session after the WebSocket tunnel is established.
+
+Playwright sessions follow the same operational model as WebDriver sessions:
+
+* Queue admission and release behave the same way as for regular Selenoid sessions.
+* Active sessions are visible in `/status`.
+* If the client disconnects, the upstream Playwright server disconnects, or the idle timeout expires, Selenoid stops the container and removes the session.
+
+=== Companion Image Contract
+
+Companion Playwright images are external to this repository. To work with Selenoid they should follow this contract:
+
+* Pin the image tag to a Playwright version.
+* Run a Playwright server, not Selenium.
+* Expose one fixed port and declare that same port in `browsers.json`.
+* Expose one fixed WebSocket path. The default path is `/`.
+* Run under `--init` or an equivalent init process so child processes are reaped correctly.
+* Define Docker `HEALTHCHECK`.
+
+At startup Selenoid prefers Docker `HEALTHCHECK` when the image provides one. If health status is unavailable, Selenoid falls back to protocol-specific probing. For Playwright images that fallback is a TCP probe against the configured Playwright endpoint.
+
+=== Version Matching Rule
+
+Playwright client and server versions must match on major and minor version.
+
+For example, a client from Playwright `1.44.x` should connect to an image built for Playwright `1.44.x`. Keep the image tag, the configured Selenoid version entry, and the client connection URL aligned.
+
+=== Configuration Example
+
+An example `browsers.json` entry for a native Playwright image:
+
+[source,javascript]
+----
+{
+  "chromium": {
+    "default": "1.44.1",
+    "versions": {
+      "1.44.1": {
+        "image": "example/playwright-chromium:1.44.1",
+        "port": "3000",
+        "path": "/",
+        "protocol": "playwright"
+      }
+    }
+  }
+}
+----
+
+This example image name is illustrative only. Selenoid does not publish companion Playwright images from this repository.
+
+=== Usage Examples
+
+Connect from Playwright with the dedicated Selenoid WebSocket endpoint:
+
+[source,javascript]
+----
+const browser = await browserType.connect(
+  "ws://selenoid.example.com:4444/playwright/chromium/1.44.1"
+);
+----
+
+If your test bootstrap reads an environment variable to choose the remote endpoint, you can pass the same URL through it:
+
+[source,bash]
+----
+PW_TEST_CONNECT_WS_ENDPOINT=ws://selenoid.example.com:4444/playwright/chromium/1.44.1
+----
+
+`PW_TEST_CONNECT_WS_ENDPOINT` is only a user-side convention for your own Playwright config or test launcher. It is not a built-in Selenoid environment variable.
+
+=== V1 Scope Limits
+
+The initial Playwright support intentionally stays narrow:
+
+* No Selenoid-specific query, header, or capability expansion is added for Playwright sessions.
+* No claim is made that Playwright sessions have feature parity with Selenoid WebDriver extensions such as file upload, clipboard access, or file download.

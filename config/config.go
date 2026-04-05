@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -50,9 +52,11 @@ type State struct {
 
 // Browser configuration
 type Browser struct {
-	Image           interface{}       `json:"image"`
-	Port            string            `json:"port"`
-	Path            string            `json:"path"`
+	Image interface{} `json:"image"`
+	Port  string      `json:"port"`
+	Path  string      `json:"path"`
+	// Protocol selects the upstream contract; empty preserves WebDriver behavior for backward compatibility.
+	Protocol        string            `json:"protocol,omitempty"`
 	Tmpfs           map[string]string `json:"tmpfs,omitempty"`
 	Volumes         []string          `json:"volumes,omitempty"`
 	Env             []string          `json:"env,omitempty"`
@@ -134,12 +138,89 @@ func (config *Config) Find(name string, version string) (*Browser, string, bool)
 			return nil, "", false
 		}
 	}
+
+	if b, ok := browser.Versions[version]; ok {
+		return b, version, true
+	}
+
+	var prefixMatch *Browser
+	var prefixVersion string
 	for v, b := range browser.Versions {
-		if strings.HasPrefix(v, version) {
-			return b, v, true
+		if !isPlaywrightBrowser(b) && strings.HasPrefix(v, version) {
+			prefixMatch = b
+			prefixVersion = v
+			break
 		}
 	}
-	return nil, version, false
+	if prefixMatch != nil {
+		return prefixMatch, prefixVersion, true
+	}
+
+	playwrightMatches := findPlaywrightVersionMatches(browser.Versions, version)
+	switch len(playwrightMatches) {
+	case 0:
+		return nil, version, false
+	case 1:
+		matchedVersion := playwrightMatches[0]
+		return browser.Versions[matchedVersion], matchedVersion, true
+	default:
+		sort.Strings(playwrightMatches)
+		log.Printf(
+			"[-] [PLAYWRIGHT_VERSION_AMBIGUOUS] [%s] [%s] [%s]",
+			name,
+			version,
+			strings.Join(playwrightMatches, ", "),
+		)
+		return nil, version, false
+	}
+}
+
+func isPlaywrightBrowser(browser *Browser) bool {
+	if browser == nil {
+		return false
+	}
+	return strings.EqualFold(browser.Protocol, "playwright")
+}
+
+func findPlaywrightVersionMatches(versions map[string]*Browser, requestedVersion string) []string {
+	requestedMajorMinor, ok := playwrightMajorMinor(requestedVersion)
+	if !ok {
+		return nil
+	}
+
+	matches := make([]string, 0, len(versions))
+	for configuredVersion, browser := range versions {
+		if !isPlaywrightBrowser(browser) {
+			continue
+		}
+
+		configuredMajorMinor, ok := playwrightMajorMinor(configuredVersion)
+		if !ok || configuredMajorMinor != requestedMajorMinor {
+			continue
+		}
+
+		matches = append(matches, configuredVersion)
+	}
+
+	return matches
+}
+
+func playwrightMajorMinor(version string) (string, bool) {
+	segments := strings.Split(version, ".")
+	if len(segments) < 2 {
+		return "", false
+	}
+
+	major, err := strconv.Atoi(segments[0])
+	if err != nil {
+		return "", false
+	}
+	minor, err := strconv.Atoi(segments[1])
+	if err != nil {
+		return "", false
+	}
+
+	return fmt.Sprintf("%d.%d", major, minor), true
 }
 
 // State - get current state

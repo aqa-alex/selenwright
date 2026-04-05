@@ -30,6 +30,7 @@ include::file-upload.adoc[leveloffset=+1]
 include::file-download.adoc[leveloffset=+1]
 include::clipboard.adoc[leveloffset=+1]
 include::devtools.adoc[leveloffset=+1]
+include::playwright.adoc[leveloffset=+1]
 include::special-capabilities.adoc[leveloffset=+1]
 
 == Advanced Features

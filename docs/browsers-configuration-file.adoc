@@ -14,12 +14,13 @@ Selenoid requires a simple JSON configuration file of the following format:
           "port": "4444",                            <6>
           "tmpfs": {"/tmp": "size=512m"},            <7>
           "path" : "/wd/hub",                        <8>
-          "volumes" : ["/from:/to:ro"],              <9>
-          "env" : ["TZ=Europe/Moscow"],              <10>
-          "hosts" : ["example.com:192.168.0.1"],     <11>
-          "shmSize" : 268435456,                     <12>
-          "cpu" : "1.0",                             <13>
-          "mem" : "512m",                            <14>
+          "protocol" : "webdriver",                  <9>
+          "volumes" : ["/from:/to:ro"],              <10>
+          "env" : ["TZ=Europe/Moscow"],              <11>
+          "hosts" : ["example.com:192.168.0.1"],     <12>
+          "shmSize" : 268435456,                     <13>
+          "cpu" : "1.0",                             <14>
+          "mem" : "512m",                            <15>
         },
         "50.0" :{
             // ...
@@ -39,12 +40,13 @@ Selenoid requires a simple JSON configuration file of the following format:
 <6> _Containers only._ Port to proxy connections to, see below
 <7> _Optional. Containers only._ Add in-memory filesystem (_tmpfs_) to container, see below
 <8> _Optional._ Path relative to / where we request a new session, see below
-<9> _Optional. Containers only._ Mount path from host machine to created container
-<10> _Optional._ Environment variables to be passed to browser container or driver process
-<11> _Optional._ Custom `/etc/hosts` entries to be passed to browser container in `hostname:ip` format.
-<12> _Optional._ Shared memory size in bytes to be set for container. Some browsers (e.g. Chrome) may work unstable when having insufficient `shmSize`. Default value is 256 megabytes.
-<13> _Optional. Containers only._ Container CPU limit in Docker units.
-<14> _Optional. Containers only._ Container memory limit in Docker units.
+<9> _Optional._ Upstream protocol contract. Omit this field for default WebDriver behavior or set it to `playwright` for native Playwright images.
+<10> _Optional. Containers only._ Mount path from host machine to created container
+<11> _Optional._ Environment variables to be passed to browser container or driver process
+<12> _Optional._ Custom `/etc/hosts` entries to be passed to browser container in `hostname:ip` format.
+<13> _Optional._ Shared memory size in bytes to be set for container. Some browsers (e.g. Chrome) may work unstable when having insufficient `shmSize`. Default value is 256 megabytes.
+<14> _Optional. Containers only._ Container CPU limit in Docker units.
+<15> _Optional. Containers only._ Container memory limit in Docker units.
 
 This file represents a mapping between a list of supported browser versions and Docker container images or driver binaries.
 
@@ -60,6 +62,11 @@ Browser name and version are just strings that are matched against Selenium desi
 
 * `browserName`
 * `version`
+
+For native Playwright connections the same entries are selected from the request path:
+
+* `<browser>` in `/playwright/<browser>/<playwright-version>`
+* `<playwright-version>` in `/playwright/<browser>/<playwright-version>`
 
 If no version capability is present default version is used. When there is no exact version match we also try to match by prefix.
 That means version string in JSON should start with version string from capabilities.
@@ -120,6 +127,7 @@ Selenoid proxies connections to either Selenium server or standalone driver bina
     "port": "",
     "tmpfs": {"/tmp": "size=512m", "/var": "size=128m"},
     "path" : "",
+    "protocol" : "",
     "volumes": ["/from:/to", "/another:/one:ro"],
     "env" : ["TZ=Europe/Moscow", "ONE_MORE_VARIABLE=itsValue"],
     "hosts" : ["one.example.com:192.168.0.1", "two.example.com:192.168.0.2"],
@@ -130,6 +138,7 @@ Selenoid proxies connections to either Selenium server or standalone driver bina
 ----
 
 * *port* (_only for containers_) - You should use `port` field to specify the real port inside container that container process (Selenium server, Selenoid or driver) will listen on.
+  For native Playwright images set this to the Playwright server listener port.
 
 * *tmpfs* (_optional_) - You may probably know that moving browser cache to in-memory filesystem (https://en.wikipedia.org/wiki/Tmpfs[Tmpfs])
 can dramatically improve its performance.
@@ -140,7 +149,12 @@ To achieve this define one or more mount points and their respective sizes in op
 Which value to specify in this field depends on container contents.
 For example, most of Firefox containers have http://seleniumhq.org/[Selenium server] inside - thus you need to specify `/wd/hub`.
 Chrome and Opera containers use web driver binary as entrypoint application which is accepting requests at `/`.
+Playwright images also default to `/` when the field is omitted, and the selected WebSocket path should stay fixed for a given image.
 We recommend to use our https://github.com/aerokube/cm[configuration tool] to avoid errors with this field.
+
+* *protocol* (_optional_) - `protocol` selects the upstream contract used by Selenoid.
+  Leave it empty for WebDriver-compatible Selenium servers and drivers.
+  Set it to `playwright` when the image runs a Playwright server instead of Selenium.
 
 * *volumes* (_optional_) - This field allows to mount volumes from host machine to browser container. Should be specified as an array of Docker volume expressions: `/host/dir:/container/dir[:mode]`.
 

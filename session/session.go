@@ -85,7 +85,8 @@ type Session struct {
 	Origin    string
 	Cancel    func()
 	Timeout   time.Duration
-	TimeoutCh chan struct{}
+	Watchdog  *Watchdog
+	Protocol  Protocol
 	Started   time.Time
 	Lock      sync.Mutex
 }

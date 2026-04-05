@@ -170,6 +170,151 @@ func testMux() http.Handler {
 	return mux
 }
 
+type dockerInspectOptions struct {
+	servicePort     string
+	serviceHostPort string
+	healthStatuses  []string
+	deleteRequests  *int
+}
+
+func dockerReadinessMux(opts dockerInspectOptions) http.Handler {
+	mux := http.NewServeMux()
+	inspectCalls := 0
+
+	mux.HandleFunc("/wd/hub", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		},
+	))
+	mux.HandleFunc("/v1.29/containers/create", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+			output := `{"id": "e90e34656806", "warnings": []}`
+			_, _ = w.Write([]byte(output))
+		},
+	))
+	mux.HandleFunc("/v1.29/containers/e90e34656806/start", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		},
+	))
+	mux.HandleFunc("/v1.29/containers/e90e34656806/kill", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		},
+	))
+	mux.HandleFunc("/v1.29/containers/e90e34656806/logs", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Add("Transfer-Encoding", "chunked")
+			w.WriteHeader(http.StatusOK)
+			const streamTypeStderr = 2
+			header := []byte{streamTypeStderr, 0, 0, 0, 0, 0, 0, 9}
+			_, _ = w.Write(header)
+			_, _ = w.Write([]byte("test-data"))
+		},
+	))
+	mux.HandleFunc("/v1.29/containers/e90e34656806", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if opts.deleteRequests != nil {
+				(*opts.deleteRequests)++
+			}
+			w.WriteHeader(http.StatusNoContent)
+		},
+	))
+	mux.HandleFunc("/v1.29/containers/e90e34656806/json", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			status := ""
+			if len(opts.healthStatuses) > 0 {
+				index := inspectCalls
+				if index >= len(opts.healthStatuses) {
+					index = len(opts.healthStatuses) - 1
+				}
+				status = opts.healthStatuses[index]
+			}
+			inspectCalls++
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(dockerInspectResponse(opts.servicePort, opts.serviceHostPort, status)))
+		},
+	))
+	mux.HandleFunc("/v1.29/networks/net-1/connect", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		},
+	))
+
+	return mux
+}
+
+func dockerInspectResponse(servicePort string, serviceHostPort string, healthStatus string) string {
+	state := `"State": {}`
+	if healthStatus != "" {
+		state = fmt.Sprintf(`"State": {"Health": {"Status": %q}}`, healthStatus)
+	}
+
+	return fmt.Sprintf(`{
+		"Id": "e90e34656806",
+		"Created": "2015-01-06T15:47:31.485331387Z",
+		"Driver": "aufs",
+		"Config": {
+			"Hostname": "browser-container"
+		},
+		"HostConfig": {},
+		"NetworkSettings": {
+			"Ports": {
+				"7070/tcp": [
+					{
+						"HostIp": "0.0.0.0",
+						"HostPort": "7070"
+					}
+				],
+				"8080/tcp": [
+					{
+						"HostIp": "0.0.0.0",
+						"HostPort": "8080"
+					}
+				],
+				"9090/tcp": [
+					{
+						"HostIp": "0.0.0.0",
+						"HostPort": "9090"
+					}
+				],
+				"5900/tcp": [
+					{
+						"HostIp": "0.0.0.0",
+						"HostPort": "5900"
+					}
+				],
+				"%s/tcp": [
+					{
+						"HostIp": "0.0.0.0",
+						"HostPort": %q
+					}
+				]
+			},
+			"Networks": {
+				"bridge": {
+					"IPAMConfig": null,
+					"Links": null,
+					"Aliases": null,
+					"NetworkID": "0152391a00ed79360bcf69401f7e2659acfab9553615726dbbcfc08b4f367b25",
+					"EndpointID": "6a36b6f58b37490666329fd0fd74b21aa4eba939dd1ce466bdb6e0f826d56f98",
+					"Gateway": "127.0.0.1",
+					"IPAddress": "127.0.0.1",
+					"IPPrefixLen": 16,
+					"IPv6Gateway": "",
+					"GlobalIPv6Address": "",
+					"GlobalIPv6PrefixLen": 0,
+					"MacAddress": "02:42:ac:11:00:02"
+				}
+			}
+		},
+		%s,
+		"Mounts": []
+	}`, servicePort, serviceHostPort, state)
+}
+
 func parseUrl(input string) *url.URL {
 	u, err := url.Parse(input)
 	if err != nil {
@@ -337,6 +482,74 @@ func TestDeleteContainerOnStartupError(t *testing.T) {
 	assert.Equal(t, numDeleteRequests, 1)
 }
 
+func TestDockerHealthcheckSuccess(t *testing.T) {
+	updateMux(dockerReadinessMux(dockerInspectOptions{
+		servicePort:     "4444",
+		serviceHostPort: "4444",
+		healthStatuses:  []string{"healthy"},
+	}))
+	defer updateMux(testMux())
+
+	env := testEnvironment()
+	starter := createDockerStarter(t, env, testConfig(env))
+	startedService, err := starter.StartWithCancel()
+	assert.NoError(t, err)
+	assert.NotNil(t, startedService)
+	assert.NotNil(t, startedService.Url)
+	assert.NotNil(t, startedService.Cancel)
+
+	startedService.Cancel()
+}
+
+func TestDockerHealthcheckUnhealthy(t *testing.T) {
+	numDeleteRequests := 0
+	updateMux(dockerReadinessMux(dockerInspectOptions{
+		servicePort:     "4444",
+		serviceHostPort: "4444",
+		healthStatuses:  []string{"unhealthy"},
+		deleteRequests:  &numDeleteRequests,
+	}))
+	defer updateMux(testMux())
+
+	env := testEnvironment()
+	starter := createDockerStarter(t, env, testConfig(env))
+	_, err := starter.StartWithCancel()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "became unhealthy")
+	assert.GreaterOrEqual(t, numDeleteRequests, 1)
+}
+
+func TestPlaywrightUsesTCPReadinessFallbackWithoutHealthcheck(t *testing.T) {
+	listener := testTCPServer("playwright-ready")
+	defer listener.Close()
+
+	servicePort := "3200"
+	updateMux(dockerReadinessMux(dockerInspectOptions{
+		servicePort:     servicePort,
+		serviceHostPort: portFromListener(t, listener),
+	}))
+	defer updateMux(testMux())
+
+	env := testEnvironment()
+	cfg := testConfig(env)
+	browser := cfg.Browsers["firefox"].Versions["33.0"]
+	browser.Protocol = "playwright"
+	browser.Port = servicePort
+	browser.Path = ""
+
+	starter := createDockerStarter(t, env, cfg)
+	startedService, err := starter.StartWithCancel()
+	assert.NoError(t, err)
+	assert.NotNil(t, startedService)
+	assert.Nil(t, startedService.Url)
+	assert.NotNil(t, startedService.PlaywrightURL)
+	assert.Equal(t, "ws", startedService.PlaywrightURL.Scheme)
+	assert.Equal(t, net.JoinHostPort("127.0.0.1", portFromListener(t, listener)), startedService.PlaywrightURL.Host)
+	assert.Equal(t, "/", startedService.PlaywrightURL.Path)
+
+	startedService.Cancel()
+}
+
 func TestFindDriver(t *testing.T) {
 	env := testEnvironment()
 	manager := service.DefaultManager{Environment: env, Config: testConfig(env)}
@@ -381,6 +594,14 @@ func testTCPServer(data string) net.Listener {
 		}
 	}()
 	return l
+}
+
+func portFromListener(t *testing.T, listener net.Listener) string {
+	t.Helper()
+
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	assert.NoError(t, err)
+	return port
 }
 
 func readDataFromWebSocket(t *testing.T, wsURL string) string {
