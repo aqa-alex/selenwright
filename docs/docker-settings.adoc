@@ -25,16 +25,16 @@ To make these settings permanent we need to adding the following line to `docker
     
 * You may also want to limit memory and CPU consumption for each started container. To do this use ```-mem``` and ```-cpu``` flags. For example to limit memory type:
 
-    # ./selenoid -mem 128m
+    # ./selenwright -mem 128m
 +
 Here values are specified in https://docs.docker.com/engine/admin/resource_constraints/[Docker format]. Similarly to limit CPU comsumption specify total number of CPUs per container as a float:
 
-    # ./selenoid -cpu 1.5
+    # ./selenwright -cpu 1.5
     
-* We use the same client as `docker` command does. This is why all environment variables like `DOCKER_API_VERSION` or `DOCKER_CERT_PATH` are applicable. See full list of supported variables in https://docs.docker.com/engine/reference/commandline/cli/#environment-variables[Docker documentation]. For example you may encounter the following error when running Selenoid:
+* We use the same client as `docker` command does. This is why all environment variables like `DOCKER_API_VERSION` or `DOCKER_CERT_PATH` are applicable. See full list of supported variables in https://docs.docker.com/engine/reference/commandline/cli/#environment-variables[Docker documentation]. For example you may encounter the following error when running Selenwright:
     
     [SERVICE_STARTUP_FAILED] [unknown] [create container: Error response from daemon: client is newer than server (client API version: 1.30, server API version: 1.24)]
 +    
-This is because your Docker server version is older than Selenoid client version. To fix this you need to switch Selenoid to use supported API version - `1.24`. This can be done by setting `DOCKER_API_VERSION` environment variable:
+This is because your Docker server version is older than Selenwright client version. To fix this you need to switch Selenwright to use supported API version - `1.24`. This can be done by setting `DOCKER_API_VERSION` environment variable:
 
-    # docker run -e DOCKER_API_VERSION=1.24 -d --name selenoid -p 4444:4444 -v /etc/selenoid:/etc/selenoid:ro -v /var/run/docker.sock:/var/run/docker.sock aerokube/selenoid:latest-release
+    # docker run -e DOCKER_API_VERSION=1.24 -d --name selenwright -p 4444:4444 -v /etc/selenwright:/etc/selenwright:ro -v /var/run/docker.sock:/var/run/docker.sock aqa-alex/selenwright:latest-release

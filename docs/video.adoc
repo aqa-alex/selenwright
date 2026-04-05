@@ -7,7 +7,7 @@
 . An additional `enableVideo` capability should be added to tests. See <<Special Capabilities>> section for more details.
 ====
 
-Selenoid can capture browser screen and save it to https://en.wikipedia.org/wiki/MPEG-4[MPEG-4] video file using https://en.wikipedia.org/wiki/H.264/MPEG-4_AVC[H264] codec.
+Selenwright can capture browser screen and save it to https://en.wikipedia.org/wiki/MPEG-4[MPEG-4] video file using https://en.wikipedia.org/wiki/H.264/MPEG-4_AVC[H264] codec.
 Video recording works by attaching a separate container with https://www.ffmpeg.org/[video capturing software] to running browser container.
 
 To use this feature you should:
@@ -15,27 +15,27 @@ To use this feature you should:
 . Pull video recorder image once:
 +
 ```
-$ docker pull selenoid/video-recorder:latest-release
+$ docker pull selenwright/video-recorder:latest-release
 ```
 
-. When running Selenoid **in Docker container**:
-.. Mount a directory from the host machine (e.g. `~/.aerokube/selenoid/video`) to store video files to `/opt/selenoid/video`.
-.. Pass an additional `OVERRIDE_VIDEO_OUTPUT_DIR` environment variable with absolute path to video directory on host machine. This is required because video recorder container, automatically created by Selenoid should save video to host machine video storage directory.
-. When running Selenoid **as a binary** - videos will be stored in `video` directory inside current working directory.
+. When running Selenwright **in Docker container**:
+.. Mount a directory from the host machine (e.g. `~/.aqa-alex/selenwright/video`) to store video files to `/opt/selenwright/video`.
+.. Pass an additional `OVERRIDE_VIDEO_OUTPUT_DIR` environment variable with absolute path to video directory on host machine. This is required because video recorder container, automatically created by Selenwright should save video to host machine video storage directory.
+. When running Selenwright **as a binary** - videos will be stored in `video` directory inside current working directory.
 +
 .Example Docker Command
 ----
 $ docker run -d                                 \
---name selenoid                                 \
+--name selenwright                                 \
 -p 4444:4444                                    \
 -v /var/run/docker.sock:/var/run/docker.sock    \
--v /your/directory/config/:/etc/selenoid/:ro              \
--v /your/directory/video/:/opt/selenoid/video/            \
+-v /your/directory/config/:/etc/selenwright/:ro              \
+-v /your/directory/video/:/opt/selenwright/video/            \
 -e OVERRIDE_VIDEO_OUTPUT_DIR=/your/directory/video/       \
-aerokube/selenoid:latest-release
+aqa-alex/selenwright:latest-release
 ----
 
-TIP: All these actions are automatically done when starting Selenoid via http://aerokube.com/cm/latest/[Configuration Manager] `selenoid start` command.
+TIP: All these actions are automatically done when starting Selenwright via https://github.com/aerokube/cm/releases/latest[Configuration Manager] `selenwright start` command.
 
 === On Windows
 
@@ -44,43 +44,43 @@ With absolute path your command will look like:
 .Windows PowerShell
 [source,bash,subs="attributes+"]
 ----
-> docker volume create selenoid-videos
+> docker volume create selenwright-videos
 > $current = $PWD -replace "\\", "/" -replace "C", "c"    <1>
 > docker run -d                                         `
---name selenoid                                         `
+--name selenwright                                         `
 -p 4444:4444                                            `
 -v //var/run/docker.sock:/var/run/docker.sock           `
--v ${current}/config/:/etc/selenoid/:ro                 `
--v /c/selenoid/video/:/opt/selenoid/video/              ` <2>
--e OVERRIDE_VIDEO_OUTPUT_DIR=/c/selenoid/video/         ` <3>
-aerokube/selenoid:latest-release
+-v ${current}/config/:/etc/selenwright/:ro                 `
+-v /c/selenwright/video/:/opt/selenwright/video/              ` <2>
+-e OVERRIDE_VIDEO_OUTPUT_DIR=/c/selenwright/video/         ` <3>
+aqa-alex/selenwright:latest-release
 ----
 <1> Simple macros to get $PWD with compatible form assumed your directory located on `C:` drive
 <2> Should be absolute path in compatible form
 <3> Should be same as in (2)
 
 
-=== Downloading Video Files from Selenoid
+=== Downloading Video Files from Selenwright
 
 You can access recorded video files using the following URL:
 
 .Direct Link to File
 ----
-http://selenoid-host.example.com:4444/video/<filename>.mp4
+http://selenwright-host.example.com:4444/video/<filename>.mp4
 ----
 
-NOTE: Direct link will work only after session has finished because Selenoid renames temporary filename to `<session-id>.mp4` (by default) at the session close.
+NOTE: Direct link will work only after session has finished because Selenwright renames temporary filename to `<session-id>.mp4` (by default) at the session close.
 
 To see all available files use:
 
 .Listing All Video Files
 ----
-http://selenoid-host.example.com:4444/video/
+http://selenwright-host.example.com:4444/video/
 ----
 
 === Deleting Video Files
 
-Selenoid intentionally has no built-in logic to automatically remove old video files. To limit storage space consumption you have two alternatives:
+Selenwright intentionally has no built-in logic to automatically remove old video files. To limit storage space consumption you have two alternatives:
 
 . Schedule scripts automatically removing files older than desired date and time. An example command under Unix operating systems can look like:
 +
@@ -92,9 +92,9 @@ $ find /path/to/video/dir -mindepth 1 -maxdepth 1 -mmin +120 -name '*.mp4' | xar
 +
 Notice `-mmin +120` argument meaning to only process files older than 2 hours (120 minutes).
 
-. Send video removal requests (e.g. from passed test cases). Just use `DELETE` HTTP method and Selenoid video URL:
+. Send video removal requests (e.g. from passed test cases). Just use `DELETE` HTTP method and Selenwright video URL:
 +
 .Deleting Video File via HTTP API
 ----
-$ curl -X DELETE http://selenoid-host.example.com:4444/video/<filename>.mp4
+$ curl -X DELETE http://selenwright-host.example.com:4444/video/<filename>.mp4
 ----

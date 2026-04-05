@@ -1,18 +1,18 @@
 == Contributing & Development
 
-To build Selenoid:
+To build Selenwright:
 
 . Install https://golang.org/doc/install[Golang] 1.12 and above.
 
 . Setup `$GOPATH` https://github.com/golang/go/wiki/GOPATH[properly]
 
-. Clone Selenoid source:
+. Clone Selenwright source:
 
-    $ git clone https://github.com/aerokube/selenoid.git
+    $ git clone https://github.com/aqa-alex/selenwright.git
 
 . Go to project directory:
 
-    $ cd selenoid
+    $ cd selenwright
 
 . Build source:
 
@@ -20,9 +20,9 @@ To build Selenoid:
 +
 This will also fetch build dependencies.
 
-. Run Selenoid:
+. Run Selenwright:
 
-    $ ./selenoid --help
+    $ ./selenwright --help
 
 [TIP]
 ====
@@ -31,8 +31,8 @@ To build Docker container type:
 [source,bash]
 ----
 $ mkdir -p dist
-$ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/selenoid_linux_amd64
-$ docker buildx build --pull --platform linux/amd64 -t selenoid:latest .
+$ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/selenwright_linux_amd64
+$ docker buildx build --pull --platform linux/amd64 -t selenwright:latest .
 ----
 
 ====

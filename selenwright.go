@@ -36,6 +36,8 @@ import (
 
 const slash = "/"
 
+const fileUploadDirHeader = "X-Selenwright-File"
+
 var (
 	httpClient = &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -209,7 +211,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 	i := 1
 	for ; ; i++ {
 		r.URL.Host, r.URL.Path = u.Host, path.Join(u.Path, r.URL.Path)
-		newBody := removeSelenoidOptions(body)
+		newBody := removeLegacyOptions(body)
 		req, _ := http.NewRequest(http.MethodPost, r.URL.String(), bytes.NewReader(newBody))
 		contentType := r.Header.Get("Content-Type")
 		if len(contentType) > 0 {
@@ -378,27 +380,27 @@ func create(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[%d] [SESSION_CREATED] [%s] [%d] [%.2fs]", requestId, s.ID, i, info.SecondsSince(sessionStartTime))
 }
 
-func removeSelenoidOptions(input []byte) []byte {
+func removeLegacyOptions(input []byte) []byte {
 	body := make(map[string]interface{})
 	_ = json.Unmarshal(input, &body)
-	const selenoidOptions = "selenoid:options"
+	const legacyOptionsKey = "selenoid:options"
 	if raw, ok := body["desiredCapabilities"]; ok {
 		if dc, ok := raw.(map[string]interface{}); ok {
-			delete(dc, selenoidOptions)
+			delete(dc, legacyOptionsKey)
 		}
 	}
 	if raw, ok := body["capabilities"]; ok {
 		if c, ok := raw.(map[string]interface{}); ok {
 			if raw, ok := c["alwaysMatch"]; ok {
 				if am, ok := raw.(map[string]interface{}); ok {
-					delete(am, selenoidOptions)
+					delete(am, legacyOptionsKey)
 				}
 			}
 			if raw, ok := c["firstMatch"]; ok {
 				if fm, ok := raw.([]interface{}); ok {
 					for _, raw := range fm {
 						if c, ok := raw.(map[string]interface{}); ok {
-							delete(c, selenoidOptions)
+							delete(c, legacyOptionsKey)
 						}
 					}
 				}
@@ -524,7 +526,7 @@ func getTemporaryFileName(dir string, extension string) string {
 func generateRandomFileName(extension string) string {
 	randBytes := make([]byte, 16)
 	_, _ = rand.Read(randBytes)
-	return "selenoid" + hex.EncodeToString(randBytes) + extension
+	return "selenwright" + hex.EncodeToString(randBytes) + extension
 }
 
 const vendorPrefix = "aerokube"
@@ -568,7 +570,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 				} else {
 					touchWatchdog(sess)
 					if len(fragments) == 4 && fragments[len(fragments)-1] == "file" && enableFileUpload {
-						r.Header.Set("X-Selenoid-File", filepath.Join(os.TempDir(), id))
+						r.Header.Set(fileUploadDirHeader, filepath.Join(os.TempDir(), id))
 						r.URL.Path = "/file"
 						return
 					}
@@ -670,7 +672,7 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer src.Close()
-	dir := r.Header.Get("X-Selenoid-File")
+	dir := r.Header.Get(fileUploadDirHeader)
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		jsonerror.UnknownError(err).Encode(w)
@@ -703,7 +705,7 @@ func status(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(
 		map[string]interface{}{
 			"value": map[string]interface{}{
-				"message": fmt.Sprintf("Selenoid %s built at %s", gitRevision, buildStamp),
+				"message": fmt.Sprintf("Selenwright %s built at %s", gitRevision, buildStamp),
 				"ready":   ready,
 			},
 		})
@@ -711,5 +713,5 @@ func status(w http.ResponseWriter, _ *http.Request) {
 
 func welcome(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(fmt.Sprintf("You are using Selenoid %s!", gitRevision)))
+	_, _ = w.Write([]byte(fmt.Sprintf("You are using Selenwright %s!", gitRevision)))
 }

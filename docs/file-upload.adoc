@@ -39,6 +39,6 @@ var remoteFilePath = browser.uploadFile(filePath);
 $("input[type='file']").setValue(remoteFilePath);
 ----
 
-Read the following note if you are using Selenoid **without Docker**.
+Read the following note if you are using Selenwright **without Docker**.
 
-NOTE: This feature is supported in WebDriver protocol by sending zipped file contents to `/file` handle. However not all driver binaries support this feature. For example this is not implemented in http://github.com/mozilla/geckodriver[Geckodriver] or https://github.com/SeleniumHQ/selenium/tree/master/cpp/iedriver[IEDriver]. When proxying requests **directly** to these drivers (i.e. when **not using Docker**) you need to start Selenoid with `-enable-file-upload` flag. In that case Selenoid will provide required API to tests. Firefox container images already include this parameter where needed.  
+NOTE: This feature is supported in WebDriver protocol by sending zipped file contents to `/file` handle. However not all driver binaries support this feature. For example this is not implemented in http://github.com/mozilla/geckodriver[Geckodriver] or https://github.com/SeleniumHQ/selenium/tree/master/cpp/iedriver[IEDriver]. When proxying requests **directly** to these drivers (i.e. when **not using Docker**) you need to start Selenwright with `-enable-file-upload` flag. In that case Selenwright will provide required API to tests. Firefox container images already include this parameter where needed.  

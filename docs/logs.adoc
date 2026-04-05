@@ -5,43 +5,43 @@
 An additional `enableLog` capability should be added to tests. See <<Special Capabilities>> section for more details.
 ====
 
-Selenoid can save log files for every running session to a separate file. By default log files are saved as `<session-id>.log` but you can alter file name via `logName` capability.
+Selenwright can save log files for every running session to a separate file. By default log files are saved as `<session-id>.log` but you can alter file name via `logName` capability.
 
-To enable this feature you only need to add `-log-output-dir </path/to/some/dir>` flag to Selenoid:
+To enable this feature you only need to add `-log-output-dir </path/to/some/dir>` flag to Selenwright:
 
-    $ ./selenoid -log-output-dir /path/to/some/dir
+    $ ./selenwright -log-output-dir /path/to/some/dir
 
-When running Selenoid **in Docker container** - don't forget to mount logs directory from the host machine:
+When running Selenwright **in Docker container** - don't forget to mount logs directory from the host machine:
 
 .Example Docker Command
 ----
 $ docker run -d
---name selenoid                                 \
+--name selenwright                                 \
 -p 4444:4444                                    \
 -v /var/run/docker.sock:/var/run/docker.sock    \
--v /your/directory/config/:/etc/selenoid/:ro              \
--v /your/directory/logs/:/opt/selenoid/logs/              \
-aerokube/selenoid:latest-release -log-output-dir /opt/selenoid/logs
+-v /your/directory/config/:/etc/selenwright/:ro              \
+-v /your/directory/logs/:/opt/selenwright/logs/              \
+aqa-alex/selenwright:latest-release -log-output-dir /opt/selenwright/logs
 ----
 
-TIP: This feature is automatically enabled when starting Selenoid via http://aerokube.com/cm/latest/[Configuration Manager] `selenoid start` command.
+TIP: This feature is automatically enabled when starting Selenwright via https://github.com/aerokube/cm/releases/latest[Configuration Manager] `selenwright start` command.
 
-=== Downloading Log Files from Selenoid
+=== Downloading Log Files from Selenwright
 
 You can access saved log files using the following URL:
 
 .Direct Link to Log File
 ----
-http://selenoid-host.example.com:4444/logs/<filename>.log
+http://selenwright-host.example.com:4444/logs/<filename>.log
 ----
 
-NOTE: Direct link will work only after session has finished because Selenoid renames temporary filename to `<session-id>.log` (by default) at the session close.
+NOTE: Direct link will work only after session has finished because Selenwright renames temporary filename to `<session-id>.log` (by default) at the session close.
 
 To see all available files use:
 
 .Listing All Log Files
 ----
-http://selenoid-host.example.com:4444/logs/
+http://selenwright-host.example.com:4444/logs/
 ----
 
 === Deleting Log Files
@@ -50,5 +50,5 @@ Similarly to video files it's up to you when to delete old log files. Either rem
 
 .Deleting Log File via HTTP API
 ----
-$ curl -X DELETE http://selenoid-host.example.com:4444/logs/<filename>.log
+$ curl -X DELETE http://selenwright-host.example.com:4444/logs/<filename>.log
 ----

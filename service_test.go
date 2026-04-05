@@ -343,7 +343,7 @@ func testConfig(env *service.Environment) *config.Config {
 		Default: "33.0",
 		Versions: map[string]*config.Browser{
 			"33.0": {
-				Image:   "selenoid/firefox:33.0",
+				Image:   "selenwright/firefox:33.0",
 				Tmpfs:   map[string]string{"/tmp": "size=128m"},
 				Port:    p,
 				Volumes: []string{"/test:/test"},
@@ -368,7 +368,7 @@ func testConfig(env *service.Environment) *config.Config {
 }
 
 func testEnvironment() *service.Environment {
-	logOutputDir, _ = os.MkdirTemp("", "selenoid-test")
+	logOutputDir, _ = os.MkdirTemp("", "selenwright-test")
 	return &service.Environment{
 		CPU:                 int64(0),
 		Memory:              int64(0),

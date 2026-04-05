@@ -5,11 +5,11 @@ A typical log file looks like the following:
 2017/11/01 19:12:38 [-] [NEW_REQUEST_ACCEPTED]
 2017/11/01 19:12:38 [41301] [LOCATING_SERVICE] [firefox-45.0]
 2017/11/01 19:12:38 [41301] [USING_DOCKER] [firefox-45.0]
-2017/11/01 19:12:38 [41301] [CREATING_CONTAINER] [selenoid/firefox:45.0]
-2017/11/01 19:12:38 [41301] [STARTING_CONTAINER] [selenoid/firefox:45.0] [19760edf330a87531eb2109cfbf1bd4b14c739afa08fe133eb1b9813b2ac6c31]
-2017/11/01 19:12:39 [41301] [CONTAINER_STARTED] [selenoid/firefox:45.0] [19760edf330a87531eb2109cfbf1bd4b14c739afa08fe133eb1b9813b2ac6c31] [896.680954ms]
-2017/11/01 19:12:40 [41301] [SERVICE_STARTED] [selenoid/firefox:45.0] [19760edf330a87531eb2109cfbf1bd4b14c739afa08fe133eb1b9813b2ac6c31] [605.184606ms]
-2017/11/01 19:12:40 [41301] [PROXY_TO] [selenoid/firefox:45.0] [19760edf330a87531eb2109cfbf1bd4b14c739afa08fe133eb1b9813b2ac6c31] [http://172.17.0.3:4444/wd/hub]
+2017/11/01 19:12:38 [41301] [CREATING_CONTAINER] [selenwright/firefox:45.0]
+2017/11/01 19:12:38 [41301] [STARTING_CONTAINER] [selenwright/firefox:45.0] [19760edf330a87531eb2109cfbf1bd4b14c739afa08fe133eb1b9813b2ac6c31]
+2017/11/01 19:12:39 [41301] [CONTAINER_STARTED] [selenwright/firefox:45.0] [19760edf330a87531eb2109cfbf1bd4b14c739afa08fe133eb1b9813b2ac6c31] [896.680954ms]
+2017/11/01 19:12:40 [41301] [SERVICE_STARTED] [selenwright/firefox:45.0] [19760edf330a87531eb2109cfbf1bd4b14c739afa08fe133eb1b9813b2ac6c31] [605.184606ms]
+2017/11/01 19:12:40 [41301] [PROXY_TO] [selenwright/firefox:45.0] [19760edf330a87531eb2109cfbf1bd4b14c739afa08fe133eb1b9813b2ac6c31] [http://172.17.0.3:4444/wd/hub]
 2017/11/01 19:12:40 [41301] [SESSION_ATTEMPTED] [test-quota] [http://172.17.0.3:4444/wd/hub] [1]
 2017/11/01 19:12:42 [41301] [SESSION_CREATED] [test-quota] [345bb886-7026-46d7-82d4-4788c0460110] [http://172.17.0.3:4444/wd/hub] [1] [4.155712239s]
 ....
@@ -50,7 +50,7 @@ The following statuses are available:
 | CONTAINER_STARTED | Docker container has successfully started
 | FAILED_TO_COPY_LOGS | Failed to copy logs from Docker container
 | CREATING_CONTAINER | Docker container with browser is creating
-| DEFAULT_VERSION | Selenoid is using default browser version
+| DEFAULT_VERSION | Selenwright is using default browser version
 | DELETED_LOG_FILE | Log file was deleted by user
 | DELETED_VIDEO_FILE | Video file was deleted by user
 | DEVTOOLS_CLIENT_DISCONNECTED | User devtools client disconnected

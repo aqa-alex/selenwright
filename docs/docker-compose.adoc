@@ -1,4 +1,4 @@
-== Selenoid with Docker Compose
+== Selenwright with Docker Compose
 
 In example https://docs.docker.com/compose/[Docker Compose] configurations below we assume that:
 
@@ -13,7 +13,7 @@ In example https://docs.docker.com/compose/[Docker Compose] configurations below
     $ mkdir -p /path/to/config/logs
     $ mkdir -p /path/to/config/video
 
-=== Option 1. Running Selenoid in default Docker network
+=== Option 1. Running Selenwright in default Docker network
 
 In that case *bridge* network mode should be used for all services:
 
@@ -21,51 +21,51 @@ In that case *bridge* network mode should be used for all services:
 ----
 version: '3'
 services:
-  selenoid:
+  selenwright:
     network_mode: bridge
-    image: aerokube/selenoid:latest-release
+    image: aqa-alex/selenwright:latest-release
     volumes:
-      - "/path/to/config:/etc/selenoid"
+      - "/path/to/config:/etc/selenwright"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "/path/to/config/video:/opt/selenoid/video"
-      - "/path/to/config/logs:/opt/selenoid/logs"
+      - "/path/to/config/video:/opt/selenwright/video"
+      - "/path/to/config/logs:/opt/selenwright/logs"
     environment:
       - OVERRIDE_VIDEO_OUTPUT_DIR=/path/to/config/video
-    command: ["-conf", "/etc/selenoid/browsers.json", "-video-output-dir", "/opt/selenoid/video", "-log-output-dir", "/opt/selenoid/logs"]
+    command: ["-conf", "/etc/selenwright/browsers.json", "-video-output-dir", "/opt/selenwright/video", "-log-output-dir", "/opt/selenwright/logs"]
     ports:
       - "4444:4444"
 ----
 
-=== Option 2. Running Selenoid in custom Docker network
+=== Option 2. Running Selenwright in custom Docker network
 
-In that case you have to add `-container-network` flag to Selenoid as follows:
+In that case you have to add `-container-network` flag to Selenwright as follows:
 
 1. Create custom Docker network:
 
-    $ docker network create selenoid
+    $ docker network create selenwright
 
-2. Start Selenoid:
+2. Start Selenwright:
 
 [source,yaml]
 ----
 version: '3'
 networks:
-  selenoid:
+  selenwright:
     external:
-      name: selenoid # This assumes network is already created
+      name: selenwright # This assumes network is already created
 services:
-  selenoid:
+  selenwright:
     networks:
-      selenoid: null
-    image: aerokube/selenoid:latest-release
+      selenwright: null
+    image: aqa-alex/selenwright:latest-release
     volumes:
-      - "/path/to/config:/etc/selenoid"
+      - "/path/to/config:/etc/selenwright"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "/path/to/config/video:/opt/selenoid/video"
-      - "/path/to/config/logs:/opt/selenoid/logs"
+      - "/path/to/config/video:/opt/selenwright/video"
+      - "/path/to/config/logs:/opt/selenwright/logs"
     environment:
       - OVERRIDE_VIDEO_OUTPUT_DIR=/path/to/config/video
-    command: ["-conf", "/etc/selenoid/browsers.json", "-video-output-dir", "/opt/selenoid/video", "-log-output-dir", "/opt/selenoid/logs", "-container-network", "selenoid"]
+    command: ["-conf", "/etc/selenwright/browsers.json", "-video-output-dir", "/opt/selenwright/video", "-log-output-dir", "/opt/selenwright/logs", "-container-network", "selenwright"]
     ports:
       - "4444:4444"
 ----

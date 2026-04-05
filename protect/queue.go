@@ -20,11 +20,11 @@ type Queue struct {
 	used     chan struct{}
 }
 
-// Try - when X-Selenoid-No-Wait header is set
+// Try - when X-Selenwright-No-Wait header is set
 // reply to client immediately if queue is full
 func (q *Queue) Try(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, noWait := r.Header["X-Selenoid-No-Wait"]
+		_, noWait := r.Header["X-Selenwright-No-Wait"]
 		select {
 		case q.limit <- struct{}{}:
 			<-q.limit
