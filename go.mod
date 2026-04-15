@@ -14,6 +14,7 @@ require (
 	github.com/mafredri/cdp v0.34.1
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
+	golang.org/x/crypto v0.23.0
 	golang.org/x/net v0.25.0
 )
 
