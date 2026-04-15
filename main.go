@@ -56,7 +56,8 @@ var (
 	confPath                 string
 	logConfPath              string
 	captureDriverLogs        bool
-	disablePrivileged        bool
+	privilegedContainers     bool
+	capAddSysAdmin           bool
 	videoOutputDir           string
 	videoRecorderImage       string
 	logOutputDir             string
@@ -130,7 +131,8 @@ func init() {
 	flag.Var(&cpu, "cpu", "Containers cpu limit as float e.g. 0.2 or 1.0")
 	flag.StringVar(&containerNetwork, "container-network", service.DefaultContainerNetwork, "Network to be used for containers")
 	flag.BoolVar(&captureDriverLogs, "capture-driver-logs", false, "Whether to add driver process logs to Selenwright output")
-	flag.BoolVar(&disablePrivileged, "disable-privileged", false, "Whether to disable privileged container mode")
+	flag.BoolVar(&privilegedContainers, "privileged", false, "Run browser containers in privileged mode. Default false — opposite of legacy upstream Selenoid which defaulted to true. Enable only when the browser needs host-level capabilities and the deployment isolates tenants some other way")
+	flag.BoolVar(&capAddSysAdmin, "cap-add-sys-admin", false, "Add the SYS_ADMIN Linux capability to browser containers (without full -privileged). Chrome's user-namespace sandbox requires it; most headless workloads do not")
 	flag.StringVar(&videoOutputDir, "video-output-dir", "video", "Directory to save recorded video to")
 	flag.StringVar(&videoRecorderImage, "video-recorder-image", "selenwright/video-recorder:latest-release", "Image to use as video recorder")
 	flag.StringVar(&logOutputDir, "log-output-dir", "", "Directory to save session log to")
@@ -266,7 +268,8 @@ func init() {
 		VideoContainerImage:  videoRecorderImage,
 		LogOutputDir:         logOutputDir,
 		SaveAllLogs:          saveAllLogs,
-		Privileged:           !disablePrivileged,
+		Privileged:           privilegedContainers,
+		CapAddSysAdmin:       capAddSysAdmin,
 	}
 	if disableDocker {
 		manager = &service.DefaultManager{Environment: &environment, Config: conf}

@@ -136,7 +136,7 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 	if len(d.Caps.DNSServers) > 0 {
 		hostConfig.DNS = d.Caps.DNSServers
 	}
-	if !d.Privileged {
+	if d.CapAddSysAdmin {
 		hostConfig.CapAdd = strslice.StrSlice{sysAdmin}
 	}
 	if len(d.ApplicationContainers) > 0 {

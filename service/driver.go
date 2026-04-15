@@ -10,10 +10,39 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aqa-alex/selenwright/session"
 )
+
+// driverEnvAllowedPrefixes lists env-var prefixes allowed from client caps
+// into a driver subprocess on the host. Caps.Env lands directly in the
+// host process, so blanket pass-through gives callers a trivial
+// LD_PRELOAD / PATH hijack. The whitelist limits what can flow through
+// even if the caps sanitizer is disabled or an admin opts into passing env.
+var driverEnvAllowedPrefixes = []string{"SELENWRIGHT_", "SE_"}
+
+func filterClientEnv(env []string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		eq := strings.IndexByte(entry, '=')
+		if eq <= 0 {
+			continue
+		}
+		name := entry[:eq]
+		for _, prefix := range driverEnvAllowedPrefixes {
+			if strings.HasPrefix(name, prefix) {
+				out = append(out, entry)
+				break
+			}
+		}
+	}
+	return out
+}
 
 // Driver - driver processes manager
 type Driver struct {
@@ -50,7 +79,7 @@ func (d *Driver) StartWithCancel() (*StartedService, error) {
 	cmdLine = append(cmdLine, fmt.Sprintf("--port=%s", port))
 	cmd := exec.Command(cmdLine[0], cmdLine[1:]...)
 	cmd.Env = append(cmd.Env, d.Service.Env...)
-	cmd.Env = append(cmd.Env, d.Caps.Env...)
+	cmd.Env = append(cmd.Env, filterClientEnv(d.Caps.Env)...)
 	if d.CaptureDriverLogs {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
