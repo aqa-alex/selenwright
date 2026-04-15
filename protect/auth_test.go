@@ -237,7 +237,7 @@ func TestAuthMiddleware_NoneAuthenticatorAlwaysSucceeds(t *testing.T) {
 	srv := httptest.NewServer(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := IdentityFromContext(r.Context())
 		require.True(t, ok)
-		require.Equal(t, "anonymous", id.User)
+		require.Equal(t, "unknown", id.User)
 		w.WriteHeader(http.StatusOK)
 	})))
 	defer srv.Close()

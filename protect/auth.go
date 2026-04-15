@@ -21,7 +21,11 @@ type Identity struct {
 	IsAdmin bool
 }
 
-var AnonymousIdentity = Identity{User: "anonymous", IsAdmin: false}
+// AnonymousIdentity is the placeholder returned by NoneAuthenticator and
+// used as the fallback when no Authenticator was set. The user string
+// matches selenwright's legacy info.RequestInfo convention so log output
+// and quota maps remain stable across the auth-mode rollout.
+var AnonymousIdentity = Identity{User: "unknown", IsAdmin: false}
 
 var (
 	ErrAuthRequired = errors.New("authentication required")

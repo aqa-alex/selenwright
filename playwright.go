@@ -19,6 +19,7 @@ import (
 	"github.com/aqa-alex/selenwright/event"
 	"github.com/aqa-alex/selenwright/info"
 	"github.com/aqa-alex/selenwright/jsonerror"
+	"github.com/aqa-alex/selenwright/protect"
 	"github.com/aqa-alex/selenwright/session"
 	gwebsocket "github.com/gorilla/websocket"
 )
@@ -139,8 +140,13 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	identity, _ := protect.IdentityFromContext(r.Context())
+	owner := identity.User
+	if owner == "" {
+		owner = user
+	}
 	sess := &session.Session{
-		Quota:     user,
+		Quota:     owner,
 		Caps:      caps,
 		URL:       clonePlaywrightURL(upstreamURL),
 		Container: startedService.Container,

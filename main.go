@@ -403,6 +403,32 @@ func stripTrustHeaders(r *http.Request) {
 	}
 }
 
+// gateSessionOwner extracts the session ID from the URL path at the given
+// fragment index, looks up the session, and forbids access when the
+// authenticated identity is neither the session owner nor an admin.
+// Unknown sessions pass through so the next handler can render its
+// standard 404 (or proceed when the path doesn't address one).
+func gateSessionOwner(idIndex int, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sid := protect.ExtractSessionID(r.URL.Path, idIndex)
+		if sid == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		sess, ok := sessions.Get(sid)
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		identity, _ := protect.IdentityFromContext(r.Context())
+		if !protect.SessionOwnership(identity, sess.Quota) {
+			protect.WriteForbidden(w)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func gateOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !originChecker.Check(r) {
@@ -529,7 +555,7 @@ var seleniumPaths = struct {
 func selenium() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc(seleniumPaths.CreateSession, post(queue.Try(queue.Check(queue.Protect(create)))))
-	mux.HandleFunc(seleniumPaths.ProxySession, proxy)
+	mux.Handle(seleniumPaths.ProxySession, gateSessionOwner(2, http.HandlerFunc(proxy)))
 	mux.HandleFunc(paths.Status, status)
 	mux.HandleFunc(paths.Welcome, welcome)
 	return mux
@@ -653,12 +679,12 @@ func handler() http.Handler {
 	// registration) so SIGHUP reload of -allowed-origins or test
 	// reassignment takes effect immediately. Removable once PR #14
 	// migrates these to gorilla/websocket.
-	root.Handle(paths.VNC, gateOrigin(websocket.Handler(vnc)))
-	root.Handle(paths.Logs, gateOrigin(http.HandlerFunc(logs)))
+	root.Handle(paths.VNC, gateOrigin(gateSessionOwner(2, websocket.Handler(vnc))))
+	root.Handle(paths.Logs, gateOrigin(gateSessionOwner(2, http.HandlerFunc(logs))))
 	root.HandleFunc(paths.Video, video)
-	root.HandleFunc(paths.Download, reverseProxy(func(sess *session.Session) string { return sess.HostPort.Fileserver }, "DOWNLOADING_FILE"))
-	root.HandleFunc(paths.Clipboard, reverseProxy(func(sess *session.Session) string { return sess.HostPort.Clipboard }, "CLIPBOARD"))
-	root.HandleFunc(paths.Devtools, reverseProxy(func(sess *session.Session) string { return sess.HostPort.Devtools }, "DEVTOOLS"))
+	root.Handle(paths.Download, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Fileserver }, "DOWNLOADING_FILE"))))
+	root.Handle(paths.Clipboard, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Clipboard }, "CLIPBOARD"))))
+	root.Handle(paths.Devtools, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Devtools }, "DEVTOOLS"))))
 	root.HandleFunc(paths.Playwright, get(queue.Try(queue.Check(queue.Protect(playwright)))))
 	if enableFileUpload {
 		root.HandleFunc(paths.File, fileUpload)
