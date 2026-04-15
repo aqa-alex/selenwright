@@ -3,118 +3,121 @@
 package session
 
 import (
+	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-type watchdogState uint8
-
 const (
-	watchdogStateActive watchdogState = iota
-	watchdogStateStopped
-	watchdogStateExpired
+	watchdogActive  int32 = 0
+	watchdogStopped int32 = 1
+	watchdogExpired int32 = 2
 )
 
-// Watchdog - protocol-agnostic idle timeout controller.
+// Watchdog is a protocol-agnostic idle timeout controller. Callers
+// call Touch whenever traffic arrives; if enough time passes without
+// a Touch (or Expire is invoked manually) the onExpire callback fires
+// exactly once. Stop cancels the watchdog without firing.
+//
+// The implementation is a small FSM over atomic.Int32 + context.Done,
+// replacing the prior mutex/FSM/channel tuple. Each transition
+// (Active → Stopped, Active → Expired) uses a compare-and-swap, so
+// the three exported methods can race against each other and against
+// the internal timer goroutine without locks.
 type Watchdog struct {
-	lock     sync.Mutex
 	timeout  time.Duration
-	timer    *time.Timer
-	done     chan struct{}
 	onExpire func()
-	state    watchdogState
+
+	state atomic.Int32
+	// deadline is the time at which the callback should fire in the
+	// absence of a Touch. Stored as Unix nanos through atomic.Int64
+	// so Touch can shift the deadline forward without a lock. The
+	// timer goroutine re-reads this value on every wake, so Touches
+	// that land between reads are honored on the next cycle.
+	deadline atomic.Int64
+
+	ctx      context.Context
+	cancel   context.CancelFunc
+	fireOnce sync.Once
 }
 
-// NewWatchdog - create a watchdog that expires after timeout.
+// NewWatchdog creates an active watchdog that expires after timeout
+// of idle. onExpire may be nil.
 func NewWatchdog(timeout time.Duration, onExpire func()) *Watchdog {
 	if onExpire == nil {
 		onExpire = func() {}
 	}
-
+	ctx, cancel := context.WithCancel(context.Background())
 	w := &Watchdog{
 		timeout:  timeout,
-		timer:    time.NewTimer(timeout),
-		done:     make(chan struct{}),
 		onExpire: onExpire,
+		ctx:      ctx,
+		cancel:   cancel,
 	}
+	w.deadline.Store(time.Now().Add(timeout).UnixNano())
 	go w.run()
-
 	return w
 }
 
-// Touch - delay expiration for another timeout interval.
+// Touch delays expiration for another timeout interval. Returns true
+// if the watchdog was still active, false if it had already been
+// stopped or expired.
 func (w *Watchdog) Touch() bool {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-
-	if w.state != watchdogStateActive {
+	if w.state.Load() != watchdogActive {
 		return false
 	}
-	if !w.timer.Stop() {
-		return false
-	}
-
-	w.timer.Reset(w.timeout)
+	w.deadline.Store(time.Now().Add(w.timeout).UnixNano())
 	return true
 }
 
-// Stop - cancel the watchdog and prevent future expiration.
+// Stop cancels the watchdog and prevents future expiration. Returns
+// true on the transition Active → Stopped; false on every later call.
 func (w *Watchdog) Stop() bool {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-
-	if w.state != watchdogStateActive {
+	if !w.state.CompareAndSwap(watchdogActive, watchdogStopped) {
 		return false
 	}
-
-	w.state = watchdogStateStopped
-	if w.timer != nil {
-		w.timer.Stop()
-	}
-	close(w.done)
-
+	w.cancel()
 	return true
 }
 
-// Expire - fire the expiration callback immediately.
+// Expire fires the expiration callback immediately. Returns true on
+// the transition Active → Expired; false on every later call. Safe
+// to race with a natural timer fire: whichever transition wins runs
+// onExpire exactly once (via fireOnce).
 func (w *Watchdog) Expire() bool {
-	callback := w.transitionToExpired()
-	if callback == nil {
+	if !w.state.CompareAndSwap(watchdogActive, watchdogExpired) {
 		return false
 	}
-
-	callback()
+	w.cancel()
+	w.fire()
 	return true
+}
+
+// fire runs onExpire at most once regardless of how many transitions
+// reach the Expired state.
+func (w *Watchdog) fire() {
+	w.fireOnce.Do(w.onExpire)
 }
 
 func (w *Watchdog) run() {
-	select {
-	case <-w.timer.C:
-	case <-w.done:
-		return
+	for {
+		wait := time.Duration(w.deadline.Load() - time.Now().UnixNano())
+		if wait <= 0 {
+			if w.state.CompareAndSwap(watchdogActive, watchdogExpired) {
+				w.cancel()
+				w.fire()
+			}
+			return
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+			// Deadline may have been pushed forward by a Touch that
+			// landed after we computed wait; loop and re-read.
+		case <-w.ctx.Done():
+			timer.Stop()
+			return
+		}
 	}
-
-	callback := w.transitionToExpired()
-	if callback == nil {
-		return
-	}
-
-	callback()
-}
-
-func (w *Watchdog) transitionToExpired() func() {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-
-	if w.state != watchdogStateActive {
-		return nil
-	}
-
-	w.state = watchdogStateExpired
-	if w.timer != nil {
-		w.timer.Stop()
-	}
-	close(w.done)
-
-	return w.onExpire
 }
