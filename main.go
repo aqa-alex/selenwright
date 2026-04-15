@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -33,8 +34,6 @@ import (
 	"github.com/aqa-alex/selenwright/session"
 	"github.com/aqa-alex/selenwright/upload"
 	"github.com/docker/docker/client"
-	"github.com/pkg/errors"
-	"golang.org/x/net/websocket"
 )
 
 var (
@@ -391,11 +390,6 @@ func splitCSV(s string) []string {
 	return out
 }
 
-// gateOrigin wraps an http.Handler with the live originChecker so reloads
-// (SIGHUP, tests) take effect without re-registering routes. The receiver
-// version OriginChecker.HandlerWrap captures the pointer at construction
-// time, which is the wrong semantics for endpoints registered once at
-// startup against a global checker that may be replaced.
 // stripTrustHeaders removes router-trust headers (X-Router-Secret,
 // X-Forwarded-User, X-Admin) before the request crosses the trust
 // boundary into a browser container. The set is kept in sync with
@@ -428,16 +422,6 @@ func gateSessionOwner(idIndex int, next http.Handler) http.Handler {
 		identity, _ := protect.IdentityFromContext(r.Context())
 		if !protect.SessionOwnership(identity, sess.Quota) {
 			protect.WriteForbidden(w)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func gateOrigin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !originChecker.Check(r) {
-			http.Error(w, "Forbidden Origin", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -677,15 +661,8 @@ func handler() http.Handler {
 		_ = json.NewEncoder(w).Encode(conf.State(sessions, limit, queue.Queued(), queue.Pending()))
 	})
 	root.HandleFunc(paths.Ping, ping)
-	// VNC and /logs/ rely on golang.org/x/net/websocket which has no
-	// CheckOrigin equivalent; gate them with the same Origin allow-list
-	// applied to gorilla-based endpoints (devtools, playwright). Each
-	// request reads the originChecker global at fire time (not at
-	// registration) so SIGHUP reload of -allowed-origins or test
-	// reassignment takes effect immediately. Removable once PR #14
-	// migrates these to gorilla/websocket.
-	root.Handle(paths.VNC, gateOrigin(gateSessionOwner(2, websocket.Handler(vnc))))
-	root.Handle(paths.Logs, gateOrigin(gateSessionOwner(2, http.HandlerFunc(logs))))
+	root.Handle(paths.VNC, gateSessionOwner(2, http.HandlerFunc(vnc)))
+	root.Handle(paths.Logs, gateSessionOwner(2, http.HandlerFunc(logs)))
 	root.HandleFunc(paths.Video, video)
 	root.Handle(paths.Download, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Fileserver }, "DOWNLOADING_FILE"))))
 	root.Handle(paths.Clipboard, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Clipboard }, "CLIPBOARD"))))

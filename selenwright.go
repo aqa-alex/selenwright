@@ -33,7 +33,7 @@ import (
 	"github.com/aqa-alex/selenwright/jsonerror"
 	"github.com/aqa-alex/selenwright/service"
 	"github.com/aqa-alex/selenwright/session"
-	"github.com/imdario/mergo"
+	"dario.cat/mergo"
 )
 
 const slash = "/"
