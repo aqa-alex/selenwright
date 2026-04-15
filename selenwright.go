@@ -233,8 +233,12 @@ func create(w http.ResponseWriter, r *http.Request) {
 			req.Header.Set("Content-Type", contentType)
 		}
 		req.Host = host
+		// Use defer-in-a-closure so the per-attempt context and its
+		// internal timer are released on every loop iteration. Prior
+		// code deferred done() at function scope, so a -retry-count=N
+		// run against a slow upstream accumulated up to N live contexts
+		// until create() finally returned (audit H-3).
 		ctx, done := context.WithTimeout(r.Context(), app.newSessionAttemptTimeout)
-		defer done()
 		log.Printf("[%d] [SESSION_ATTEMPTED] [%s] [%d]", requestId, u.String(), i)
 		rsp, err := httpClient.Do(req.WithContext(ctx))
 		select {
@@ -246,6 +250,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			case context.DeadlineExceeded:
 				log.Printf("[%d] [SESSION_ATTEMPT_TIMED_OUT] [%s]", requestId, app.newSessionAttemptTimeout)
 				if i < app.retryCount {
+					done()
 					continue
 				}
 				err := fmt.Errorf("New session attempts retry count exceeded")
@@ -254,6 +259,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			case context.Canceled:
 				log.Printf("[%d] [CLIENT_DISCONNECTED] [%s] [%s] [%.2fs]", requestId, user, remote, info.SecondsSince(sessionStartTime))
 			}
+			done()
 			app.queue.Drop()
 			cancel()
 			return
@@ -265,15 +271,18 @@ func create(w http.ResponseWriter, r *http.Request) {
 			}
 			log.Printf("[%d] [SESSION_FAILED] [%s] [%s]", requestId, u.String(), err)
 			jsonerror.SessionNotCreated(err).Encode(w)
+			done()
 			app.queue.Drop()
 			cancel()
 			return
 		}
 		if rsp.StatusCode == http.StatusNotFound && u.Path == "" {
 			u.Path = "/wd/hub"
+			done()
 			continue
 		}
 		resp = rsp
+		done()
 		break
 	}
 	defer resp.Body.Close()
