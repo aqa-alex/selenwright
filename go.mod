@@ -3,6 +3,7 @@ module github.com/aqa-alex/selenwright
 go 1.22
 
 require (
+	dario.cat/mergo v1.0.1
 	github.com/aerokube/ggr v0.0.0-20240420103110-fc913c480489
 	github.com/aws/aws-sdk-go v1.53.5
 	github.com/docker/docker v26.1.5+incompatible
@@ -10,12 +11,9 @@ require (
 	github.com/docker/go-units v0.5.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.1
-	github.com/imdario/mergo v0.3.15
 	github.com/mafredri/cdp v0.34.1
-	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.23.0
-	golang.org/x/net v0.25.0
 	golang.org/x/sync v0.7.0
 )
 
@@ -35,6 +33,7 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.47.0 // indirect
 	go.opentelemetry.io/otel v1.22.0 // indirect
@@ -43,6 +42,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.22.0 // indirect
 	go.opentelemetry.io/otel/trace v1.22.0 // indirect
 	golang.org/x/mod v0.17.0 // indirect
+	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.21.0 // indirect

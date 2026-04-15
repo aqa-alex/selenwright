@@ -13,12 +13,18 @@ import (
 	"github.com/aqa-alex/selenwright/info"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/pkg/stdcopy"
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
 )
 
 const (
 	jsonParam = "json"
 )
+
+var logsUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return originChecker.Check(r)
+	},
+}
 
 func logs(w http.ResponseWriter, r *http.Request) {
 	requestId := serial()
@@ -38,7 +44,7 @@ func logs(w http.ResponseWriter, r *http.Request) {
 		fileServer.ServeHTTP(w, r)
 		return
 	}
-	websocket.Handler(streamLogs).ServeHTTP(w, r)
+	streamLogs(w, r)
 }
 
 func listFilesAsJson(requestId uint64, w http.ResponseWriter, dir string, errStatus string) {
@@ -56,27 +62,35 @@ func listFilesAsJson(requestId uint64, w http.ResponseWriter, dir string, errSta
 	_ = json.NewEncoder(w).Encode(ret)
 }
 
-func streamLogs(wsconn *websocket.Conn) {
-	defer wsconn.Close()
+func streamLogs(w http.ResponseWriter, r *http.Request) {
 	requestId := serial()
-	sid, _ := splitRequestPath(wsconn.Request().URL.Path)
-	sess, ok := sessions.Get(sid)
-	if ok && sess.Container != nil {
-		log.Printf("[%d] [CONTAINER_LOGS] [%s]", requestId, sess.Container.ID)
-		r, err := cli.ContainerLogs(wsconn.Request().Context(), sess.Container.ID, container.LogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Follow:     true,
-		})
-		if err != nil {
-			log.Printf("[%d] [CONTAINER_LOGS_ERROR] [%v]", requestId, err)
-			return
-		}
-		defer r.Close()
-		wsconn.PayloadType = websocket.BinaryFrame
-		_, _ = stdcopy.StdCopy(wsconn, wsconn, r)
-		log.Printf("[%d] [CONTAINER_LOGS_DISCONNECTED] [%s]", requestId, sid)
-	} else {
-		log.Printf("[%d] [SESSION_NOT_FOUND] [%s]", requestId, sid)
+	wsconn, err := logsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("[%d] [LOGS_UPGRADE_FAILED] [%v]", requestId, err)
+		return
 	}
+	defer wsconn.Close()
+
+	sid, _ := splitRequestPath(r.URL.Path)
+	sess, ok := sessions.Get(sid)
+	if !ok || sess.Container == nil {
+		log.Printf("[%d] [SESSION_NOT_FOUND] [%s]", requestId, sid)
+		return
+	}
+
+	log.Printf("[%d] [CONTAINER_LOGS] [%s]", requestId, sess.Container.ID)
+	rc, err := cli.ContainerLogs(r.Context(), sess.Container.ID, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     true,
+	})
+	if err != nil {
+		log.Printf("[%d] [CONTAINER_LOGS_ERROR] [%v]", requestId, err)
+		return
+	}
+	defer rc.Close()
+
+	ww := &wsBinaryWriter{conn: wsconn}
+	_, _ = stdcopy.StdCopy(ww, ww, rc)
+	log.Printf("[%d] [CONTAINER_LOGS_DISCONNECTED] [%s]", requestId, sid)
 }

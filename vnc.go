@@ -6,15 +6,28 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 
 	"github.com/aqa-alex/selenwright/session"
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
 )
 
-func vnc(wsconn *websocket.Conn) {
-	defer wsconn.Close()
+var vncUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return originChecker.Check(r)
+	},
+}
+
+func vnc(w http.ResponseWriter, r *http.Request) {
 	requestId := serial()
-	sid, _ := splitRequestPath(wsconn.Request().URL.Path)
+	wsconn, err := vncUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("[%d] [VNC_UPGRADE_FAILED] [%v]", requestId, err)
+		return
+	}
+	defer wsconn.Close()
+
+	sid, _ := splitRequestPath(r.URL.Path)
 	sess, ok := sessions.Get(sid)
 	if !ok {
 		log.Printf("[%d] [SESSION_NOT_FOUND] [%s]", requestId, sid)
@@ -26,20 +39,24 @@ func vnc(wsconn *websocket.Conn) {
 		return
 	}
 	log.Printf("[%d] [VNC_ENABLED] [%s]", requestId, sid)
+
 	var d net.Dialer
-	conn, err := d.DialContext(wsconn.Request().Context(), "tcp", vncHostPort)
+	conn, err := d.DialContext(r.Context(), "tcp", vncHostPort)
 	if err != nil {
 		log.Printf("[%d] [VNC_ERROR] [%v]", requestId, err)
 		return
 	}
 	defer conn.Close()
-	wsconn.PayloadType = websocket.BinaryFrame
+
+	wsWriter := &wsBinaryWriter{conn: wsconn}
+	wsReader := &wsMessageReader{conn: wsconn}
 	go func() {
-		_, _ = copyWithWatchdog(wsconn, conn, sess)
+		_, _ = copyWithWatchdog(conn, wsReader, sess)
+		_ = conn.Close()
 		_ = wsconn.Close()
 		log.Printf("[%d] [VNC_SESSION_CLOSED] [%s]", requestId, sid)
 	}()
-	_, _ = copyWithWatchdog(conn, wsconn, sess)
+	_, _ = copyWithWatchdog(wsWriter, conn, sess)
 	log.Printf("[%d] [VNC_CLIENT_DISCONNECTED] [%s]", requestId, sid)
 }
 
@@ -73,4 +90,51 @@ func copyWithWatchdog(dst io.Writer, src io.Reader, sess *session.Session) (int6
 			return total, rerr
 		}
 	}
+}
+
+// wsMessageReader adapts a gorilla *websocket.Conn to io.Reader by
+// concatenating successive messages into one byte stream. Message
+// boundaries are irrelevant for the VNC byte-for-byte tunnel — the
+// remote TCP endpoint (x11vnc) just needs bytes in order. Not
+// goroutine-safe; callers own the conn for reading.
+type wsMessageReader struct {
+	conn *websocket.Conn
+	cur  io.Reader
+}
+
+func (r *wsMessageReader) Read(p []byte) (int, error) {
+	for {
+		if r.cur != nil {
+			n, err := r.cur.Read(p)
+			if err == io.EOF {
+				r.cur = nil
+				if n > 0 {
+					return n, nil
+				}
+				continue
+			}
+			return n, err
+		}
+		_, next, err := r.conn.NextReader()
+		if err != nil {
+			return 0, err
+		}
+		r.cur = next
+	}
+}
+
+// wsBinaryWriter adapts a gorilla *websocket.Conn to io.Writer by
+// emitting each Write as a single binary message. Both VNC (one frame
+// per 32 KiB chunk) and container-log streaming (one frame per stdcopy
+// multiplex slice) tolerate per-Write framing because the other side
+// reassembles the byte stream irrespective of message boundaries.
+type wsBinaryWriter struct {
+	conn *websocket.Conn
+}
+
+func (w *wsBinaryWriter) Write(p []byte) (int, error) {
+	if err := w.conn.WriteMessage(websocket.BinaryMessage, p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }

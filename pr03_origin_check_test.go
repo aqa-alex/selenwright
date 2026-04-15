@@ -4,16 +4,13 @@
 // each WebSocket-bearing path with three Origin states:
 //
 //   - allowed origin → upgrade succeeds (101 / status acceptable)
-//   - disallowed origin → 403 (gorilla returns it via CheckOrigin failure;
-//     the legacy x/net/websocket path returns it via the HandlerWrap
-//     middleware)
+//   - disallowed origin → 403 via the upgrader's CheckOrigin callback
 //   - missing origin → upgrade succeeds, mirroring native CLI clients
 
 package main
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -52,7 +49,7 @@ func upgradeRequest(t *testing.T, target, origin string) *http.Response {
 	return resp
 }
 
-// TestVNCRejectsForeignOrigin — x/net/websocket path defended via HandlerWrap.
+// TestVNCRejectsForeignOrigin — Origin rejected in the upgrader's CheckOrigin.
 func TestVNCRejectsForeignOrigin(t *testing.T) {
 	withStrictOrigin(t, "https://ci.example.com")
 	resp := upgradeRequest(t, srv.URL+paths.VNC+"some-session-id", "https://evil.example.com")
@@ -89,29 +86,15 @@ func TestLogsRejectsForeignOrigin(t *testing.T) {
 // Playwright upstream and a session map fixture — out of proportion for
 // what is a one-line CheckOrigin: originChecker.Check substitution.
 
-// TestOriginGateAllowsAbsentOrigin verifies our gateOrigin middleware
-// itself does not reject a missing Origin (since browsers always send
-// Origin on WS upgrade, an absent value identifies a native CLI client
-// which cannot host CSWSH).
-//
-// We exercise the gate against a one-off endpoint registered for the
-// test instead of /vnc/ or /logs/, because both legacy x/net/websocket
-// endpoints additionally enforce Origin presence inside the library
-// itself (handshake.go returns 403 when Origin is absent). PR #14 will
-// migrate them to gorilla/websocket where the behavior matches our gate.
-func TestOriginGateAllowsAbsentOrigin(t *testing.T) {
+// TestVNCAllowsAbsentOrigin — native CLI clients (no Origin header) must
+// keep working after PR #14's migration to the gorilla upgrader. The
+// originChecker treats a missing Origin as legitimate; the upgrader's
+// CheckOrigin honors that same contract.
+func TestVNCAllowsAbsentOrigin(t *testing.T) {
 	withStrictOrigin(t, "https://ci.example.com")
-	gated := gateOrigin(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusTeapot)
-	}))
-	mux := http.NewServeMux()
-	mux.Handle("/probe", gated)
-	probeSrv := httptest.NewServer(mux)
-	t.Cleanup(probeSrv.Close)
-
-	resp := upgradeRequest(t, probeSrv.URL+"/probe", "")
+	resp := upgradeRequest(t, srv.URL+paths.VNC+"unknown-session", "")
 	defer resp.Body.Close()
-	assert.Equal(t, http.StatusTeapot, resp.StatusCode,
+	assert.NotEqual(t, http.StatusForbidden, resp.StatusCode,
 		"absent Origin must pass the gate so native clients keep working")
 }
 

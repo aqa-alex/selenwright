@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/imdario/mergo"
+	"dario.cat/mergo"
 )
 
 // Caps - user capabilities

@@ -20,8 +20,8 @@ import (
 	"github.com/aqa-alex/selenwright/session"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/gorilla/websocket"
 	assert "github.com/stretchr/testify/require"
-	"golang.org/x/net/websocket"
 )
 
 var (
@@ -608,13 +608,15 @@ func portFromListener(t *testing.T, listener net.Listener) string {
 }
 
 func readDataFromWebSocket(t *testing.T, wsURL string) string {
-	ws, err := websocket.Dial(wsURL, "", "http://localhost")
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 	assert.NoError(t, err)
+	defer ws.Close()
 
-	var msg = make([]byte, 512)
-	_, err = ws.Read(msg)
+	_, msg, _ := ws.ReadMessage()
 	msg = bytes.Trim(msg, "\x00")
-	//assert.NoError(t, err)
 	return string(msg)
 }
 

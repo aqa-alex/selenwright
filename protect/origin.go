@@ -131,18 +131,3 @@ func isDefaultPort(scheme, port string) bool {
 	return false
 }
 
-// HandlerWrap returns a middleware that rejects requests with a disallowed
-// Origin before passing them to next. Used for endpoints that do not call
-// gorilla's Upgrader (vnc, logs_ws — both built on the deprecated
-// golang.org/x/net/websocket package which has no CheckOrigin hook). When
-// PR #14 migrates those endpoints to gorilla, this wrap can be removed in
-// favor of the upgrader's CheckOrigin field.
-func (c *OriginChecker) HandlerWrap(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !c.Check(r) {
-			http.Error(w, "Forbidden Origin", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
