@@ -80,12 +80,18 @@ func (a *TrustedProxyAuthenticator) Realm() string { return "" }
 
 type AuthMiddlewareOptions struct {
 	OpenPaths []string
+	// OnFailure is called whenever the middleware rejects a request
+	// with 401. Intended for metrics / audit logging — callers wire
+	// a counter increment or log line here without touching the
+	// middleware's core logic.
+	OnFailure func()
 }
 
 // AuthMiddleware returns a middleware that authenticates incoming requests
 // using the Authenticator returned by authFn. The function is invoked per
 // request so callers can swap the active Authenticator atomically (SIGHUP
-// reload, runtime reconfiguration, tests).
+// reload, runtime reconfiguration, tests). OnFailure (if set) is invoked
+// for every rejection — hook it up to metrics or audit logging.
 func AuthMiddleware(authFn func() Authenticator, opts AuthMiddlewareOptions) func(http.Handler) http.Handler {
 	openExact := make(map[string]struct{}, len(opts.OpenPaths))
 	for _, p := range opts.OpenPaths {
@@ -100,6 +106,9 @@ func AuthMiddleware(authFn func() Authenticator, opts AuthMiddlewareOptions) fun
 			auth := authFn()
 			id, err := auth.Authenticate(r)
 			if err != nil {
+				if opts.OnFailure != nil {
+					opts.OnFailure()
+				}
 				if realm := auth.Realm(); realm != "" {
 					w.Header().Set("WWW-Authenticate", `Basic realm="`+realm+`"`)
 				}

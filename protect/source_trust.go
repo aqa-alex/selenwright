@@ -114,7 +114,18 @@ func (st *SourceTrust) StripFromRequest(r *http.Request) {
 // at runtime (SIGHUP reload, tests). openPaths bypass the gate so health
 // checks from load balancers (which don't carry the router secret) keep
 // working.
+// SourceTrustMiddleware is the signature preserved for existing
+// callers that only care about the open-paths set. When wiring
+// observability, pass an OnFailure callback via
+// SourceTrustMiddlewareWithHooks.
 func SourceTrustMiddleware(stFn func() *SourceTrust, openPaths []string) func(http.Handler) http.Handler {
+	return SourceTrustMiddlewareWithHooks(stFn, openPaths, nil)
+}
+
+// SourceTrustMiddlewareWithHooks accepts an optional callback invoked
+// whenever the source-trust check rejects a request. Callers wire it
+// to metrics.AuthFailure so rejection counters stay centralised.
+func SourceTrustMiddlewareWithHooks(stFn func() *SourceTrust, openPaths []string, onFailure func()) func(http.Handler) http.Handler {
 	openExact := make(map[string]struct{}, len(openPaths))
 	for _, p := range openPaths {
 		openExact[p] = struct{}{}
@@ -131,6 +142,9 @@ func SourceTrustMiddleware(stFn func() *SourceTrust, openPaths []string) func(ht
 				return
 			}
 			if err := st.Check(r); err != nil {
+				if onFailure != nil {
+					onFailure()
+				}
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}

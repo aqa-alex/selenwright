@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/aqa-alex/selenwright/info"
+	"github.com/aqa-alex/selenwright/internal/metrics"
 	"github.com/aqa-alex/selenwright/internal/safepath"
 	"github.com/aqa-alex/selenwright/protect"
 
@@ -159,6 +160,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 		_ = mergo.Merge(&caps, *fmc)
 		caps.ProcessExtensionCapabilities()
 		if err = session.Sanitize(&caps, session.CapsPolicy(app.capsPolicyFlag), identity.IsAdmin); err != nil {
+			metrics.CapsRejected()
 			log.Printf("[%d] [REJECTED_CAPS] [%v]", requestId, err)
 			jsonerror.InvalidArgument(err).Encode(w)
 			app.queue.Drop()
@@ -403,10 +405,12 @@ func create(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		event.SessionStopped(event.StoppedSession{Event: e})
+		metrics.SessionEnded("selenium", "cancel", info.SecondsSince(sess.Started))
 	}
 	sess.Cancel = cancelAndRenameFiles
 	app.sessions.Put(s.ID, sess)
 	app.queue.Create()
+	metrics.SessionCreated("selenium")
 	log.Printf("[%d] [SESSION_CREATED] [%s] [%d] [%.2fs]", requestId, s.ID, i, info.SecondsSince(sessionStartTime))
 }
 
