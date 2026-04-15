@@ -113,6 +113,11 @@ func create(w http.ResponseWriter, r *http.Request) {
 	sessionStartTime := time.Now()
 	requestId := serial()
 	user, remote := info.RequestInfo(r)
+	// Cap the request body so a malicious client cannot exhaust memory by
+	// streaming gigabytes of capabilities. MaxBytesReader also closes the
+	// connection after the limit, surfacing a 413 to the client via the
+	// response writer when ReadAll subsequently errors.
+	r.Body = http.MaxBytesReader(w, r.Body, maxCreateBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	_ = r.Body.Close()
 	if err != nil {
@@ -647,6 +652,10 @@ func stopWatchdog(sess *session.Session) {
 }
 
 func fileUpload(w http.ResponseWriter, r *http.Request) {
+	// Cap the JSON envelope size before decoding. The upload endpoint accepts
+	// a base64-encoded zip in `file`, which expands ~33% on the wire — we
+	// allow generous headroom but still bound it.
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBodyBytes)
 	var jsonRequest struct {
 		File []byte `json:"file"`
 	}
@@ -666,6 +675,13 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	file := z.File[0]
+	// Reject zip-bomb attempts whose declared uncompressed size already
+	// exceeds the limit. The header can lie, so we re-check the actual
+	// extracted byte count below.
+	if file.UncompressedSize64 > uint64(maxUploadExtractedBytes) {
+		jsonerror.InvalidArgument(fmt.Errorf("uncompressed file size %d exceeds limit %d", file.UncompressedSize64, maxUploadExtractedBytes)).Encode(w)
+		return
+	}
 	src, err := file.Open()
 	if err != nil {
 		jsonerror.InvalidArgument(err).Encode(w)
@@ -685,9 +701,19 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer dst.Close()
-	_, err = io.Copy(dst, src)
+	// Bound the actual decompressed bytes regardless of the header. We read
+	// one byte beyond the limit to detect overshoot and reject without
+	// committing a partial-but-still-huge file to disk.
+	limited := io.LimitReader(src, maxUploadExtractedBytes+1)
+	written, err := io.Copy(dst, limited)
 	if err != nil {
 		jsonerror.UnknownError(err).Encode(w)
+		return
+	}
+	if written > maxUploadExtractedBytes {
+		_ = dst.Close()
+		_ = os.Remove(fileName)
+		jsonerror.InvalidArgument(fmt.Errorf("uncompressed file size exceeds limit %d", maxUploadExtractedBytes)).Encode(w)
 		return
 	}
 
