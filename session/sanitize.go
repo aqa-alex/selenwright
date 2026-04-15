@@ -10,11 +10,11 @@ import (
 type CapsPolicy string
 
 const (
-	PolicyStrict      CapsPolicy = "strict"
-	PolicyPermissive  CapsPolicy = "permissive"
-	hostnameMaxLen               = 63
-	labelMaxLen                  = 128
-	fileNameMaxLen               = 128
+	PolicyStrict     CapsPolicy = "strict"
+	PolicyPermissive CapsPolicy = "permissive"
+	hostnameMaxLen              = 63
+	labelMaxLen                 = 128
+	fileNameMaxLen              = 128
 )
 
 var (

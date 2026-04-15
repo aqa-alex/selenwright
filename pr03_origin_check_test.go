@@ -1,7 +1,5 @@
-// Modified by [Aleksander R], 2026: PR #3 — WebSocket CheckOrigin allow-list
-//
-// Regression tests for Cross-Site WebSocket Hijacking defenses. We exercise
-// each WebSocket-bearing path with three Origin states:
+// PR #3 regression tests for Cross-Site WebSocket Hijacking defenses.
+// Each WebSocket-bearing path is exercised with three Origin states:
 //
 //   - allowed origin → upgrade succeeds (101 / status acceptable)
 //   - disallowed origin → 403 via the upgrader's CheckOrigin callback

@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: PR #4 — strip Authorization/Cookie + HandshakeTimeout
+// PR #4 regression tests: strip Authorization/Cookie + HandshakeTimeout.
 
 package main
 

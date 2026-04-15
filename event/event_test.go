@@ -125,9 +125,9 @@ type initOnceListener struct {
 	onInit func()
 }
 
-func (l *initOnceListener) Init()                            { l.onInit() }
-func (l *initOnceListener) OnFileCreated(cf CreatedFile)     {}
-func (l *initOnceListener) OnSessionStopped(StoppedSession)  {}
+func (l *initOnceListener) Init()                           { l.onInit() }
+func (l *initOnceListener) OnFileCreated(cf CreatedFile)    {}
+func (l *initOnceListener) OnSessionStopped(StoppedSession) {}
 
 // TestShutdownBeforeStartIsNoOp ensures Shutdown is safe to call when
 // the pool was never started — production shutdown paths may run

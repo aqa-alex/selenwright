@@ -1,6 +1,4 @@
-// Modified by [Aleksander R], 2026: PR #1 — server timeouts + body limits
-//
-// Regression tests for HTTP server hardening:
+// PR #1 regression tests for HTTP server hardening:
 //   - request body size limits on /session create
 //   - request body + extracted size limits on /file upload (zip-bomb guard)
 //   - http.Server timeout constants are non-zero where expected

@@ -784,7 +784,7 @@ func TestStatus(t *testing.T) {
 func TestServeAndDeleteVideoFile(t *testing.T) {
 	fileName := "testfile"
 	filePath := filepath.Join(app.videoOutputDir, fileName)
-	_ = os.WriteFile(filePath, []byte("test-data"), 0644)
+	_ = os.WriteFile(filePath, []byte("test-data"), 0o644)
 
 	rsp, err := http.Get(With(srv.URL).Path("/video/testfile"))
 	assert.NoError(t, err)
@@ -811,7 +811,7 @@ func TestServeAndDeleteVideoFile(t *testing.T) {
 func TestServeAndDeleteLogFile(t *testing.T) {
 	fileName := "logfile.log"
 	filePath := filepath.Join(app.logOutputDir, fileName)
-	_ = os.WriteFile(filePath, []byte("test-data"), 0644)
+	_ = os.WriteFile(filePath, []byte("test-data"), 0o644)
 
 	rsp, err := http.Get(With(srv.URL).Path("/logs/logfile.log"))
 	assert.NoError(t, err)
