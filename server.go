@@ -60,6 +60,7 @@ type Server struct {
 	enableMetrics            bool
 	metricsPath              string
 	logJSON                  bool
+	browserNetwork           string
 
 	// Runtime state (populated in main.init after flag parsing and
 	// after conf/client/manager construction; reloadable via SIGHUP).
