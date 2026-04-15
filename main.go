@@ -98,6 +98,8 @@ func init() {
 	flag.BoolVar(&app.enableMetrics, "enable-metrics", false, "Expose a Prometheus-compatible /metrics endpoint (queue depth, session counts, session duration histogram, auth/caps rejection counters). Path is controlled by -metrics-path")
 	flag.StringVar(&app.metricsPath, "metrics-path", "/metrics", "Path the Prometheus metrics endpoint is served on when -enable-metrics is set. Access is not gated by the configured authenticator; the endpoint is expected to live behind the same network boundary as Prometheus itself")
 	flag.BoolVar(&app.logJSON, "log-json", false, "Emit logs as one JSON object per line (event, request_id, fields, level, time). Default is the legacy bracketed text format. Parses existing log lines structurally so no call-site changes are required")
+	flag.StringVar(&app.artifactHistoryDir, "artifact-history-dir", "artifacts", "Directory to store artifact history manifests and persisted downloads. Must be writable and ideally on a volume mount so data survives container recreation")
+	flag.StringVar(&app.artifactHistorySettingsPath, "artifact-history-settings", filepath.Join("state", "artifact-history.json"), "JSON file storing artifact history settings (enabled, retentionDays). Survives restarts when placed on a volume mount")
 	flag.StringVar(&app.browserNetwork, "browser-network", "selenwright-browsers", "Dedicated Docker network that browser containers attach to as their primary network. Created on startup with Internal=true (no external gateway) to limit the blast radius of a sandbox escape. Set empty to disable isolation and revert to -container-network as the primary attachment")
 	flag.Parse()
 
@@ -198,6 +200,21 @@ func init() {
 		if app.saveAllLogs {
 			log.Printf("[-] [INIT] [Saving all logs]")
 		}
+	}
+
+	if app.artifactHistoryDir != "" {
+		app.artifactHistoryDir, err = filepath.Abs(app.artifactHistoryDir)
+		if err != nil {
+			log.Fatalf("[-] [INIT] [Invalid artifact history dir %s: %v]", app.artifactHistoryDir, err)
+		}
+		log.Printf("[-] [INIT] [Artifact History Dir: %s]", app.artifactHistoryDir)
+	}
+	if app.artifactHistorySettingsPath != "" {
+		app.artifactHistorySettingsPath, err = filepath.Abs(app.artifactHistorySettingsPath)
+		if err != nil {
+			log.Fatalf("[-] [INIT] [Invalid artifact history settings path %s: %v]", app.artifactHistorySettingsPath, err)
+		}
+		log.Printf("[-] [INIT] [Artifact History Settings: %s]", app.artifactHistorySettingsPath)
 	}
 
 	upload.Init()
@@ -576,7 +593,7 @@ func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request
 }
 
 var paths = struct {
-	Video, VNC, Logs, Devtools, Playwright, Download, Clipboard, File, Ping, Status, Error, WdHub, Welcome, Config, HistorySettings string
+	Video, VNC, Logs, Devtools, Playwright, Download, Downloads, Clipboard, File, Ping, Status, Error, WdHub, Welcome, Config, HistorySettings string
 }{
 	Video:           "/video/",
 	VNC:             "/vnc/",
@@ -584,6 +601,7 @@ var paths = struct {
 	Devtools:        "/devtools/",
 	Playwright:      "/playwright/",
 	Download:        "/download/",
+	Downloads:       "/downloads/",
 	Clipboard:       "/clipboard/",
 	Status:          "/status",
 	File:            "/file",
@@ -595,9 +613,10 @@ var paths = struct {
 	HistorySettings: "/history/settings",
 }
 
-var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings}
+var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings, paths.Downloads}
 
 func handler() http.Handler {
+	ensureArtifactHistoryManager()
 	root := http.NewServeMux()
 	root.HandleFunc(paths.WdHub+"/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
@@ -614,8 +633,10 @@ func handler() http.Handler {
 		_ = json.NewEncoder(w).Encode(app.conf.State(app.sessions, app.limit, app.queue.Queued(), app.queue.Pending()))
 	})
 	root.HandleFunc(paths.Ping, ping)
-	root.HandleFunc(paths.Config, configInfo)
-	root.HandleFunc(paths.HistorySettings, historySettings)
+	root.HandleFunc(paths.Config, get(configHandler))
+	root.HandleFunc(paths.HistorySettings, historySettingsHandler)
+	root.HandleFunc(paths.HistorySettings+"/", historySettingsHandler)
+	root.HandleFunc(paths.Downloads, persistedDownloadsHandler)
 	root.Handle(paths.VNC, gateSessionOwner(2, http.HandlerFunc(vnc)))
 	root.Handle(paths.Logs, gateSessionOwner(2, http.HandlerFunc(logs)))
 	root.HandleFunc(paths.Video, video)
@@ -655,6 +676,8 @@ func showVersion() {
 func main() {
 	log.Printf("[-] [INIT] [Timezone: %s]", time.Local)
 	log.Printf("[-] [INIT] [Listening on %s]", app.listen)
+
+	ensureArtifactHistoryManager().StartJanitor()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)

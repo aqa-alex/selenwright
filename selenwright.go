@@ -150,6 +150,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 	var ok bool
 	var sessionTimeout time.Duration
 	var finalVideoName, finalLogName string
+	var historyEnabled bool
 	identity, _ := protect.IdentityFromContext(r.Context())
 	for _, fmc := range firstMatchCaps {
 		caps = browser.Caps
@@ -189,8 +190,9 @@ func create(w http.ResponseWriter, r *http.Request) {
 		if caps.Video && !app.disableDocker {
 			caps.VideoName = getTemporaryFileName(app.videoOutputDir, videoFileExtension)
 		}
+		historyEnabled = ensureArtifactHistoryManager().IsEnabledForNewSessions()
 		finalLogName = caps.LogName
-		if app.logOutputDir != "" && (app.saveAllLogs || caps.Log) {
+		if app.logOutputDir != "" && (app.saveAllLogs || caps.Log || historyEnabled) {
 			caps.LogName = getTemporaryFileName(app.logOutputDir, logFileExtension)
 		}
 		starter, ok = app.manager.Find(caps, requestId)
@@ -341,9 +343,16 @@ func create(w http.ResponseWriter, r *http.Request) {
 		Watchdog: session.NewWatchdog(sessionTimeout, func() {
 			request{r}.session(s.ID).Delete(requestId)
 		}),
-		Started: time.Now(),
+		Started:                time.Now(),
+		ArtifactHistoryEnabled: historyEnabled,
 	}
 	cancelAndRenameFiles := func() {
+		// Capture downloads from the browser container while it's still alive —
+		// cancel() below will remove it and a post-cancel docker cp from an
+		// async SessionStopped listener would hit "no such container".
+		if sess.ArtifactHistoryEnabled {
+			ensureArtifactHistoryManager().CaptureDownloadsForSession(sess, preprocessSessionId(s.ID))
+		}
 		cancel()
 		sessionId := preprocessSessionId(s.ID)
 		e := event.Event{

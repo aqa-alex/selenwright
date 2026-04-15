@@ -56,6 +56,9 @@ type Server struct {
 	logJSON                  bool
 	browserNetwork           string
 
+	artifactHistoryDir          string
+	artifactHistorySettingsPath string
+
 	sessions      *session.Map
 	queue         *protect.Queue
 	manager       service.Manager

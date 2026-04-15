@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added ArtifactHistoryEnabled for per-session retention
 
 package session
 
@@ -79,18 +79,19 @@ type Container struct {
 
 // Session - holds session info
 type Session struct {
-	Quota     string
-	Caps      Caps
-	URL       *url.URL
-	Container *Container
-	HostPort  HostPort
-	Origin    string
-	Cancel    func()
-	Timeout   time.Duration
-	Watchdog  *Watchdog
-	Protocol  Protocol
-	Started   time.Time
-	Lock      sync.Mutex
+	Quota                  string
+	Caps                   Caps
+	URL                    *url.URL
+	Container              *Container
+	HostPort               HostPort
+	Origin                 string
+	Cancel                 func()
+	Timeout                time.Duration
+	Watchdog               *Watchdog
+	Protocol               Protocol
+	Started                time.Time
+	ArtifactHistoryEnabled bool
+	Lock                   sync.Mutex
 }
 
 // HostPort - hold host-port values for all forwarded ports

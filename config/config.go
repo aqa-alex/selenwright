@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added BrowserCatalog snapshot for /config endpoint
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added BrowserCatalog snapshot for /config endpoint; added ReloadStatus/Snapshot for artifact history
 
 package config
 
@@ -78,10 +78,28 @@ type Versions struct {
 
 // Config current configuration
 type Config struct {
-	lock           sync.RWMutex
-	LastReloadTime time.Time
-	Browsers       map[string]Versions
-	ContainerLogs  *container.LogConfig
+	lock                  sync.RWMutex
+	LastReloadTime        time.Time
+	LastReloadAttemptTime time.Time
+	LastReloadSuccessful  bool
+	LastReloadError       string
+	Browsers              map[string]Versions
+	ContainerLogs         *container.LogConfig
+}
+
+// ReloadStatus stores the latest configuration reload outcome.
+type ReloadStatus struct {
+	LastReloadTime        time.Time
+	LastReloadAttemptTime time.Time
+	LastReloadSuccessful  bool
+	LastReloadError       string
+}
+
+// Snapshot is a read-only copy of the loaded configuration state.
+type Snapshot struct {
+	Browsers      map[string]Versions
+	ContainerLogs *container.LogConfig
+	ReloadStatus  ReloadStatus
 }
 
 // NewConfig creates new config
@@ -103,25 +121,78 @@ func loadJSON(filename string, v interface{}) error {
 // Load loads config from file
 func (config *Config) Load(browsers, containerLogs string) error {
 	log.Println("[-] [INIT] [Loading configuration files...]")
+	attemptTime := time.Now()
+	config.markReloadAttempt(attemptTime)
 	br := make(map[string]Versions)
 	err := loadJSON(browsers, &br)
 	if err != nil {
-		return fmt.Errorf("browsers config: %v", err)
+		err = fmt.Errorf("browsers config: %v", err)
+		config.markReloadFailure(err)
+		return err
 	}
 	log.Printf("[-] [INIT] [Loaded configuration from %s]", browsers)
 	cl := &container.LogConfig{}
 	if containerLogs != "" {
 		err = loadJSON(containerLogs, cl)
 		if err != nil {
-			return fmt.Errorf("log config: %v", err)
+			err = fmt.Errorf("log config: %v", err)
+			config.markReloadFailure(err)
+			return err
 		}
 		log.Printf("[-] [INIT] [Loaded log configuration from %s]", containerLogs)
 	}
 	config.lock.Lock()
 	defer config.lock.Unlock()
 	config.Browsers, config.ContainerLogs = br, cl
-	config.LastReloadTime = time.Now()
+	config.LastReloadTime = attemptTime
+	config.LastReloadSuccessful = true
+	config.LastReloadError = ""
 	return nil
+}
+
+func (config *Config) markReloadAttempt(attemptTime time.Time) {
+	config.lock.Lock()
+	defer config.lock.Unlock()
+	config.LastReloadAttemptTime = attemptTime
+}
+
+func (config *Config) markReloadFailure(err error) {
+	config.lock.Lock()
+	defer config.lock.Unlock()
+	config.LastReloadSuccessful = false
+	if err != nil {
+		config.LastReloadError = err.Error()
+		return
+	}
+	config.LastReloadError = ""
+}
+
+// ReloadStatus returns the current configuration reload status.
+func (config *Config) ReloadStatus() ReloadStatus {
+	config.lock.RLock()
+	defer config.lock.RUnlock()
+	return ReloadStatus{
+		LastReloadTime:        config.LastReloadTime,
+		LastReloadAttemptTime: config.LastReloadAttemptTime,
+		LastReloadSuccessful:  config.LastReloadSuccessful,
+		LastReloadError:       config.LastReloadError,
+	}
+}
+
+// Snapshot returns a deep copy of the loaded configuration state.
+func (config *Config) Snapshot() Snapshot {
+	config.lock.RLock()
+	defer config.lock.RUnlock()
+	return Snapshot{
+		Browsers:      config.Browsers,
+		ContainerLogs: config.ContainerLogs,
+		ReloadStatus: ReloadStatus{
+			LastReloadTime:        config.LastReloadTime,
+			LastReloadAttemptTime: config.LastReloadAttemptTime,
+			LastReloadSuccessful:  config.LastReloadSuccessful,
+			LastReloadError:       config.LastReloadError,
+		},
+	}
 }
 
 // Find - find concrete browser
