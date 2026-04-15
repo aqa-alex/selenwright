@@ -27,7 +27,7 @@ const (
 	defaultArtifactHistoryRetentionDays = 7
 	maxArtifactHistoryRetentionDays     = 365
 	minArtifactHistoryRetentionDays     = 1
-	artifactHistoryJanitorInterval      = 6 * time.Hour
+	artifactHistoryJanitorInterval      = 3 * time.Hour
 	managedDownloadsPath                = "/home/selenium/Downloads"
 )
 
