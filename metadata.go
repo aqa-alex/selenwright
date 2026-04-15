@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/aqa-alex/selenwright/event"
+	"github.com/aqa-alex/selenwright/internal/safepath"
 	"github.com/aqa-alex/selenwright/session"
 )
 
@@ -38,7 +38,17 @@ func (mp *MetadataProcessor) OnSessionStopped(stoppedSession event.StoppedSessio
 			log.Printf("[%d] [METADATA] [%s] [Failed to marshal: %v]", stoppedSession.RequestId, stoppedSession.SessionId, err)
 			return
 		}
-		filename := filepath.Join(app.logOutputDir, stoppedSession.SessionId+metadataFileExtension)
+		// stoppedSession.SessionId comes from the upstream browser container
+		// response (see processBody in selenwright.go). A malicious or
+		// compromised image can return "sessionId": "../../etc/cron.d/evil",
+		// which without this guard would let filepath.Join drop the metadata
+		// JSON outside logOutputDir. Reject every traversal attempt instead
+		// of silently producing a garbled path.
+		filename, err := safepath.Join(app.logOutputDir, stoppedSession.SessionId+metadataFileExtension)
+		if err != nil {
+			log.Printf("[%d] [METADATA] [%s] [Rejected session id: %v]", stoppedSession.RequestId, stoppedSession.SessionId, err)
+			return
+		}
 		err = os.WriteFile(filename, data, 0o644)
 		if err != nil {
 			log.Printf("[%d] [METADATA] [%s] [Failed to save to %s: %v]", stoppedSession.RequestId, stoppedSession.SessionId, filename, err)
