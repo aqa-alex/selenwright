@@ -58,6 +58,9 @@ var (
 	videoRecorderImage       string
 	logOutputDir             string
 	saveAllLogs              bool
+	maxCreateBodyBytes       int64
+	maxUploadBodyBytes       int64
+	maxUploadExtractedBytes  int64
 	ggrHost                  *ggr.Host
 	conf                     *config.Config
 	queue                    *protect.Queue
@@ -69,6 +72,23 @@ var (
 	version     bool
 	gitRevision = "HEAD"
 	buildStamp  = "unknown"
+)
+
+// HTTP server hardening defaults.
+//
+// ReadHeaderTimeout caps how long a client can take to send the request line
+// and headers — the primary defense against Slowloris-style attacks. ReadTimeout
+// bounds the entire request body read for non-streaming endpoints. IdleTimeout
+// closes idle keep-alive connections to free file descriptors. WriteTimeout is
+// deliberately omitted on the server (left at 0) because long-lived WebSocket
+// tunnels (Playwright, DevTools, VNC, log streams) and the WebDriver reverse
+// proxy must outlive any per-request write deadline; per-handler timeouts are
+// applied where appropriate.
+const (
+	readHeaderTimeout = 10 * time.Second
+	readTimeout       = 60 * time.Second
+	idleTimeout       = 120 * time.Second
+	maxHeaderBytes    = 64 << 10 // 64 KiB
 )
 
 func init() {
@@ -98,6 +118,9 @@ func init() {
 	flag.StringVar(&logOutputDir, "log-output-dir", "", "Directory to save session log to")
 	flag.BoolVar(&saveAllLogs, "save-all-logs", false, "Whether to save all logs without considering capabilities")
 	flag.DurationVar(&gracefulPeriod, "graceful-period", 300*time.Second, "graceful shutdown period in time.Duration format, e.g. 300s or 500ms")
+	flag.Int64Var(&maxCreateBodyBytes, "max-create-body-bytes", 4<<20, "Maximum POST body size for /session create requests in bytes (default 4 MiB)")
+	flag.Int64Var(&maxUploadBodyBytes, "max-upload-body-bytes", 256<<20, "Maximum POST body size for /file upload requests in bytes (default 256 MiB)")
+	flag.Int64Var(&maxUploadExtractedBytes, "max-upload-extracted-bytes", 1<<30, "Maximum total extracted size for /file uploaded zip archives in bytes (default 1 GiB)")
 	flag.Parse()
 
 	if version {
@@ -427,8 +450,14 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 	server := &http.Server{
-		Addr:    listen,
-		Handler: handler(),
+		Addr:              listen,
+		Handler:           handler(),
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
+		// WriteTimeout intentionally left zero: long-lived WebSocket and
+		// log-stream connections must outlive any per-request write deadline.
 	}
 	e := make(chan error)
 	go func() {

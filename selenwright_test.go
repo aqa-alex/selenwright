@@ -40,6 +40,10 @@ func init() {
 	logOutputDir, _ = os.MkdirTemp("", "selenwright-test")
 	saveAllLogs = true
 	gitRevision = "test-revision"
+	// Match production defaults from main.init(); tests bypass flag.Parse.
+	maxCreateBodyBytes = 4 << 20
+	maxUploadBodyBytes = 256 << 20
+	maxUploadExtractedBytes = 1 << 30
 	ggrHost = &ggr.Host{
 		Name: "some-host.example.com",
 		Port: 4444,
