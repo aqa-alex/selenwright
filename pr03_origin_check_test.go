@@ -22,11 +22,11 @@ import (
 // accepts the supplied origins. Restores the prior checker on cleanup.
 func withStrictOrigin(t *testing.T, allowed ...string) {
 	t.Helper()
-	prev := originChecker
+	prev := app.originChecker
 	c, err := protect.NewOriginChecker(allowed)
 	assert.NoError(t, err)
-	originChecker = c
-	t.Cleanup(func() { originChecker = prev })
+	app.originChecker = c
+	t.Cleanup(func() { app.originChecker = prev })
 }
 
 // upgradeRequest constructs a WebSocket Upgrade request without going
@@ -103,7 +103,7 @@ func TestVNCAllowsAbsentOrigin(t *testing.T) {
 // "warned but not blocked" in main.init.
 func TestPermissiveModeStillAccepts(t *testing.T) {
 	withStrictOrigin(t /* no entries -> permissive */)
-	assert.True(t, originChecker.AllowsAll())
+	assert.True(t, app.originChecker.AllowsAll())
 	resp := upgradeRequest(t, srv.URL+paths.VNC+"x", "https://anywhere.example.com")
 	defer resp.Body.Close()
 	assert.NotEqual(t, http.StatusForbidden, resp.StatusCode)

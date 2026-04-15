@@ -32,7 +32,7 @@ import (
 // this mirrors how a real attacker's curl/wget/script would shape the
 // request to defeat naive proxies.
 func TestDeleteVideoRejectsTraversal(t *testing.T) {
-	parent := filepath.Dir(filepath.Dir(videoOutputDir))
+	parent := filepath.Dir(filepath.Dir(app.videoOutputDir))
 	canary := filepath.Join(parent, "selenwright-canary.txt")
 	assert.NoError(t, os.WriteFile(canary, []byte("canary"), 0o600))
 	t.Cleanup(func() { _ = os.Remove(canary) })
@@ -60,7 +60,7 @@ func TestDeleteVideoRejectsTraversal(t *testing.T) {
 // upgrades to a WebSocket. The canary file therefore ends in `.log` so the
 // DELETE branch actually runs and exercises the safepath check.
 func TestDeleteLogsRejectsTraversal(t *testing.T) {
-	parent := filepath.Dir(filepath.Dir(logOutputDir))
+	parent := filepath.Dir(filepath.Dir(app.logOutputDir))
 	canary := filepath.Join(parent, "selenwright-log-canary.log")
 	assert.NoError(t, os.WriteFile(canary, []byte("canary"), 0o600))
 	t.Cleanup(func() { _ = os.Remove(canary) })
@@ -81,7 +81,7 @@ func TestDeleteLogsRejectsTraversal(t *testing.T) {
 // TestFileUploadRejectsZipSlip verifies a zip entry whose Name contains
 // traversal segments is rejected before any byte hits the filesystem.
 func TestFileUploadRejectsZipSlip(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -89,8 +89,8 @@ func TestFileUploadRejectsZipSlip(t *testing.T) {
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
 	t.Cleanup(func() {
-		sessions.Remove(sess["sessionId"])
-		queue.Release()
+		app.sessions.Remove(sess["sessionId"])
+		app.queue.Release()
 	})
 
 	// Construct a zip whose single entry tries to escape /tmp/<sid>/.
@@ -115,7 +115,7 @@ func TestFileUploadRejectsZipSlip(t *testing.T) {
 // TestFileUploadHonestEntryStillWorks — regression: legit upload paths
 // continue to work after the safepath guard is added.
 func TestFileUploadHonestEntryStillWorks(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -123,8 +123,8 @@ func TestFileUploadHonestEntryStillWorks(t *testing.T) {
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
 	t.Cleanup(func() {
-		sessions.Remove(sess["sessionId"])
-		queue.Release()
+		app.sessions.Remove(sess["sessionId"])
+		app.queue.Release()
 	})
 
 	zipBytes := buildZipWithName(t, "ok.txt", []byte("Hello"))
@@ -143,7 +143,7 @@ func TestFileUploadHonestEntryStillWorks(t *testing.T) {
 // TestOutputDirsHaveExecuteBit ensures the H3 fix sticks: video/log dirs
 // must be enterable so file listing and per-file Stat work for non-root.
 func TestOutputDirsHaveExecuteBit(t *testing.T) {
-	for _, dir := range []string{videoOutputDir, logOutputDir} {
+	for _, dir := range []string{app.videoOutputDir, app.logOutputDir} {
 		info, err := os.Stat(dir)
 		assert.NoError(t, err, "test setup must create %s", dir)
 		mode := info.Mode().Perm()

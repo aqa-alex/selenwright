@@ -31,10 +31,10 @@ var (
 
 func init() {
 	updateMux(testMux())
-	timeout = 2 * time.Second
-	serviceStartupTimeout = 1 * time.Second
-	newSessionAttemptTimeout = 1 * time.Second
-	sessionDeleteTimeout = 1 * time.Second
+	app.timeout = 2 * time.Second
+	app.serviceStartupTimeout = 1 * time.Second
+	app.newSessionAttemptTimeout = 1 * time.Second
+	app.sessionDeleteTimeout = 1 * time.Second
 }
 
 func updateMux(mux http.Handler) {
@@ -43,7 +43,7 @@ func updateMux(mux http.Handler) {
 	mockServer = httptest.NewServer(mux)
 	_ = os.Setenv("DOCKER_HOST", "tcp://"+hostPort(mockServer.URL))
 	_ = os.Setenv("DOCKER_API_VERSION", "1.29")
-	cli, _ = client.NewClientWithOpts(client.FromEnv)
+	app.cli, _ = client.NewClientWithOpts(client.FromEnv)
 }
 
 func testMux() http.Handler {
@@ -334,12 +334,12 @@ func port(input string) string {
 }
 
 func testConfig(env *service.Environment) *config.Config {
-	conf := config.NewConfig()
+	cfg := config.NewConfig()
 	p := "4444"
 	if env.InDocker {
 		p = port(mockServer.URL)
 	}
-	conf.Browsers["firefox"] = config.Versions{
+	cfg.Browsers["firefox"] = config.Versions{
 		Default: "33.0",
 		Versions: map[string]*config.Browser{
 			"33.0": {
@@ -354,7 +354,7 @@ func testConfig(env *service.Environment) *config.Config {
 			},
 		},
 	}
-	conf.Browsers["internet explorer"] = config.Versions{
+	cfg.Browsers["internet explorer"] = config.Versions{
 		Default: "11",
 		Versions: map[string]*config.Browser{
 			"11": {
@@ -364,20 +364,20 @@ func testConfig(env *service.Environment) *config.Config {
 			},
 		},
 	}
-	return conf
+	return cfg
 }
 
 func testEnvironment() *service.Environment {
-	logOutputDir, _ = os.MkdirTemp("", "selenwright-test")
+	app.logOutputDir, _ = os.MkdirTemp("", "selenwright-test")
 	return &service.Environment{
 		CPU:                 int64(0),
 		Memory:              int64(0),
-		Network:             containerNetwork,
-		StartupTimeout:      serviceStartupTimeout,
-		CaptureDriverLogs:   captureDriverLogs,
+		Network:             app.containerNetwork,
+		StartupTimeout:      app.serviceStartupTimeout,
+		CaptureDriverLogs:   app.captureDriverLogs,
 		VideoContainerImage: "aerokube/video-recorder",
 		VideoOutputDir:      "/some/dir",
-		LogOutputDir:        logOutputDir,
+		LogOutputDir:        app.logOutputDir,
 		Privileged:          false,
 	}
 }
@@ -419,9 +419,9 @@ func testDocker(t *testing.T, env *service.Environment, cfg *config.Config) {
 }
 
 func createDockerStarter(t *testing.T, env *service.Environment, cfg *config.Config) service.Starter {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+	dockerCli, err := client.NewClientWithOpts(client.FromEnv)
 	assert.NoError(t, err)
-	manager := service.DefaultManager{Environment: env, Client: cli, Config: cfg}
+	mgr := service.DefaultManager{Environment: env, Client: dockerCli, Config: cfg}
 	caps := session.Caps{
 		DeviceName:            "firefox",
 		Version:               "33.0",
@@ -444,7 +444,7 @@ func createDockerStarter(t *testing.T, env *service.Environment, cfg *config.Con
 		ContainerHostname:     "some-hostname",
 		TestName:              "my-cool-test",
 	}
-	starter, success := manager.Find(caps, 42)
+	starter, success := mgr.Find(caps, 42)
 	assert.True(t, success)
 	assert.NotNil(t, starter)
 	return starter
@@ -554,13 +554,13 @@ func TestPlaywrightUsesTCPReadinessFallbackWithoutHealthcheck(t *testing.T) {
 
 func TestFindDriver(t *testing.T) {
 	env := testEnvironment()
-	manager := service.DefaultManager{Environment: env, Config: testConfig(env)}
+	mgr := service.DefaultManager{Environment: env, Config: testConfig(env)}
 	caps := session.Caps{
 		Name:             "internet explorer", //Using default version
 		ScreenResolution: "1024x768",
 		VNC:              true,
 	}
-	starter, success := manager.Find(caps, 42)
+	starter, success := mgr.Find(caps, 42)
 	assert.True(t, success)
 	assert.NotNil(t, starter)
 }
@@ -571,13 +571,13 @@ func TestGetVNC(t *testing.T) {
 	defer srv.Close()
 
 	testTcpServer := testTCPServer("test-data")
-	sessions.Put("test-session", &session.Session{
+	app.sessions.Put("test-session", &session.Session{
 		Quota: "unknown",
 		HostPort: session.HostPort{
 			VNC: testTcpServer.Addr().String(),
 		},
 	})
-	defer sessions.Remove("test-session")
+	defer app.sessions.Remove("test-session")
 
 	u := fmt.Sprintf("ws://%s/vnc/test-session", hostPort(srv.URL))
 	assert.Equal(t, readDataFromWebSocket(t, u), "test-data")
@@ -625,14 +625,14 @@ func TestGetLogs(t *testing.T) {
 	srv := httptest.NewServer(handler())
 	defer srv.Close()
 
-	sessions.Put("test-session", &session.Session{
+	app.sessions.Put("test-session", &session.Session{
 		Quota: "unknown",
 		Container: &session.Container{
 			ID:        "e90e34656806",
 			IPAddress: "127.0.0.1",
 		},
 	})
-	defer sessions.Remove("test-session")
+	defer app.sessions.Remove("test-session")
 
 	u := fmt.Sprintf("ws://%s/logs/test-session", hostPort(srv.URL))
 	assert.Equal(t, readDataFromWebSocket(t, u), "test-data")

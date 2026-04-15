@@ -36,21 +36,21 @@ var (
 )
 
 func init() {
-	enableFileUpload = true
-	videoOutputDir, _ = os.MkdirTemp("", "selenwright-test")
-	logOutputDir, _ = os.MkdirTemp("", "selenwright-test")
-	saveAllLogs = true
+	app.enableFileUpload = true
+	app.videoOutputDir, _ = os.MkdirTemp("", "selenwright-test")
+	app.logOutputDir, _ = os.MkdirTemp("", "selenwright-test")
+	app.saveAllLogs = true
 	gitRevision = "test-revision"
 	// Match production defaults from main.init(); tests bypass flag.Parse.
-	maxCreateBodyBytes = 4 << 20
-	maxUploadBodyBytes = 256 << 20
-	maxUploadExtractedBytes = 1 << 30
+	app.maxCreateBodyBytes = 4 << 20
+	app.maxUploadBodyBytes = 256 << 20
+	app.maxUploadExtractedBytes = 1 << 30
 	// Default to legacy permissive origin behavior so existing tests
 	// (which never set Origin) continue to pass; per-test overrides
 	// reassign originChecker to a strict instance.
-	originChecker, _ = protect.NewOriginChecker(nil)
-	authenticator = protect.NoneAuthenticator{}
-	ggrHost = &ggr.Host{
+	app.originChecker, _ = protect.NewOriginChecker(nil)
+	app.authenticator = protect.NoneAuthenticator{}
+	app.ggrHost = &ggr.Host{
 		Name: "some-host.example.com",
 		Port: 4444,
 	}
@@ -58,37 +58,37 @@ func init() {
 }
 
 func TestNewSessionWithGet(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	rsp, err := http.Get(With(srv.URL).Path("/wd/hub/session"))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusMethodNotAllowed)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestBadJsonFormat(t *testing.T) {
 	rsp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusBadRequest)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestServiceStartupFailure(t *testing.T) {
-	manager = &StartupError{}
+	app.manager = &StartupError{}
 
 	rsp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusInternalServerError)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestBrowserNotFound(t *testing.T) {
-	manager = &BrowserNotFound{}
+	app.manager = &BrowserNotFound{}
 
 	rsp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusBadRequest)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestGetDefaultScreenResolution(t *testing.T) {
@@ -118,21 +118,21 @@ func TestInvalidSessionTimeoutCapability(t *testing.T) {
 }
 
 func testBadSessionTimeoutCapability(t *testing.T, timeoutValue string) {
-	manager = &BrowserNotFound{}
+	app.manager = &BrowserNotFound{}
 
 	rsp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte(fmt.Sprintf(`{"desiredCapabilities":{"sessionTimeout":"%s"}}`, timeoutValue))))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusBadRequest)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestMalformedScreenResolutionCapability(t *testing.T) {
-	manager = &BrowserNotFound{}
+	app.manager = &BrowserNotFound{}
 
 	rsp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte(`{"desiredCapabilities":{"screenResolution":"bad-resolution"}}`)))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusBadRequest)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestGetVideoScreenSizeFromCapability(t *testing.T) {
@@ -148,27 +148,27 @@ func TestDetermineVideoScreenSizeFromScreenResolution(t *testing.T) {
 }
 
 func TestMalformedVideoScreenSizeCapability(t *testing.T) {
-	manager = &BrowserNotFound{}
+	app.manager = &BrowserNotFound{}
 
 	rsp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte(`{"desiredCapabilities":{"videoScreenSize":"bad-size"}}`)))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusBadRequest)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestNewSessionNotFound(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	rsp, err := http.Get(With(srv.URL).Path("/wd/hub/session/123"))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusNotFound)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestNewSessionHostDown(t *testing.T) {
 	canceled := false
 	ch := make(chan bool)
-	manager = &HTTPTest{
+	app.manager = &HTTPTest{
 		Handler: Selenium(),
 		Action: func(s *httptest.Server) {
 			log.Println("Host is going down...")
@@ -185,13 +185,13 @@ func TestNewSessionHostDown(t *testing.T) {
 	canceled = <-ch
 	assert.True(t, canceled)
 
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestNewSessionBadHostResponse(t *testing.T) {
 	canceled := false
 	ch := make(chan bool)
-	manager = &HTTPTest{
+	app.manager = &HTTPTest{
 		Handler: HTTPResponse("Bad Request", http.StatusBadRequest),
 		Cancel:  ch,
 	}
@@ -202,12 +202,12 @@ func TestNewSessionBadHostResponse(t *testing.T) {
 
 	canceled = <-ch
 	assert.True(t, canceled)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestSessionCreated(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
-	timeout = 5 * time.Second
+	app.manager = &HTTPTest{Handler: Selenium()}
+	app.timeout = 5 * time.Second
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte(`{"desiredCapabilities": {"enableVideo": true, "enableVNC": true, "sessionTimeout": "3s"}}`)))
 	assert.NoError(t, err)
@@ -221,13 +221,13 @@ func TestSessionCreated(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 1)
-	assert.Equal(t, queue.Used(), 1)
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	assert.Equal(t, app.queue.Used(), 1)
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestSessionCreatedW3C(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte(`{"capabilities":{"alwaysMatch":{"acceptInsecureCerts":true, "browserName":"firefox", "browserVersion":"latest", "selenoid:options":{"enableVNC": true}}}}`)))
 	assert.NoError(t, err)
@@ -241,7 +241,7 @@ func TestSessionCreatedW3C(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 1)
-	assert.Equal(t, queue.Used(), 1)
+	assert.Equal(t, app.queue.Used(), 1)
 
 	versions, firefoxPresent := state.Browsers["firefox"]
 	assert.True(t, firefoxPresent)
@@ -253,12 +253,12 @@ func TestSessionCreatedW3C(t *testing.T) {
 	assert.Len(t, userInfo.Sessions, 1)
 	assert.True(t, userInfo.Sessions[0].VNC)
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestSessionCreatedFirstMatchOnly(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte(`{"capabilities":{"firstMatch":[{"browserName":"firefox", "browserVersion":"latest", "selenoid:options":{"enableVNC": true}}]}}`)))
 	assert.NoError(t, err)
@@ -272,7 +272,7 @@ func TestSessionCreatedFirstMatchOnly(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 1)
-	assert.Equal(t, queue.Used(), 1)
+	assert.Equal(t, app.queue.Used(), 1)
 
 	versions, firefoxPresent := state.Browsers["firefox"]
 	assert.True(t, firefoxPresent)
@@ -284,8 +284,8 @@ func TestSessionCreatedFirstMatchOnly(t *testing.T) {
 	assert.Len(t, userInfo.Sessions, 1)
 	assert.True(t, userInfo.Sessions[0].VNC)
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestSessionCreatedWdHub(t *testing.T) {
@@ -294,7 +294,7 @@ func TestSessionCreatedWdHub(t *testing.T) {
 		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/wd/hub")
 		Selenium().ServeHTTP(w, r)
 	}))
-	manager = &HTTPTest{Handler: root}
+	app.manager = &HTTPTest{Handler: root}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -308,9 +308,9 @@ func TestSessionCreatedWdHub(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 1)
-	assert.Equal(t, queue.Used(), 1)
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	assert.Equal(t, app.queue.Used(), 1)
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestSessionWithContentTypeCreatedWdHub(t *testing.T) {
@@ -320,7 +320,7 @@ func TestSessionWithContentTypeCreatedWdHub(t *testing.T) {
 		assert.Equal(t, r.Header.Get("Content-Type"), "application/json; charset=utf-8")
 		Selenium().ServeHTTP(w, r)
 	}))
-	manager = &HTTPTest{Handler: root}
+	app.manager = &HTTPTest{Handler: root}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "application/json; charset=utf-8", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -334,14 +334,14 @@ func TestSessionWithContentTypeCreatedWdHub(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 1)
-	assert.Equal(t, queue.Used(), 1)
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	assert.Equal(t, app.queue.Used(), 1)
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestSessionFailedAfterTimeout(t *testing.T) {
-	newSessionAttemptTimeout = 10 * time.Millisecond
-	manager = &HTTPTest{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.newSessionAttemptTimeout = 10 * time.Millisecond
+	app.manager = &HTTPTest{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-time.After(100 * time.Millisecond)
 	})}
 
@@ -355,11 +355,11 @@ func TestSessionFailedAfterTimeout(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 0)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestClientDisconnected(t *testing.T) {
-	manager = &HTTPTest{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.manager = &HTTPTest{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-time.After(1000 * time.Millisecond)
 	})}
 
@@ -375,13 +375,13 @@ func TestClientDisconnected(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 0)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestSessionFailedAfterTwoTimeout(t *testing.T) {
-	retryCount = 2
-	newSessionAttemptTimeout = 10 * time.Millisecond
-	manager = &HTTPTest{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.retryCount = 2
+	app.newSessionAttemptTimeout = 10 * time.Millisecond
+	app.manager = &HTTPTest{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-time.After(100 * time.Millisecond)
 	})}
 
@@ -395,7 +395,7 @@ func TestSessionFailedAfterTwoTimeout(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 0)
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestSessionCreatedRedirect(t *testing.T) {
@@ -408,7 +408,7 @@ func TestSessionCreatedRedirect(t *testing.T) {
 	root.Handle("/wd/hub/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, With(srv.URL).Path("/wd/hub/session/123"), http.StatusFound)
 	}))
-	manager = &HTTPTest{Handler: root}
+	app.manager = &HTTPTest{Handler: root}
 
 	resp, err := httpClient.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -423,9 +423,9 @@ func TestSessionCreatedRedirect(t *testing.T) {
 	var state config.State
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&state))
 	assert.Equal(t, state.Used, 1)
-	assert.Equal(t, queue.Used(), 1)
-	sessions.Remove(sid)
-	queue.Release()
+	assert.Equal(t, app.queue.Used(), 1)
+	app.sessions.Remove(sid)
+	app.queue.Release()
 }
 
 func TestSessionCreatedRemoveExtensionCapabilities(t *testing.T) {
@@ -452,7 +452,7 @@ func TestSessionCreatedRemoveExtensionCapabilities(t *testing.T) {
 		assert.Len(t, browser.W3CCaps.FirstMatch, 1)
 		_, firstMatchPresent = browser.W3CCaps.FirstMatch[0]["selenoid:options"]
 	}))
-	manager = &HTTPTest{Handler: root}
+	app.manager = &HTTPTest{Handler: root}
 
 	resp, err := httpClient.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte(`{"desiredCapabilities": {"browserName": "chrome", "selenoid:options": {"enableVNC": true}}, "capabilities":{"alwaysMatch":{"browserName": "chrome", "goog:chromeOptions": {"args": ["headless"]}, "selenoid:options":{"enableVNC": true}}, "firstMatch": [{"platform": "linux", "selenoid:options": {"enableVideo": true}}]}}`)))
 	assert.NoError(t, err)
@@ -464,7 +464,7 @@ func TestSessionCreatedRemoveExtensionCapabilities(t *testing.T) {
 }
 
 func TestProxySession(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -476,14 +476,14 @@ func TestProxySession(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 
-	assert.Equal(t, queue.Used(), 1)
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	assert.Equal(t, app.queue.Used(), 1)
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestProxySessionPanicOnAbortHandler(t *testing.T) {
 
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -495,14 +495,14 @@ func TestProxySessionPanicOnAbortHandler(t *testing.T) {
 	resp, err = http.DefaultClient.Do(req)
 	assert.Error(t, err)
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestSessionDeleted(t *testing.T) {
 	canceled := false
 	ch := make(chan bool)
-	manager = &HTTPTest{
+	app.manager = &HTTPTest{
 		Handler: Selenium(),
 		Cancel:  ch,
 	}
@@ -528,11 +528,11 @@ func TestSessionDeleted(t *testing.T) {
 	canceled = <-ch
 	assert.True(t, canceled)
 
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestSessionOnClose(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -544,27 +544,27 @@ func TestSessionOnClose(t *testing.T) {
 		With(srv.URL).Path(fmt.Sprintf("/wd/hub/session/%s/window", sess["sessionId"])), nil)
 	_, _ = http.DefaultClient.Do(req)
 
-	assert.Equal(t, queue.Used(), 1)
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	assert.Equal(t, app.queue.Used(), 1)
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestProxySessionCanceled(t *testing.T) {
 	canceled := false
 	ch := make(chan bool)
-	manager = &HTTPTest{
+	app.manager = &HTTPTest{
 		Handler: Selenium(),
 		Cancel:  ch,
 	}
 
-	timeout = 100 * time.Millisecond
+	app.timeout = 100 * time.Millisecond
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
 
-	_, ok := sessions.Get(sess["sessionId"])
+	_, ok := app.sessions.Get(sess["sessionId"])
 	assert.True(t, ok)
 
 	req, _ := http.NewRequest(http.MethodGet, With(srv.URL).Path(fmt.Sprintf("/wd/hub/session/%s/url?timeout=1s", sess["sessionId"])), nil)
@@ -576,82 +576,82 @@ func TestProxySessionCanceled(t *testing.T) {
 	<-time.After(50 * time.Millisecond)
 	cancel()
 	<-time.After(100 * time.Millisecond)
-	_, ok = sessions.Get(sess["sessionId"])
+	_, ok = app.sessions.Get(sess["sessionId"])
 	assert.False(t, ok)
 
 	canceled = <-ch
 	assert.True(t, canceled)
 
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestNewSessionTimeout(t *testing.T) {
 	canceled := false
 	ch := make(chan bool)
-	manager = &HTTPTest{
+	app.manager = &HTTPTest{
 		Handler: Selenium(),
 		Cancel:  ch,
 	}
 
-	timeout = 30 * time.Millisecond
+	app.timeout = 30 * time.Millisecond
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
 
-	_, ok := sessions.Get(sess["sessionId"])
+	_, ok := app.sessions.Get(sess["sessionId"])
 	assert.True(t, ok)
 
 	<-time.After(50 * time.Millisecond)
-	_, ok = sessions.Get(sess["sessionId"])
+	_, ok = app.sessions.Get(sess["sessionId"])
 	assert.False(t, ok)
 
 	canceled = <-ch
 	assert.True(t, canceled)
 
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestProxySessionTimeout(t *testing.T) {
 	canceled := false
 	ch := make(chan bool)
-	manager = &HTTPTest{
+	app.manager = &HTTPTest{
 		Handler: Selenium(),
 		Cancel:  ch,
 	}
 
-	timeout = 30 * time.Millisecond
+	app.timeout = 30 * time.Millisecond
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
 
-	_, ok := sessions.Get(sess["sessionId"])
+	_, ok := app.sessions.Get(sess["sessionId"])
 	assert.True(t, ok)
 
 	<-time.After(20 * time.Millisecond)
-	_, ok = sessions.Get(sess["sessionId"])
+	_, ok = app.sessions.Get(sess["sessionId"])
 	assert.True(t, ok)
 	_, _ = http.Get(With(srv.URL).Path(fmt.Sprintf("/wd/hub/session/%s/url", sess["sessionId"])))
 
 	<-time.After(20 * time.Millisecond)
-	_, ok = sessions.Get(sess["sessionId"])
+	_, ok = app.sessions.Get(sess["sessionId"])
 	assert.True(t, ok)
 
 	<-time.After(50 * time.Millisecond)
-	_, ok = sessions.Get(sess["sessionId"])
+	_, ok = app.sessions.Get(sess["sessionId"])
 	assert.False(t, ok)
 
 	canceled = <-ch
 	assert.True(t, canceled)
 
-	assert.Equal(t, queue.Used(), 0)
+	assert.Equal(t, app.queue.Used(), 0)
 }
 
 func TestFileUpload(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -681,12 +681,12 @@ func TestFileUpload(t *testing.T) {
 
 	assert.Equal(t, string(content), "Hello World!")
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestFileUploadBadJson(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -698,12 +698,12 @@ func TestFileUploadBadJson(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusBadRequest)
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestFileUploadNoFile(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -715,12 +715,12 @@ func TestFileUploadNoFile(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusBadRequest)
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestFileUploadTwoFiles(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -732,8 +732,8 @@ func TestFileUploadTwoFiles(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusBadRequest)
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestPing(t *testing.T) {
@@ -783,7 +783,7 @@ func TestStatus(t *testing.T) {
 
 func TestServeAndDeleteVideoFile(t *testing.T) {
 	fileName := "testfile"
-	filePath := filepath.Join(videoOutputDir, fileName)
+	filePath := filepath.Join(app.videoOutputDir, fileName)
 	_ = os.WriteFile(filePath, []byte("test-data"), 0644)
 
 	rsp, err := http.Get(With(srv.URL).Path("/video/testfile"))
@@ -810,7 +810,7 @@ func TestServeAndDeleteVideoFile(t *testing.T) {
 
 func TestServeAndDeleteLogFile(t *testing.T) {
 	fileName := "logfile.log"
-	filePath := filepath.Join(logOutputDir, fileName)
+	filePath := filepath.Join(app.logOutputDir, fileName)
 	_ = os.WriteFile(filePath, []byte("test-data"), 0644)
 
 	rsp, err := http.Get(With(srv.URL).Path("/logs/logfile.log"))
@@ -847,7 +847,7 @@ func TestFileDownloadProtocolExtension(t *testing.T) {
 }
 
 func testFileDownload(t *testing.T, path func(string) string) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -862,8 +862,8 @@ func testFileDownload(t *testing.T, path func(string) string) {
 	assert.NoError(t, err)
 	assert.Equal(t, string(data), "test-data")
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestFileDownloadMissingSession(t *testing.T) {
@@ -885,7 +885,7 @@ func TestClipboardProtocolExtension(t *testing.T) {
 }
 
 func testClipboard(t *testing.T, path func(string) string) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -904,8 +904,8 @@ func testClipboard(t *testing.T, path func(string) string) {
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestClipboardMissingSession(t *testing.T) {
@@ -915,7 +915,7 @@ func TestClipboardMissingSession(t *testing.T) {
 }
 
 func TestDevtools(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -936,21 +936,21 @@ func TestDevtools(t *testing.T) {
 	err = c.Page.Enable(ctx)
 	assert.NoError(t, err)
 
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestDevtoolsConnectionRefreshesWatchdog(t *testing.T) {
 	cancelCh := make(chan bool, 1)
-	manager = &HTTPTest{
+	app.manager = &HTTPTest{
 		Handler: Selenium(),
 		Cancel:  cancelCh,
 	}
 
-	previousTimeout := timeout
-	timeout = 80 * time.Millisecond
+	previousTimeout := app.timeout
+	app.timeout = 80 * time.Millisecond
 	t.Cleanup(func() {
-		timeout = previousTimeout
+		app.timeout = previousTimeout
 	})
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
@@ -962,10 +962,10 @@ func TestDevtoolsConnectionRefreshesWatchdog(t *testing.T) {
 	sessionID := sess["sessionId"]
 
 	t.Cleanup(func() {
-		if _, ok := sessions.Get(sessionID); ok {
-			sessions.Remove(sessionID)
-			if queue.Used() > 0 {
-				queue.Release()
+		if _, ok := app.sessions.Get(sessionID); ok {
+			app.sessions.Remove(sessionID)
+			if app.queue.Used() > 0 {
+				app.queue.Release()
 			}
 		}
 	})
@@ -978,11 +978,11 @@ func TestDevtoolsConnectionRefreshesWatchdog(t *testing.T) {
 	defer conn.Close()
 
 	time.Sleep(30 * time.Millisecond)
-	_, ok := sessions.Get(sessionID)
+	_, ok := app.sessions.Get(sessionID)
 	assert.True(t, ok)
 
 	assert.Eventually(t, func() bool {
-		_, ok := sessions.Get(sessionID)
+		_, ok := app.sessions.Get(sessionID)
 		return !ok
 	}, time.Second, 10*time.Millisecond)
 
@@ -993,7 +993,7 @@ func TestDevtoolsConnectionRefreshesWatchdog(t *testing.T) {
 		t.Fatal("timed out waiting for session cleanup")
 	}
 
-	assert.Equal(t, 0, queue.Used())
+	assert.Equal(t, 0, app.queue.Used())
 }
 
 func TestAddedSeCdpCapability(t *testing.T) {
@@ -1004,7 +1004,7 @@ func TestAddedSeCdpCapability(t *testing.T) {
 		}
 		delete(input, "sessionId")
 	}
-	manager = &HTTPTest{Handler: Selenium(fn)}
+	app.manager = &HTTPTest{Handler: Selenium(fn)}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -1045,8 +1045,8 @@ func TestAddedSeCdpCapability(t *testing.T) {
 	err = c.Page.Enable(ctx)
 	assert.NoError(t, err)
 
-	sessions.Remove(sessionId)
-	queue.Release()
+	app.sessions.Remove(sessionId)
+	app.queue.Release()
 }
 
 func TestParseGgrHost(t *testing.T) {

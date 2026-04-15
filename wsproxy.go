@@ -21,7 +21,7 @@ const upstreamHandshakeTimeout = 15 * time.Second
 // startup warning so operators notice.
 var websocketUpgrader = gwebsocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return originChecker.Check(r)
+		return app.originChecker.Check(r)
 	},
 }
 

@@ -23,9 +23,9 @@ func writeTestHtpasswd(t *testing.T, user, password string) string {
 
 func withAuthenticator(t *testing.T, a protect.Authenticator) {
 	t.Helper()
-	prev := authenticator
-	authenticator = a
-	t.Cleanup(func() { authenticator = prev })
+	prev := app.authenticator
+	app.authenticator = a
+	t.Cleanup(func() { app.authenticator = prev })
 }
 
 func TestEmbeddedAuth_RejectsMissingCredentials(t *testing.T) {

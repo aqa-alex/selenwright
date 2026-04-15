@@ -20,16 +20,16 @@ import (
 // early cleanup: a failing upstream dial must still call serviceCancel
 // and queue.Drop so the slot is not leaked.
 func TestPlaywrightEarlyCleanupOnDialFailure(t *testing.T) {
-	prevManager := manager
-	prevTimeout := timeout
-	timeout = 200 * time.Millisecond
+	prevManager := app.manager
+	prevTimeout := app.timeout
+	app.timeout = 200 * time.Millisecond
 	t.Cleanup(func() {
-		manager = prevManager
-		timeout = prevTimeout
+		app.manager = prevManager
+		app.timeout = prevTimeout
 	})
 
 	var cancelCalls int32
-	manager = &StaticService{
+	app.manager = &StaticService{
 		Available: true,
 		StartedService: service.StartedService{
 			PlaywrightURL: mustParseWS(t, "ws://127.0.0.1:1/never-listens"),
@@ -39,8 +39,8 @@ func TestPlaywrightEarlyCleanupOnDialFailure(t *testing.T) {
 		},
 	}
 
-	usedBefore := queue.Used()
-	pendingBefore := queue.Pending()
+	usedBefore := app.queue.Used()
+	pendingBefore := app.queue.Pending()
 
 	wsURL := fmt.Sprintf("ws://%s/playwright/firefox/1.49.1", srv.Listener.Addr().String())
 	_, resp, err := gwebsocket.DefaultDialer.Dial(wsURL, nil)
@@ -56,9 +56,9 @@ func TestPlaywrightEarlyCleanupOnDialFailure(t *testing.T) {
 	}, time.Second, 10*time.Millisecond,
 		"serviceCancel must be called once when upstream dial fails")
 
-	assert.Equal(t, usedBefore, queue.Used(),
+	assert.Equal(t, usedBefore, app.queue.Used(),
 		"used counter must stay unchanged after failed setup")
-	assert.Equal(t, pendingBefore, queue.Pending(),
+	assert.Equal(t, pendingBefore, app.queue.Pending(),
 		"pending counter must not leak — queue.Drop should have fired")
 }
 
@@ -120,4 +120,3 @@ type funcReader struct {
 }
 
 func (r *funcReader) Read(p []byte) (int, error) { return r.fn(p) }
-

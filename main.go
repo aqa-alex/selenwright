@@ -37,56 +37,6 @@ import (
 )
 
 var (
-	hostname                 string
-	disableDocker            bool
-	disableQueue             bool
-	enableFileUpload         bool
-	listen                   string
-	timeout                  time.Duration
-	maxTimeout               time.Duration
-	newSessionAttemptTimeout time.Duration
-	sessionDeleteTimeout     time.Duration
-	serviceStartupTimeout    time.Duration
-	gracefulPeriod           time.Duration
-	limit                    int
-	retryCount               int
-	containerNetwork         string
-	sessions                 = session.NewMap()
-	confPath                 string
-	logConfPath              string
-	captureDriverLogs        bool
-	privilegedContainers     bool
-	capAddSysAdmin           bool
-	videoOutputDir           string
-	videoRecorderImage       string
-	logOutputDir             string
-	saveAllLogs              bool
-	maxCreateBodyBytes       int64
-	maxUploadBodyBytes       int64
-	maxUploadExtractedBytes  int64
-	allowedOriginsRaw        string
-	originChecker            *protect.OriginChecker
-	authModeFlag             string
-	htpasswdPath             string
-	userHeaderFlag           string
-	adminHeaderFlag          string
-	adminUsersRaw            string
-	allowInsecureNone        bool
-	authenticator            protect.Authenticator
-	htpasswdAuth             *protect.HtpasswdAuthenticator
-	sourceTrust              *protect.SourceTrust
-	trustedProxySecretRaw    string
-	trustedProxyCIDRsRaw     string
-	trustedProxyMTLSCAPath   string
-	capsPolicyFlag           string
-	ggrHost                  *ggr.Host
-	conf                     *config.Config
-	queue                    *protect.Queue
-	manager                  service.Manager
-	cli                      *client.Client
-
-	startTime = time.Now()
-
 	version     bool
 	gitRevision = "HEAD"
 	buildStamp  = "unknown"
@@ -112,45 +62,45 @@ const (
 func init() {
 	var mem service.MemLimit
 	var cpu service.CpuLimit
-	flag.BoolVar(&disableDocker, "disable-docker", false, "Disable docker support")
-	flag.BoolVar(&disableQueue, "disable-queue", false, "Disable wait queue")
-	flag.BoolVar(&enableFileUpload, "enable-file-upload", false, "File upload support")
-	flag.StringVar(&listen, "listen", ":4444", "Network address to accept connections")
-	flag.StringVar(&confPath, "conf", "config/browsers.json", "Browsers configuration file")
-	flag.StringVar(&logConfPath, "log-conf", "", "Container logging configuration file")
-	flag.IntVar(&limit, "limit", 5, "Simultaneous container runs")
-	flag.IntVar(&retryCount, "retry-count", 1, "New session attempts retry count")
-	flag.DurationVar(&timeout, "timeout", 60*time.Second, "Session idle timeout in time.Duration format")
-	flag.DurationVar(&maxTimeout, "max-timeout", 1*time.Hour, "Maximum valid session idle timeout in time.Duration format")
-	flag.DurationVar(&newSessionAttemptTimeout, "session-attempt-timeout", 30*time.Second, "New session attempt timeout in time.Duration format")
-	flag.DurationVar(&sessionDeleteTimeout, "session-delete-timeout", 30*time.Second, "Session delete timeout in time.Duration format")
-	flag.DurationVar(&serviceStartupTimeout, "service-startup-timeout", 30*time.Second, "Service startup timeout in time.Duration format")
+	flag.BoolVar(&app.disableDocker, "disable-docker", false, "Disable docker support")
+	flag.BoolVar(&app.disableQueue, "disable-queue", false, "Disable wait queue")
+	flag.BoolVar(&app.enableFileUpload, "enable-file-upload", false, "File upload support")
+	flag.StringVar(&app.listen, "listen", ":4444", "Network address to accept connections")
+	flag.StringVar(&app.confPath, "conf", "config/browsers.json", "Browsers configuration file")
+	flag.StringVar(&app.logConfPath, "log-conf", "", "Container logging configuration file")
+	flag.IntVar(&app.limit, "limit", 5, "Simultaneous container runs")
+	flag.IntVar(&app.retryCount, "retry-count", 1, "New session attempts retry count")
+	flag.DurationVar(&app.timeout, "timeout", 60*time.Second, "Session idle timeout in time.Duration format")
+	flag.DurationVar(&app.maxTimeout, "max-timeout", 1*time.Hour, "Maximum valid session idle timeout in time.Duration format")
+	flag.DurationVar(&app.newSessionAttemptTimeout, "session-attempt-timeout", 30*time.Second, "New session attempt timeout in time.Duration format")
+	flag.DurationVar(&app.sessionDeleteTimeout, "session-delete-timeout", 30*time.Second, "Session delete timeout in time.Duration format")
+	flag.DurationVar(&app.serviceStartupTimeout, "service-startup-timeout", 30*time.Second, "Service startup timeout in time.Duration format")
 	flag.BoolVar(&version, "version", false, "Show version and exit")
 	flag.Var(&mem, "mem", "Containers memory limit e.g. 128m or 1g")
 	flag.Var(&cpu, "cpu", "Containers cpu limit as float e.g. 0.2 or 1.0")
-	flag.StringVar(&containerNetwork, "container-network", service.DefaultContainerNetwork, "Network to be used for containers")
-	flag.BoolVar(&captureDriverLogs, "capture-driver-logs", false, "Whether to add driver process logs to Selenwright output")
-	flag.BoolVar(&privilegedContainers, "privileged", false, "Run browser containers in privileged mode. Default false — opposite of legacy upstream Selenoid which defaulted to true. Enable only when the browser needs host-level capabilities and the deployment isolates tenants some other way")
-	flag.BoolVar(&capAddSysAdmin, "cap-add-sys-admin", false, "Add the SYS_ADMIN Linux capability to browser containers (without full -privileged). Chrome's user-namespace sandbox requires it; most headless workloads do not")
-	flag.StringVar(&videoOutputDir, "video-output-dir", "video", "Directory to save recorded video to")
-	flag.StringVar(&videoRecorderImage, "video-recorder-image", "selenwright/video-recorder:latest-release", "Image to use as video recorder")
-	flag.StringVar(&logOutputDir, "log-output-dir", "", "Directory to save session log to")
-	flag.BoolVar(&saveAllLogs, "save-all-logs", false, "Whether to save all logs without considering capabilities")
-	flag.DurationVar(&gracefulPeriod, "graceful-period", 300*time.Second, "graceful shutdown period in time.Duration format, e.g. 300s or 500ms")
-	flag.Int64Var(&maxCreateBodyBytes, "max-create-body-bytes", 4<<20, "Maximum POST body size for /session create requests in bytes (default 4 MiB)")
-	flag.Int64Var(&maxUploadBodyBytes, "max-upload-body-bytes", 256<<20, "Maximum POST body size for /file upload requests in bytes (default 256 MiB)")
-	flag.Int64Var(&maxUploadExtractedBytes, "max-upload-extracted-bytes", 1<<30, "Maximum total extracted size for /file uploaded zip archives in bytes (default 1 GiB)")
-	flag.StringVar(&allowedOriginsRaw, "allowed-origins", "", "Comma-separated list of allowed Origin values for WebSocket upgrades (devtools, playwright, vnc, logs). Empty (default) keeps the legacy permissive behavior; '*' is explicit allow-all. Recommended: configure to your CI/QA hosts to defend against Cross-Site WebSocket Hijacking")
-	flag.StringVar(&authModeFlag, "auth-mode", string(protect.ModeEmbedded), "Authentication mode: 'embedded' (built-in BasicAuth + htpasswd), 'trusted-proxy' (read pre-validated user from -user-header), 'none' (no auth — only allowed when -listen is bound to loopback unless -allow-insecure-none is set)")
-	flag.StringVar(&htpasswdPath, "htpasswd", "", "Path to bcrypt-format htpasswd file used by -auth-mode=embedded. Generate with `htpasswd -B users.htpasswd alice` (apache2-utils) or `docker run --rm httpd:alpine htpasswd -nbB alice pass`")
-	flag.StringVar(&userHeaderFlag, "user-header", "X-Forwarded-User", "Header to read for authenticated user identity in -auth-mode=trusted-proxy")
-	flag.StringVar(&adminHeaderFlag, "admin-header", "X-Admin", "Header in -auth-mode=trusted-proxy whose value 'true' marks the request as administrative")
-	flag.StringVar(&adminUsersRaw, "admin-users", "", "Comma-separated list of usernames treated as admin in -auth-mode=embedded")
-	flag.BoolVar(&allowInsecureNone, "allow-insecure-none", false, "Permit -auth-mode=none on a non-loopback listen address. Required acknowledgement that the service is reachable without authentication")
-	flag.StringVar(&trustedProxySecretRaw, "trusted-proxy-secret", "", "Shared secret expected in X-Router-Secret header. When set, every request must present this value or it is rejected with 401 — defends -auth-mode=trusted-proxy from clients that bypass the router")
-	flag.StringVar(&trustedProxyCIDRsRaw, "trusted-proxy-cidr", "", "Comma-separated CIDR allow-list for the source IP. When set, request must originate from one of the listed networks regardless of headers")
-	flag.StringVar(&trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
-	flag.StringVar(&capsPolicyFlag, "caps-policy", string(session.PolicyStrict), "Capability policy: 'strict' rejects dangerous caps (env, dnsServers, hostsEntries, additionalNetworks, applicationContainers) for non-admin callers; 'permissive' preserves the legacy upstream-Selenoid behavior")
+	flag.StringVar(&app.containerNetwork, "container-network", service.DefaultContainerNetwork, "Network to be used for containers")
+	flag.BoolVar(&app.captureDriverLogs, "capture-driver-logs", false, "Whether to add driver process logs to Selenwright output")
+	flag.BoolVar(&app.privilegedContainers, "privileged", false, "Run browser containers in privileged mode. Default false — opposite of legacy upstream Selenoid which defaulted to true. Enable only when the browser needs host-level capabilities and the deployment isolates tenants some other way")
+	flag.BoolVar(&app.capAddSysAdmin, "cap-add-sys-admin", false, "Add the SYS_ADMIN Linux capability to browser containers (without full -privileged). Chrome's user-namespace sandbox requires it; most headless workloads do not")
+	flag.StringVar(&app.videoOutputDir, "video-output-dir", "video", "Directory to save recorded video to")
+	flag.StringVar(&app.videoRecorderImage, "video-recorder-image", "selenwright/video-recorder:latest-release", "Image to use as video recorder")
+	flag.StringVar(&app.logOutputDir, "log-output-dir", "", "Directory to save session log to")
+	flag.BoolVar(&app.saveAllLogs, "save-all-logs", false, "Whether to save all logs without considering capabilities")
+	flag.DurationVar(&app.gracefulPeriod, "graceful-period", 300*time.Second, "graceful shutdown period in time.Duration format, e.g. 300s or 500ms")
+	flag.Int64Var(&app.maxCreateBodyBytes, "max-create-body-bytes", 4<<20, "Maximum POST body size for /session create requests in bytes (default 4 MiB)")
+	flag.Int64Var(&app.maxUploadBodyBytes, "max-upload-body-bytes", 256<<20, "Maximum POST body size for /file upload requests in bytes (default 256 MiB)")
+	flag.Int64Var(&app.maxUploadExtractedBytes, "max-upload-extracted-bytes", 1<<30, "Maximum total extracted size for /file uploaded zip archives in bytes (default 1 GiB)")
+	flag.StringVar(&app.allowedOriginsRaw, "allowed-origins", "", "Comma-separated list of allowed Origin values for WebSocket upgrades (devtools, playwright, vnc, logs). Empty (default) keeps the legacy permissive behavior; '*' is explicit allow-all. Recommended: configure to your CI/QA hosts to defend against Cross-Site WebSocket Hijacking")
+	flag.StringVar(&app.authModeFlag, "auth-mode", string(protect.ModeEmbedded), "Authentication mode: 'embedded' (built-in BasicAuth + htpasswd), 'trusted-proxy' (read pre-validated user from -user-header), 'none' (no auth — only allowed when -listen is bound to loopback unless -allow-insecure-none is set)")
+	flag.StringVar(&app.htpasswdPath, "htpasswd", "", "Path to bcrypt-format htpasswd file used by -auth-mode=embedded. Generate with `htpasswd -B users.htpasswd alice` (apache2-utils) or `docker run --rm httpd:alpine htpasswd -nbB alice pass`")
+	flag.StringVar(&app.userHeaderFlag, "user-header", "X-Forwarded-User", "Header to read for authenticated user identity in -auth-mode=trusted-proxy")
+	flag.StringVar(&app.adminHeaderFlag, "admin-header", "X-Admin", "Header in -auth-mode=trusted-proxy whose value 'true' marks the request as administrative")
+	flag.StringVar(&app.adminUsersRaw, "admin-users", "", "Comma-separated list of usernames treated as admin in -auth-mode=embedded")
+	flag.BoolVar(&app.allowInsecureNone, "allow-insecure-none", false, "Permit -auth-mode=none on a non-loopback listen address. Required acknowledgement that the service is reachable without authentication")
+	flag.StringVar(&app.trustedProxySecretRaw, "trusted-proxy-secret", "", "Shared secret expected in X-Router-Secret header. When set, every request must present this value or it is rejected with 401 — defends -auth-mode=trusted-proxy from clients that bypass the router")
+	flag.StringVar(&app.trustedProxyCIDRsRaw, "trusted-proxy-cidr", "", "Comma-separated CIDR allow-list for the source IP. When set, request must originate from one of the listed networks regardless of headers")
+	flag.StringVar(&app.trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
+	flag.StringVar(&app.capsPolicyFlag, "caps-policy", string(session.PolicyStrict), "Capability policy: 'strict' rejects dangerous caps (env, dnsServers, hostsEntries, additionalNetworks, applicationContainers) for non-admin callers; 'permissive' preserves the legacy upstream-Selenoid behavior")
 	flag.Parse()
 
 	if version {
@@ -159,22 +109,22 @@ func init() {
 	}
 
 	var err error
-	originChecker, err = protect.NewOriginChecker(splitCSV(allowedOriginsRaw))
+	app.originChecker, err = protect.NewOriginChecker(splitCSV(app.allowedOriginsRaw))
 	if err != nil {
 		log.Fatalf("[-] [INIT] [Invalid -allowed-origins: %v]", err)
 	}
-	if originChecker.AllowsAll() {
+	if app.originChecker.AllowsAll() {
 		log.Printf("[-] [INIT] [WARN] [WebSocket Origin check is permissive — set -allowed-origins to defend against Cross-Site WebSocket Hijacking]")
 	}
-	authenticator, htpasswdAuth, err = buildAuthenticator(authModeFlag, htpasswdPath, splitCSV(adminUsersRaw), userHeaderFlag, adminHeaderFlag, listen, allowInsecureNone)
+	app.authenticator, app.htpasswdAuth, err = buildAuthenticator(app.authModeFlag, app.htpasswdPath, splitCSV(app.adminUsersRaw), app.userHeaderFlag, app.adminHeaderFlag, app.listen, app.allowInsecureNone)
 	if err != nil {
 		if testing.Testing() {
-			authenticator = protect.NoneAuthenticator{}
+			app.authenticator = protect.NoneAuthenticator{}
 		} else {
 			log.Fatalf("[-] [INIT] [%v]", err)
 		}
 	}
-	stCfg, err := buildSourceTrustConfig(authModeFlag, trustedProxySecretRaw, trustedProxyCIDRsRaw, trustedProxyMTLSCAPath, userHeaderFlag, adminHeaderFlag)
+	stCfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag)
 	if err != nil {
 		if testing.Testing() {
 			stCfg = protect.SourceTrustConfig{}
@@ -182,38 +132,38 @@ func init() {
 			log.Fatalf("[-] [INIT] [%v]", err)
 		}
 	}
-	sourceTrust = protect.NewSourceTrust(stCfg)
-	hostname, err = os.Hostname()
+	app.sourceTrust = protect.NewSourceTrust(stCfg)
+	app.hostname, err = os.Hostname()
 	if err != nil {
 		log.Fatalf("[-] [INIT] [%s: %v]", os.Args[0], err)
 	}
 	if ggrHostEnv := os.Getenv("GGR_HOST"); ggrHostEnv != "" {
-		ggrHost = parseGgrHost(ggrHostEnv)
+		app.ggrHost = parseGgrHost(ggrHostEnv)
 	}
-	queue = protect.New(limit, disableQueue)
-	conf = config.NewConfig()
-	err = conf.Load(confPath, logConfPath)
+	app.queue = protect.New(app.limit, app.disableQueue)
+	app.conf = config.NewConfig()
+	err = app.conf.Load(app.confPath, app.logConfPath)
 	if err != nil {
 		log.Fatalf("[-] [INIT] [%s: %v]", os.Args[0], err)
 	}
 	onSIGHUP(func() {
-		err := conf.Load(confPath, logConfPath)
+		err := app.conf.Load(app.confPath, app.logConfPath)
 		if err != nil {
 			log.Printf("[-] [INIT] [%s: %v]", os.Args[0], err)
 		}
-		if htpasswdAuth != nil {
-			if err := htpasswdAuth.Reload(); err != nil {
+		if app.htpasswdAuth != nil {
+			if err := app.htpasswdAuth.Reload(); err != nil {
 				log.Printf("[-] [INIT] [htpasswd reload failed: %v]", err)
 			} else {
 				log.Printf("[-] [INIT] [htpasswd reloaded]")
 			}
 		}
-		if sourceTrust != nil {
-			cfg, err := buildSourceTrustConfig(authModeFlag, trustedProxySecretRaw, trustedProxyCIDRsRaw, trustedProxyMTLSCAPath, userHeaderFlag, adminHeaderFlag)
+		if app.sourceTrust != nil {
+			cfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag)
 			if err != nil {
 				log.Printf("[-] [INIT] [source-trust reload failed: %v]", err)
 			} else {
-				sourceTrust.Update(cfg)
+				app.sourceTrust.Update(cfg)
 				log.Printf("[-] [INIT] [source-trust reloaded]")
 			}
 		}
@@ -224,31 +174,31 @@ func init() {
 		inDocker = true
 	}
 
-	if !disableDocker {
-		videoOutputDir, err = filepath.Abs(videoOutputDir)
+	if !app.disableDocker {
+		app.videoOutputDir, err = filepath.Abs(app.videoOutputDir)
 		if err != nil {
-			log.Fatalf("[-] [INIT] [Invalid video output dir %s: %v]", videoOutputDir, err)
+			log.Fatalf("[-] [INIT] [Invalid video output dir %s: %v]", app.videoOutputDir, err)
 		}
 		// 0o750 — the previous 0o644 omitted the execute bit and made the
 		// directory unenterable for the owning process, which only worked
 		// in production because it ran as root.
-		err = os.MkdirAll(videoOutputDir, 0o750)
+		err = os.MkdirAll(app.videoOutputDir, 0o750)
 		if err != nil {
-			log.Fatalf("[-] [INIT] [Failed to create video output dir %s: %v]", videoOutputDir, err)
+			log.Fatalf("[-] [INIT] [Failed to create video output dir %s: %v]", app.videoOutputDir, err)
 		}
-		log.Printf("[-] [INIT] [Video Dir: %s]", videoOutputDir)
+		log.Printf("[-] [INIT] [Video Dir: %s]", app.videoOutputDir)
 	}
-	if logOutputDir != "" {
-		logOutputDir, err = filepath.Abs(logOutputDir)
+	if app.logOutputDir != "" {
+		app.logOutputDir, err = filepath.Abs(app.logOutputDir)
 		if err != nil {
-			log.Fatalf("[-] [INIT] [Invalid log output dir %s: %v]", logOutputDir, err)
+			log.Fatalf("[-] [INIT] [Invalid log output dir %s: %v]", app.logOutputDir, err)
 		}
-		err = os.MkdirAll(logOutputDir, 0o750)
+		err = os.MkdirAll(app.logOutputDir, 0o750)
 		if err != nil {
-			log.Fatalf("[-] [INIT] [Failed to create log output dir %s: %v]", logOutputDir, err)
+			log.Fatalf("[-] [INIT] [Failed to create log output dir %s: %v]", app.logOutputDir, err)
 		}
-		log.Printf("[-] [INIT] [Logs Dir: %s]", logOutputDir)
-		if saveAllLogs {
+		log.Printf("[-] [INIT] [Logs Dir: %s]", app.logOutputDir)
+		if app.saveAllLogs {
 			log.Printf("[-] [INIT] [Saving all logs]")
 		}
 	}
@@ -259,20 +209,20 @@ func init() {
 		InDocker:             inDocker,
 		CPU:                  int64(cpu),
 		Memory:               int64(mem),
-		Network:              containerNetwork,
-		StartupTimeout:       serviceStartupTimeout,
-		SessionDeleteTimeout: sessionDeleteTimeout,
-		CaptureDriverLogs:    captureDriverLogs,
-		VideoOutputDir:       videoOutputDir,
-		VideoContainerImage:  videoRecorderImage,
-		LogOutputDir:         logOutputDir,
-		SaveAllLogs:          saveAllLogs,
-		Privileged:           privilegedContainers,
-		CapAddSysAdmin:       capAddSysAdmin,
+		Network:              app.containerNetwork,
+		StartupTimeout:       app.serviceStartupTimeout,
+		SessionDeleteTimeout: app.sessionDeleteTimeout,
+		CaptureDriverLogs:    app.captureDriverLogs,
+		VideoOutputDir:       app.videoOutputDir,
+		VideoContainerImage:  app.videoRecorderImage,
+		LogOutputDir:         app.logOutputDir,
+		SaveAllLogs:          app.saveAllLogs,
+		Privileged:           app.privilegedContainers,
+		CapAddSysAdmin:       app.capAddSysAdmin,
 	}
-	if disableDocker {
-		manager = &service.DefaultManager{Environment: &environment, Config: conf}
-		if logOutputDir != "" && captureDriverLogs {
+	if app.disableDocker {
+		app.manager = &service.DefaultManager{Environment: &environment, Config: app.conf}
+		if app.logOutputDir != "" && app.captureDriverLogs {
 			log.Fatalf("[-] [INIT] [In drivers mode only one of -capture-driver-logs and -log-output-dir flags is allowed]")
 		}
 		return
@@ -287,7 +237,7 @@ func init() {
 	}
 	ip, _, _ := net.SplitHostPort(u.Host)
 	environment.IP = ip
-	cli, err = createCompatibleDockerClient(
+	app.cli, err = createCompatibleDockerClient(
 		func(specifiedApiVersion string) {
 			log.Printf("[-] [INIT] [Using Docker API version: %s]", specifiedApiVersion)
 		},
@@ -301,7 +251,7 @@ func init() {
 	if err != nil {
 		log.Fatalf("[-] [INIT] [New docker client: %v]", err)
 	}
-	manager = &service.DefaultManager{Environment: &environment, Client: cli, Config: conf}
+	app.manager = &service.DefaultManager{Environment: &environment, Client: app.cli, Config: app.conf}
 }
 
 func createCompatibleDockerClient(onVersionSpecified, onVersionDetermined, onUsingDefaultVersion func(string)) (*client.Client, error) {
@@ -397,8 +347,8 @@ func splitCSV(s string) []string {
 // and -admin-header. Defends against credential / identity leakage
 // to upstream containers (PR #6).
 func stripTrustHeaders(r *http.Request) {
-	if sourceTrust != nil {
-		sourceTrust.StripFromRequest(r)
+	if app.sourceTrust != nil {
+		app.sourceTrust.StripFromRequest(r)
 	}
 }
 
@@ -414,7 +364,7 @@ func gateSessionOwner(idIndex int, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		sess, ok := sessions.Get(sid)
+		sess, ok := app.sessions.Get(sid)
 		if !ok {
 			next.ServeHTTP(w, r)
 			return
@@ -543,7 +493,7 @@ var seleniumPaths = struct {
 
 func selenium() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc(seleniumPaths.CreateSession, post(queue.Try(queue.Check(queue.Protect(create)))))
+	mux.HandleFunc(seleniumPaths.CreateSession, post(app.queue.Try(app.queue.Check(app.queue.Protect(create)))))
 	mux.Handle(seleniumPaths.ProxySession, gateSessionOwner(2, http.HandlerFunc(proxy)))
 	mux.HandleFunc(paths.Status, status)
 	mux.HandleFunc(paths.Welcome, welcome)
@@ -577,22 +527,22 @@ func ping(w http.ResponseWriter, _ *http.Request) {
 		LastReloadTime string `json:"lastReloadTime"`
 		NumRequests    uint64 `json:"numRequests"`
 		Version        string `json:"version"`
-	}{time.Since(startTime).String(), conf.LastReloadTime.Format(time.RFC3339), getSerial(), gitRevision})
+	}{time.Since(app.startTime).String(), app.conf.LastReloadTime.Format(time.RFC3339), getSerial(), gitRevision})
 }
 
 func video(w http.ResponseWriter, r *http.Request) {
 	requestId := serial()
 	if r.Method == http.MethodDelete {
-		deleteFileIfExists(requestId, w, r, videoOutputDir, paths.Video, "DELETED_VIDEO_FILE")
+		deleteFileIfExists(requestId, w, r, app.videoOutputDir, paths.Video, "DELETED_VIDEO_FILE")
 		return
 	}
 	user, remote := info.RequestInfo(r)
 	if _, ok := r.URL.Query()[jsonParam]; ok {
-		listFilesAsJson(requestId, w, videoOutputDir, "VIDEO_ERROR")
+		listFilesAsJson(requestId, w, app.videoOutputDir, "VIDEO_ERROR")
 		return
 	}
 	log.Printf("[%d] [VIDEO_LISTING] [%s] [%s]", requestId, user, remote)
-	fileServer := http.StripPrefix(paths.Video, http.FileServer(http.Dir(videoOutputDir)))
+	fileServer := http.StripPrefix(paths.Video, http.FileServer(http.Dir(app.videoOutputDir)))
 	fileServer.ServeHTTP(w, r)
 }
 
@@ -658,7 +608,7 @@ func handler() http.Handler {
 	})
 	root.HandleFunc(paths.Status, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(conf.State(sessions, limit, queue.Queued(), queue.Pending()))
+		_ = json.NewEncoder(w).Encode(app.conf.State(app.sessions, app.limit, app.queue.Queued(), app.queue.Pending()))
 	})
 	root.HandleFunc(paths.Ping, ping)
 	root.Handle(paths.VNC, gateSessionOwner(2, http.HandlerFunc(vnc)))
@@ -667,13 +617,13 @@ func handler() http.Handler {
 	root.Handle(paths.Download, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Fileserver }, "DOWNLOADING_FILE"))))
 	root.Handle(paths.Clipboard, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Clipboard }, "CLIPBOARD"))))
 	root.Handle(paths.Devtools, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Devtools }, "DEVTOOLS"))))
-	root.HandleFunc(paths.Playwright, get(queue.Try(queue.Check(queue.Protect(playwright)))))
-	if enableFileUpload {
+	root.HandleFunc(paths.Playwright, get(app.queue.Try(app.queue.Check(app.queue.Protect(playwright)))))
+	if app.enableFileUpload {
 		root.HandleFunc(paths.File, fileUpload)
 	}
 	root.HandleFunc(paths.Welcome, welcome)
-	authMw := protect.AuthMiddleware(func() protect.Authenticator { return authenticator }, protect.AuthMiddlewareOptions{OpenPaths: openPaths})
-	sourceTrustMw := protect.SourceTrustMiddleware(func() *protect.SourceTrust { return sourceTrust }, openPaths)
+	authMw := protect.AuthMiddleware(func() protect.Authenticator { return app.authenticator }, protect.AuthMiddlewareOptions{OpenPaths: openPaths})
+	sourceTrustMw := protect.SourceTrustMiddleware(func() *protect.SourceTrust { return app.sourceTrust }, openPaths)
 	return sourceTrustMw(authMw(root))
 }
 
@@ -684,13 +634,13 @@ func showVersion() {
 
 func main() {
 	log.Printf("[-] [INIT] [Timezone: %s]", time.Local)
-	log.Printf("[-] [INIT] [Listening on %s]", listen)
+	log.Printf("[-] [INIT] [Listening on %s]", app.listen)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 	server := &http.Server{
-		Addr:              listen,
+		Addr:              app.listen,
 		Handler:           handler(),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
@@ -709,8 +659,8 @@ func main() {
 	case <-stop:
 	}
 
-	log.Printf("[-] [SHUTTING_DOWN] [%s]", gracefulPeriod)
-	ctx, cancel := context.WithTimeout(context.Background(), gracefulPeriod)
+	log.Printf("[-] [SHUTTING_DOWN] [%s]", app.gracefulPeriod)
+	ctx, cancel := context.WithTimeout(context.Background(), app.gracefulPeriod)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("[-] [SHUTTING_DOWN] [Failed to shut down: %v]", err)
@@ -720,13 +670,13 @@ func main() {
 		id      string
 		session *session.Session
 	}
-	activeSessions := make([]activeSession, 0, sessions.Len())
-	sessions.Each(func(k string, s *session.Session) {
+	activeSessions := make([]activeSession, 0, app.sessions.Len())
+	app.sessions.Each(func(k string, s *session.Session) {
 		activeSessions = append(activeSessions, activeSession{id: k, session: s})
 	})
 
 	for _, activeSession := range activeSessions {
-		if enableFileUpload {
+		if app.enableFileUpload {
 			_ = os.RemoveAll(path.Join(os.TempDir(), activeSession.id))
 		}
 		if activeSession.session != nil && activeSession.session.Cancel != nil {
@@ -734,8 +684,8 @@ func main() {
 		}
 	}
 
-	if !disableDocker {
-		err := cli.Close()
+	if !app.disableDocker {
+		err := app.cli.Close()
 		if err != nil {
 			log.Fatalf("[-] [SHUTTING_DOWN] [Error closing Docker client: %v]", err)
 		}

@@ -23,11 +23,11 @@ import (
 // TestCreateBodyTooLarge verifies that posting a request body larger than
 // maxCreateBodyBytes is rejected without exhausting memory.
 func TestCreateBodyTooLarge(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	// One byte over the limit — MaxBytesReader will surface an error to
 	// io.ReadAll, the handler then returns 400 via jsonerror.InvalidArgument.
-	oversized := bytes.Repeat([]byte("x"), int(maxCreateBodyBytes)+1)
+	oversized := bytes.Repeat([]byte("x"), int(app.maxCreateBodyBytes)+1)
 	resp, err := http.Post(
 		With(srv.URL).Path("/wd/hub/session"),
 		"application/json",
@@ -37,14 +37,14 @@ func TestCreateBodyTooLarge(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
 		"oversized create body must be rejected with 400")
-	assert.Equal(t, 0, queue.Used(),
+	assert.Equal(t, 0, app.queue.Used(),
 		"oversized body must drop the queue slot")
 }
 
 // TestFileUploadBodyTooLarge verifies the upload endpoint rejects oversized
 // JSON envelopes before attempting to decode them.
 func TestFileUploadBodyTooLarge(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -52,16 +52,16 @@ func TestFileUploadBodyTooLarge(t *testing.T) {
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
 	defer func() {
-		sessions.Remove(sess["sessionId"])
-		queue.Release()
+		app.sessions.Remove(sess["sessionId"])
+		app.queue.Release()
 	}()
 
 	// Construct a JSON envelope larger than maxUploadBodyBytes. We reuse the
 	// existing test default (256 MiB) but temporarily shrink it for the test
 	// to avoid allocating a 256 MiB buffer.
-	original := maxUploadBodyBytes
-	maxUploadBodyBytes = 1 << 10 // 1 KiB
-	defer func() { maxUploadBodyBytes = original }()
+	original := app.maxUploadBodyBytes
+	app.maxUploadBodyBytes = 1 << 10 // 1 KiB
+	defer func() { app.maxUploadBodyBytes = original }()
 
 	envelope := []byte(`{"file":"` + strings.Repeat("A", 4*1024) + `"}`)
 	resp, err = http.Post(
@@ -79,7 +79,7 @@ func TestFileUploadBodyTooLarge(t *testing.T) {
 // directory advertises an uncompressed size above the limit is rejected
 // before a single decompressed byte is written.
 func TestFileUploadZipBombDeclaredSize(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -87,16 +87,16 @@ func TestFileUploadZipBombDeclaredSize(t *testing.T) {
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
 	defer func() {
-		sessions.Remove(sess["sessionId"])
-		queue.Release()
+		app.sessions.Remove(sess["sessionId"])
+		app.queue.Release()
 	}()
 
 	// Shrink the limit so a tiny test payload can exceed it. The header check
 	// uses uint64 comparison — make the limit small and the file slightly
 	// larger to trigger rejection without writing a real bomb to disk.
-	originalExtracted := maxUploadExtractedBytes
-	maxUploadExtractedBytes = 16
-	defer func() { maxUploadExtractedBytes = originalExtracted }()
+	originalExtracted := app.maxUploadExtractedBytes
+	app.maxUploadExtractedBytes = 16
+	defer func() { app.maxUploadExtractedBytes = originalExtracted }()
 
 	// 32 bytes of payload — declared and actual size both exceed 16.
 	payload := bytes.Repeat([]byte("z"), 32)
@@ -117,7 +117,7 @@ func TestFileUploadZipBombDeclaredSize(t *testing.T) {
 // TestFileUploadHonestUnderLimit confirms the legitimate path still works
 // after the new guards are added.
 func TestFileUploadHonestUnderLimit(t *testing.T) {
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", bytes.NewReader([]byte("{}")))
 	assert.NoError(t, err)
@@ -125,8 +125,8 @@ func TestFileUploadHonestUnderLimit(t *testing.T) {
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
 	defer func() {
-		sessions.Remove(sess["sessionId"])
-		queue.Release()
+		app.sessions.Remove(sess["sessionId"])
+		app.queue.Release()
 	}()
 
 	zipBytes := buildZipWithPayload(t, "ok.txt", []byte("Hello World!"))

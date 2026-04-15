@@ -29,11 +29,11 @@ import (
 	"github.com/aqa-alex/selenwright/internal/safepath"
 	"github.com/aqa-alex/selenwright/protect"
 
+	"dario.cat/mergo"
 	"github.com/aqa-alex/selenwright/event"
 	"github.com/aqa-alex/selenwright/jsonerror"
 	"github.com/aqa-alex/selenwright/service"
 	"github.com/aqa-alex/selenwright/session"
-	"dario.cat/mergo"
 )
 
 const slash = "/"
@@ -81,7 +81,7 @@ func (s *sess) Delete(requestId uint64) {
 		log.Printf("[%d] [DELETE_FAILED] [%s] [%v]", requestId, s.id, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), sessionDeleteTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), app.sessionDeleteTimeout)
 	defer cancel()
 	resp, err := httpClient.Do(r.WithContext(ctx))
 	if resp != nil {
@@ -119,13 +119,13 @@ func create(w http.ResponseWriter, r *http.Request) {
 	// streaming gigabytes of capabilities. MaxBytesReader also closes the
 	// connection after the limit, surfacing a 413 to the client via the
 	// response writer when ReadAll subsequently errors.
-	r.Body = http.MaxBytesReader(w, r.Body, maxCreateBodyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, app.maxCreateBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	_ = r.Body.Close()
 	if err != nil {
 		log.Printf("[%d] [ERROR_READING_REQUEST] [%v]", requestId, err)
 		jsonerror.InvalidArgument(err).Encode(w)
-		queue.Drop()
+		app.queue.Drop()
 		return
 	}
 	var browser struct {
@@ -139,7 +139,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[%d] [BAD_JSON_FORMAT] [%v]", requestId, err)
 		jsonerror.InvalidArgument(err).Encode(w)
-		queue.Drop()
+		app.queue.Drop()
 		return
 	}
 	if browser.W3CCaps.Caps.BrowserName() != "" && browser.Caps.BrowserName() == "" {
@@ -159,24 +159,24 @@ func create(w http.ResponseWriter, r *http.Request) {
 		caps = browser.Caps
 		_ = mergo.Merge(&caps, *fmc)
 		caps.ProcessExtensionCapabilities()
-		if err = session.Sanitize(&caps, session.CapsPolicy(capsPolicyFlag), identity.IsAdmin); err != nil {
+		if err = session.Sanitize(&caps, session.CapsPolicy(app.capsPolicyFlag), identity.IsAdmin); err != nil {
 			log.Printf("[%d] [REJECTED_CAPS] [%v]", requestId, err)
 			jsonerror.InvalidArgument(err).Encode(w)
-			queue.Drop()
+			app.queue.Drop()
 			return
 		}
-		sessionTimeout, err = getSessionTimeout(caps.SessionTimeout, maxTimeout, timeout)
+		sessionTimeout, err = getSessionTimeout(caps.SessionTimeout, app.maxTimeout, app.timeout)
 		if err != nil {
 			log.Printf("[%d] [BAD_SESSION_TIMEOUT] [%s]", requestId, caps.SessionTimeout)
 			jsonerror.InvalidArgument(err).Encode(w)
-			queue.Drop()
+			app.queue.Drop()
 			return
 		}
 		resolution, err := getScreenResolution(caps.ScreenResolution)
 		if err != nil {
 			log.Printf("[%d] [BAD_SCREEN_RESOLUTION] [%s]", requestId, caps.ScreenResolution)
 			jsonerror.InvalidArgument(err).Encode(w)
-			queue.Drop()
+			app.queue.Drop()
 			return
 		}
 		caps.ScreenResolution = resolution
@@ -184,19 +184,19 @@ func create(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("[%d] [BAD_VIDEO_SCREEN_SIZE] [%s]", requestId, caps.VideoScreenSize)
 			jsonerror.InvalidArgument(err).Encode(w)
-			queue.Drop()
+			app.queue.Drop()
 			return
 		}
 		caps.VideoScreenSize = videoScreenSize
 		finalVideoName = caps.VideoName
-		if caps.Video && !disableDocker {
-			caps.VideoName = getTemporaryFileName(videoOutputDir, videoFileExtension)
+		if caps.Video && !app.disableDocker {
+			caps.VideoName = getTemporaryFileName(app.videoOutputDir, videoFileExtension)
 		}
 		finalLogName = caps.LogName
-		if logOutputDir != "" && (saveAllLogs || caps.Log) {
-			caps.LogName = getTemporaryFileName(logOutputDir, logFileExtension)
+		if app.logOutputDir != "" && (app.saveAllLogs || caps.Log) {
+			caps.LogName = getTemporaryFileName(app.logOutputDir, logFileExtension)
 		}
-		starter, ok = manager.Find(caps, requestId)
+		starter, ok = app.manager.Find(caps, requestId)
 		if ok {
 			break
 		}
@@ -204,14 +204,14 @@ func create(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("[%d] [ENVIRONMENT_NOT_AVAILABLE] [%s] [%s]", requestId, caps.BrowserName(), caps.Version)
 		jsonerror.InvalidArgument(errors.New("Requested environment is not available")).Encode(w)
-		queue.Drop()
+		app.queue.Drop()
 		return
 	}
 	startedService, err := starter.StartWithCancel()
 	if err != nil {
 		log.Printf("[%d] [SERVICE_STARTUP_FAILED] [%v]", requestId, err)
 		jsonerror.SessionNotCreated(err).Encode(w)
-		queue.Drop()
+		app.queue.Drop()
 		return
 	}
 	u := startedService.Url
@@ -232,7 +232,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			req.Header.Set("Content-Type", contentType)
 		}
 		req.Host = host
-		ctx, done := context.WithTimeout(r.Context(), newSessionAttemptTimeout)
+		ctx, done := context.WithTimeout(r.Context(), app.newSessionAttemptTimeout)
 		defer done()
 		log.Printf("[%d] [SESSION_ATTEMPTED] [%s] [%d]", requestId, u.String(), i)
 		rsp, err := httpClient.Do(req.WithContext(ctx))
@@ -243,8 +243,8 @@ func create(w http.ResponseWriter, r *http.Request) {
 			}
 			switch ctx.Err() {
 			case context.DeadlineExceeded:
-				log.Printf("[%d] [SESSION_ATTEMPT_TIMED_OUT] [%s]", requestId, newSessionAttemptTimeout)
-				if i < retryCount {
+				log.Printf("[%d] [SESSION_ATTEMPT_TIMED_OUT] [%s]", requestId, app.newSessionAttemptTimeout)
+				if i < app.retryCount {
 					continue
 				}
 				err := fmt.Errorf("New session attempts retry count exceeded")
@@ -253,7 +253,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			case context.Canceled:
 				log.Printf("[%d] [CLIENT_DISCONNECTED] [%s] [%s] [%.2fs]", requestId, user, remote, info.SecondsSince(sessionStartTime))
 			}
-			queue.Drop()
+			app.queue.Drop()
 			cancel()
 			return
 		default:
@@ -264,7 +264,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			}
 			log.Printf("[%d] [SESSION_FAILED] [%s] [%s]", requestId, u.String(), err)
 			jsonerror.SessionNotCreated(err).Encode(w)
-			queue.Drop()
+			app.queue.Drop()
 			cancel()
 			return
 		}
@@ -290,7 +290,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			s.ID = fragments[len(fragments)-1]
 			u := &url.URL{
 				Scheme: "http",
-				Host:   hostname,
+				Host:   app.hostname,
 				Path:   path.Join("/wd/hub/session", s.ID),
 			}
 			w.Header().Add("Location", u.String())
@@ -300,7 +300,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Printf("[%d] [ERROR_READING_RESPONSE] [%v]", requestId, err)
-			queue.Drop()
+			app.queue.Drop()
 			cancel()
 			w.WriteHeader(resp.StatusCode)
 			return
@@ -308,7 +308,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 		newBody, sessionId, err := processBody(body, r.Host)
 		if err != nil {
 			log.Printf("[%d] [ERROR_PROCESSING_RESPONSE] [%v]", requestId, err)
-			queue.Drop()
+			app.queue.Drop()
 			cancel()
 			w.WriteHeader(resp.StatusCode)
 			return
@@ -321,7 +321,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.ID == "" {
 		log.Printf("[%d] [SESSION_FAILED] [%s] [%s]", requestId, u.String(), resp.Status)
-		queue.Drop()
+		app.queue.Drop()
 		cancel()
 		return
 	}
@@ -350,8 +350,8 @@ func create(w http.ResponseWriter, r *http.Request) {
 			SessionId: sessionId,
 			Session:   sess,
 		}
-		if caps.Video && !disableDocker {
-			oldVideoName := filepath.Join(videoOutputDir, caps.VideoName)
+		if caps.Video && !app.disableDocker {
+			oldVideoName := filepath.Join(app.videoOutputDir, caps.VideoName)
 			if finalVideoName == "" {
 				finalVideoName = sessionId + videoFileExtension
 				e.Session.Caps.VideoName = finalVideoName
@@ -360,7 +360,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			// client (selenwright.go:177). Without this guard a payload like
 			// "../../etc/cron.d/evil.mp4" would let the user place the
 			// recorded file at an attacker-chosen path on the host.
-			newVideoName, joinErr := safepath.Join(videoOutputDir, finalVideoName)
+			newVideoName, joinErr := safepath.Join(app.videoOutputDir, finalVideoName)
 			if joinErr != nil {
 				log.Printf("[%d] [VIDEO_ERROR] [Rejected video name %q: %v]", requestId, finalVideoName, joinErr)
 			} else {
@@ -377,16 +377,16 @@ func create(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if logOutputDir != "" && (saveAllLogs || caps.Log) {
+		if app.logOutputDir != "" && (app.saveAllLogs || caps.Log) {
 			//The following logic will fail if -capture-driver-logs is enabled and a session is requested in driver mode.
 			//Specifying both -log-output-dir and -capture-driver-logs in that case is considered a misconfiguration.
-			oldLogName := filepath.Join(logOutputDir, caps.LogName)
+			oldLogName := filepath.Join(app.logOutputDir, caps.LogName)
 			if finalLogName == "" {
 				finalLogName = sessionId + logFileExtension
 				e.Session.Caps.LogName = finalLogName
 			}
 			// Same defense as above: finalLogName came from caps.LogName.
-			newLogName, joinErr := safepath.Join(logOutputDir, finalLogName)
+			newLogName, joinErr := safepath.Join(app.logOutputDir, finalLogName)
 			if joinErr != nil {
 				log.Printf("[%d] [LOG_ERROR] [Rejected log name %q: %v]", requestId, finalLogName, joinErr)
 			} else {
@@ -406,8 +406,8 @@ func create(w http.ResponseWriter, r *http.Request) {
 		event.SessionStopped(event.StoppedSession{e})
 	}
 	sess.Cancel = cancelAndRenameFiles
-	sessions.Put(s.ID, sess)
-	queue.Create()
+	app.sessions.Put(s.ID, sess)
+	app.queue.Create()
 	log.Printf("[%d] [SESSION_CREATED] [%s] [%d] [%.2fs]", requestId, s.ID, i, info.SecondsSince(sessionStartTime))
 }
 
@@ -485,8 +485,8 @@ func processBody(input []byte, host string) ([]byte, string, error) {
 }
 
 func preprocessSessionId(sid string) string {
-	if ggrHost != nil {
-		return ggrHost.Sum() + sid
+	if app.ggrHost != nil {
+		return app.ggrHost.Sum() + sid
 	}
 	return sid
 }
@@ -540,10 +540,10 @@ func getSessionTimeout(sessionTimeout string, maxTimeout time.Duration, defaultT
 		if err != nil {
 			return 0, fmt.Errorf("invalid sessionTimeout capability: %v", err)
 		}
-		if st <= maxTimeout {
+		if st <= app.maxTimeout {
 			return st, nil
 		}
-		return maxTimeout, nil
+		return app.maxTimeout, nil
 	}
 	return defaultTimeout, nil
 }
@@ -577,7 +577,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := fragments[2]
-	sess, ok := sessions.Get(id)
+	sess, ok := app.sessions.Get(id)
 	if !ok {
 		r.URL.Path = paths.Error
 		(&httputil.ReverseProxy{Director: func(*http.Request) {}, ErrorHandler: defaultErrorHandler(requestId)}).ServeHTTP(w, r)
@@ -606,12 +606,12 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 
 	if isSessionDelete {
 		sess.Lock.Lock()
-		if enableFileUpload {
+		if app.enableFileUpload {
 			_ = os.RemoveAll(filepath.Join(os.TempDir(), id))
 		}
 		stopWatchdog(sess)
-		sessions.Remove(id)
-		queue.Release()
+		app.sessions.Remove(id)
+		app.queue.Release()
 		log.Printf("[%d] [SESSION_DELETED] [%s]", requestId, id)
 		postCleanup = sess.Cancel
 		sess.Lock.Unlock()
@@ -621,7 +621,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 
 	director := func(r *http.Request) {
 		stripTrustHeaders(r)
-		if len(fragments) == 4 && fragments[len(fragments)-1] == "file" && enableFileUpload {
+		if len(fragments) == 4 && fragments[len(fragments)-1] == "file" && app.enableFileUpload {
 			r.Header.Set(fileUploadDirHeader, filepath.Join(os.TempDir(), id))
 			r.URL.Path = "/file"
 			return
@@ -659,7 +659,7 @@ func reverseProxy(hostFn func(sess *session.Session) string, status string) func
 	return func(w http.ResponseWriter, r *http.Request) {
 		requestId := serial()
 		sid, remainingPath := splitRequestPath(r.URL.Path)
-		sess, ok := sessions.Get(sid)
+		sess, ok := app.sessions.Get(sid)
 		if ok {
 			if isDevtoolsWebSocketRequest(r) {
 				handleDevtoolsWebSocket(w, r, requestId, sid, remainingPath, sess)
@@ -706,7 +706,7 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 	// Cap the JSON envelope size before decoding. The upload endpoint accepts
 	// a base64-encoded zip in `file`, which expands ~33% on the wire — we
 	// allow generous headroom but still bound it.
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBodyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, app.maxUploadBodyBytes)
 	var jsonRequest struct {
 		File []byte `json:"file"`
 	}
@@ -729,8 +729,8 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 	// Reject zip-bomb attempts whose declared uncompressed size already
 	// exceeds the limit. The header can lie, so we re-check the actual
 	// extracted byte count below.
-	if file.UncompressedSize64 > uint64(maxUploadExtractedBytes) {
-		jsonerror.InvalidArgument(fmt.Errorf("uncompressed file size %d exceeds limit %d", file.UncompressedSize64, maxUploadExtractedBytes)).Encode(w)
+	if file.UncompressedSize64 > uint64(app.maxUploadExtractedBytes) {
+		jsonerror.InvalidArgument(fmt.Errorf("uncompressed file size %d exceeds limit %d", file.UncompressedSize64, app.maxUploadExtractedBytes)).Encode(w)
 		return
 	}
 	src, err := file.Open()
@@ -763,16 +763,16 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 	// Bound the actual decompressed bytes regardless of the header. We read
 	// one byte beyond the limit to detect overshoot and reject without
 	// committing a partial-but-still-huge file to disk.
-	limited := io.LimitReader(src, maxUploadExtractedBytes+1)
+	limited := io.LimitReader(src, app.maxUploadExtractedBytes+1)
 	written, err := io.Copy(dst, limited)
 	if err != nil {
 		jsonerror.UnknownError(err).Encode(w)
 		return
 	}
-	if written > maxUploadExtractedBytes {
+	if written > app.maxUploadExtractedBytes {
 		_ = dst.Close()
 		_ = os.Remove(fileName)
-		jsonerror.InvalidArgument(fmt.Errorf("uncompressed file size exceeds limit %d", maxUploadExtractedBytes)).Encode(w)
+		jsonerror.InvalidArgument(fmt.Errorf("uncompressed file size exceeds limit %d", app.maxUploadExtractedBytes)).Encode(w)
 		return
 	}
 
@@ -786,7 +786,7 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 
 func status(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	ready := limit > sessions.Len()
+	ready := app.limit > app.sessions.Len()
 	_ = json.NewEncoder(w).Encode(
 		map[string]interface{}{
 			"value": map[string]interface{}{
