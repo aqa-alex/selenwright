@@ -59,6 +59,7 @@ type Server struct {
 	eventWorkers             int
 	enableMetrics            bool
 	metricsPath              string
+	logJSON                  bool
 
 	// Runtime state (populated in main.init after flag parsing and
 	// after conf/client/manager construction; reloadable via SIGHUP).
