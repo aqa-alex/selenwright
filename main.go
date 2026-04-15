@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 
 	"github.com/aqa-alex/selenwright/info"
@@ -64,6 +65,14 @@ var (
 	maxUploadExtractedBytes  int64
 	allowedOriginsRaw        string
 	originChecker            *protect.OriginChecker
+	authModeFlag             string
+	htpasswdPath             string
+	userHeaderFlag           string
+	adminHeaderFlag          string
+	adminUsersRaw            string
+	allowInsecureNone        bool
+	authenticator            protect.Authenticator
+	htpasswdAuth             *protect.HtpasswdAuthenticator
 	ggrHost                  *ggr.Host
 	conf                     *config.Config
 	queue                    *protect.Queue
@@ -125,6 +134,12 @@ func init() {
 	flag.Int64Var(&maxUploadBodyBytes, "max-upload-body-bytes", 256<<20, "Maximum POST body size for /file upload requests in bytes (default 256 MiB)")
 	flag.Int64Var(&maxUploadExtractedBytes, "max-upload-extracted-bytes", 1<<30, "Maximum total extracted size for /file uploaded zip archives in bytes (default 1 GiB)")
 	flag.StringVar(&allowedOriginsRaw, "allowed-origins", "", "Comma-separated list of allowed Origin values for WebSocket upgrades (devtools, playwright, vnc, logs). Empty (default) keeps the legacy permissive behavior; '*' is explicit allow-all. Recommended: configure to your CI/QA hosts to defend against Cross-Site WebSocket Hijacking")
+	flag.StringVar(&authModeFlag, "auth-mode", string(protect.ModeEmbedded), "Authentication mode: 'embedded' (built-in BasicAuth + htpasswd), 'trusted-proxy' (read pre-validated user from -user-header), 'none' (no auth — only allowed when -listen is bound to loopback unless -allow-insecure-none is set)")
+	flag.StringVar(&htpasswdPath, "htpasswd", "", "Path to bcrypt-format htpasswd file used by -auth-mode=embedded. Generate with `htpasswd -B users.htpasswd alice` (apache2-utils) or `docker run --rm httpd:alpine htpasswd -nbB alice pass`")
+	flag.StringVar(&userHeaderFlag, "user-header", "X-Forwarded-User", "Header to read for authenticated user identity in -auth-mode=trusted-proxy")
+	flag.StringVar(&adminHeaderFlag, "admin-header", "X-Admin", "Header in -auth-mode=trusted-proxy whose value 'true' marks the request as administrative")
+	flag.StringVar(&adminUsersRaw, "admin-users", "", "Comma-separated list of usernames treated as admin in -auth-mode=embedded")
+	flag.BoolVar(&allowInsecureNone, "allow-insecure-none", false, "Permit -auth-mode=none on a non-loopback listen address. Required acknowledgement that the service is reachable without authentication")
 	flag.Parse()
 
 	if version {
@@ -139,6 +154,14 @@ func init() {
 	}
 	if originChecker.AllowsAll() {
 		log.Printf("[-] [INIT] [WARN] [WebSocket Origin check is permissive — set -allowed-origins to defend against Cross-Site WebSocket Hijacking]")
+	}
+	authenticator, htpasswdAuth, err = buildAuthenticator(authModeFlag, htpasswdPath, splitCSV(adminUsersRaw), userHeaderFlag, adminHeaderFlag, listen, allowInsecureNone)
+	if err != nil {
+		if testing.Testing() {
+			authenticator = protect.NoneAuthenticator{}
+		} else {
+			log.Fatalf("[-] [INIT] [%v]", err)
+		}
 	}
 	hostname, err = os.Hostname()
 	if err != nil {
@@ -157,6 +180,13 @@ func init() {
 		err := conf.Load(confPath, logConfPath)
 		if err != nil {
 			log.Printf("[-] [INIT] [%s: %v]", os.Args[0], err)
+		}
+		if htpasswdAuth != nil {
+			if err := htpasswdAuth.Reload(); err != nil {
+				log.Printf("[-] [INIT] [htpasswd reload failed: %v]", err)
+			} else {
+				log.Printf("[-] [INIT] [htpasswd reloaded]")
+			}
 		}
 	})
 	inDocker := false
@@ -345,6 +375,55 @@ func gateOrigin(next http.Handler) http.Handler {
 	})
 }
 
+func buildAuthenticator(mode, htpasswd string, admins []string, userHeader, adminHeader, listenAddr string, allowInsecure bool) (protect.Authenticator, *protect.HtpasswdAuthenticator, error) {
+	switch protect.AuthMode(mode) {
+	case protect.ModeEmbedded:
+		if htpasswd == "" {
+			return nil, nil, fmt.Errorf("-auth-mode=embedded requires -htpasswd <path>")
+		}
+		auth, err := protect.NewHtpasswdAuthenticator(htpasswd, admins)
+		if err != nil {
+			return nil, nil, fmt.Errorf("loading htpasswd: %w", err)
+		}
+		log.Printf("[-] [INIT] [Auth: embedded BasicAuth from %s, %d admin(s)]", htpasswd, len(admins))
+		return auth, auth, nil
+	case protect.ModeTrustedProxy:
+		if userHeader == "" {
+			return nil, nil, fmt.Errorf("-auth-mode=trusted-proxy requires non-empty -user-header")
+		}
+		log.Printf("[-] [INIT] [Auth: trusted-proxy reading user from %q, admin from %q]", userHeader, adminHeader)
+		return &protect.TrustedProxyAuthenticator{UserHeader: userHeader, AdminHeader: adminHeader}, nil, nil
+	case protect.ModeNone:
+		if !isLoopbackListen(listenAddr) && !allowInsecure {
+			return nil, nil, fmt.Errorf("-auth-mode=none on non-loopback listen %q is refused; bind to 127.0.0.1 or set -allow-insecure-none to opt in", listenAddr)
+		}
+		if !isLoopbackListen(listenAddr) {
+			log.Printf("[-] [INIT] [WARN] [Auth: NONE on %s — service is reachable without authentication]", listenAddr)
+		} else {
+			log.Printf("[-] [INIT] [Auth: none (loopback only)]")
+		}
+		return protect.NoneAuthenticator{}, nil, nil
+	default:
+		return nil, nil, fmt.Errorf("unknown -auth-mode %q (expected embedded|trusted-proxy|none)", mode)
+	}
+}
+
+func isLoopbackListen(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	host = strings.Trim(host, "[]")
+	if host == "" {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func onSIGHUP(fn func()) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)
@@ -464,6 +543,8 @@ var paths = struct {
 	Welcome:    "/",
 }
 
+var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome}
+
 func handler() http.Handler {
 	root := http.NewServeMux()
 	root.HandleFunc(paths.WdHub+"/", func(w http.ResponseWriter, r *http.Request) {
@@ -499,7 +580,7 @@ func handler() http.Handler {
 		root.HandleFunc(paths.File, fileUpload)
 	}
 	root.HandleFunc(paths.Welcome, welcome)
-	return root
+	return protect.AuthMiddleware(func() protect.Authenticator { return authenticator }, protect.AuthMiddlewareOptions{OpenPaths: openPaths})(root)
 }
 
 func showVersion() {

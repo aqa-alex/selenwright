@@ -49,6 +49,7 @@ func init() {
 	// (which never set Origin) continue to pass; per-test overrides
 	// reassign originChecker to a strict instance.
 	originChecker, _ = protect.NewOriginChecker(nil)
+	authenticator = protect.NoneAuthenticator{}
 	ggrHost = &ggr.Host{
 		Name: "some-host.example.com",
 		Port: 4444,
