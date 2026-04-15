@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"sync"
 
 	"github.com/aqa-alex/selenwright/config"
 )
@@ -113,40 +115,88 @@ func metricsPathValue() string {
 }
 
 // historySettingsPayload matches the ArtifactHistorySettings shape the UI
-// normalizes in selenwright-ui/src/app/api/settings.ts. Artifact retention is
-// not implemented in Selenwright yet; available:false makes the UI render the
-// "unavailable" note instead of a red protocol error.
+// normalizes in selenwright-ui/src/app/api/settings.ts. Retention enforcement
+// (periodic sweep of old video/logs/downloads) is not implemented yet — the
+// settings round-trip through an in-memory store so the UI stays interactive
+// and the backend can accept PUTs without 501ing.
 type historySettingsPayload struct {
-	Available     bool   `json:"available"`
-	Enabled       bool   `json:"enabled"`
-	Reason        string `json:"reason,omitempty"`
-	RetentionDays int    `json:"retentionDays"`
+	Available     bool `json:"available"`
+	Enabled       bool `json:"enabled"`
+	RetentionDays int  `json:"retentionDays"`
 }
 
-const historySettingsUnavailableReason = "Artifact retention is not implemented in this Selenwright build."
+type historySettingsUpdate struct {
+	Enabled       *bool `json:"enabled"`
+	RetentionDays *int  `json:"retentionDays"`
+}
+
+const (
+	historyRetentionMinDays = 1
+	historyRetentionMaxDays = 365
+)
+
+var historyState = struct {
+	mu            sync.Mutex
+	enabled       bool
+	retentionDays int
+}{retentionDays: 7}
+
+func snapshotHistorySettings() historySettingsPayload {
+	historyState.mu.Lock()
+	defer historyState.mu.Unlock()
+	return historySettingsPayload{
+		Available:     true,
+		Enabled:       historyState.enabled,
+		RetentionDays: historyState.retentionDays,
+	}
+}
 
 func historySettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	switch r.Method {
 	case http.MethodGet:
-		_ = json.NewEncoder(w).Encode(historySettingsPayload{
-			Available:     false,
-			Enabled:       false,
-			Reason:        historySettingsUnavailableReason,
-			RetentionDays: 7,
-		})
+		_ = json.NewEncoder(w).Encode(snapshotHistorySettings())
 	case http.MethodPut, http.MethodPost:
-		w.WriteHeader(http.StatusNotImplemented)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":   "not_implemented",
-			"message": historySettingsUnavailableReason,
-		})
+		var update historySettingsUpdate
+		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+			writeHistoryError(w, http.StatusBadRequest, "invalid_body",
+				fmt.Sprintf("could not parse body: %v", err))
+			return
+		}
+		if update.RetentionDays != nil {
+			days := *update.RetentionDays
+			if days < historyRetentionMinDays || days > historyRetentionMaxDays {
+				writeHistoryError(w, http.StatusBadRequest, "invalid_retention",
+					fmt.Sprintf("retentionDays must be between %d and %d", historyRetentionMinDays, historyRetentionMaxDays))
+				return
+			}
+		}
+		historyState.mu.Lock()
+		if update.Enabled != nil {
+			historyState.enabled = *update.Enabled
+		}
+		if update.RetentionDays != nil {
+			historyState.retentionDays = *update.RetentionDays
+		}
+		resp := historySettingsPayload{
+			Available:     true,
+			Enabled:       historyState.enabled,
+			RetentionDays: historyState.retentionDays,
+		}
+		historyState.mu.Unlock()
+		log.Printf("[-] [HISTORY_SETTINGS_UPDATED] [enabled=%t] [retentionDays=%d]", resp.Enabled, resp.RetentionDays)
+		_ = json.NewEncoder(w).Encode(resp)
 	default:
 		w.Header().Set("Allow", "GET, PUT")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":   "method_not_allowed",
-			"message": fmt.Sprintf("method %s not allowed on /history/settings", r.Method),
-		})
+		writeHistoryError(w, http.StatusMethodNotAllowed, "method_not_allowed",
+			fmt.Sprintf("method %s not allowed on /history/settings", r.Method))
 	}
+}
+
+func writeHistoryError(w http.ResponseWriter, status int, code, message string) {
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":   code,
+		"message": message,
+	})
 }
