@@ -78,6 +78,7 @@ var (
 	trustedProxySecretRaw    string
 	trustedProxyCIDRsRaw     string
 	trustedProxyMTLSCAPath   string
+	capsPolicyFlag           string
 	ggrHost                  *ggr.Host
 	conf                     *config.Config
 	queue                    *protect.Queue
@@ -148,6 +149,7 @@ func init() {
 	flag.StringVar(&trustedProxySecretRaw, "trusted-proxy-secret", "", "Shared secret expected in X-Router-Secret header. When set, every request must present this value or it is rejected with 401 — defends -auth-mode=trusted-proxy from clients that bypass the router")
 	flag.StringVar(&trustedProxyCIDRsRaw, "trusted-proxy-cidr", "", "Comma-separated CIDR allow-list for the source IP. When set, request must originate from one of the listed networks regardless of headers")
 	flag.StringVar(&trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
+	flag.StringVar(&capsPolicyFlag, "caps-policy", string(session.PolicyStrict), "Capability policy: 'strict' rejects dangerous caps (env, dnsServers, hostsEntries, additionalNetworks, applicationContainers) for non-admin callers; 'permissive' preserves the legacy upstream-Selenoid behavior")
 	flag.Parse()
 
 	if version {

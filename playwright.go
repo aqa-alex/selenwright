@@ -67,6 +67,14 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		caps.LogName = getTemporaryFileName(logOutputDir, logFileExtension)
 	}
 
+	identity, _ := protect.IdentityFromContext(r.Context())
+	if err := session.Sanitize(&caps, session.CapsPolicy(capsPolicyFlag), identity.IsAdmin); err != nil {
+		log.Printf("[%d] [REJECTED_CAPS] [%v]", requestId, err)
+		jsonerror.InvalidArgument(err).Encode(w)
+		queue.Drop()
+		return
+	}
+
 	starter, ok := manager.Find(caps, requestId)
 	if !ok {
 		log.Printf("[%d] [ENVIRONMENT_NOT_AVAILABLE] [%s] [%s]", requestId, caps.BrowserName(), caps.Version)
@@ -140,7 +148,6 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	identity, _ := protect.IdentityFromContext(r.Context())
 	owner := identity.User
 	if owner == "" {
 		owner = user

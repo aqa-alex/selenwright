@@ -154,10 +154,17 @@ func create(w http.ResponseWriter, r *http.Request) {
 	var ok bool
 	var sessionTimeout time.Duration
 	var finalVideoName, finalLogName string
+	identity, _ := protect.IdentityFromContext(r.Context())
 	for _, fmc := range firstMatchCaps {
 		caps = browser.Caps
 		_ = mergo.Merge(&caps, *fmc)
 		caps.ProcessExtensionCapabilities()
+		if err = session.Sanitize(&caps, session.CapsPolicy(capsPolicyFlag), identity.IsAdmin); err != nil {
+			log.Printf("[%d] [REJECTED_CAPS] [%v]", requestId, err)
+			jsonerror.InvalidArgument(err).Encode(w)
+			queue.Drop()
+			return
+		}
 		sessionTimeout, err = getSessionTimeout(caps.SessionTimeout, maxTimeout, timeout)
 		if err != nil {
 			log.Printf("[%d] [BAD_SESSION_TIMEOUT] [%s]", requestId, caps.SessionTimeout)
@@ -318,7 +325,6 @@ func create(w http.ResponseWriter, r *http.Request) {
 		cancel()
 		return
 	}
-	identity, _ := protect.IdentityFromContext(r.Context())
 	owner := identity.User
 	if owner == "" {
 		owner = user
