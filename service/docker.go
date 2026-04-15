@@ -118,12 +118,22 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 	image := d.Service.Image
 	ctx := context.Background()
 	log.Printf("[%d] [CREATING_CONTAINER] [%s]", requestId, image)
+	// When -browser-network is set, join the browser container to the
+	// isolated internal network as its primary attachment. The operator
+	// network from -container-network, if distinct and not the Docker
+	// sentinel "default", is added as a secondary network below so
+	// legacy multi-tenant routing setups keep working without egress
+	// via the default gateway.
+	primaryNetwork := d.Network
+	if d.BrowserNetwork != "" {
+		primaryNetwork = d.BrowserNetwork
+	}
 	hostConfig := ctr.HostConfig{
 		Binds:        d.Service.Volumes,
 		AutoRemove:   true,
 		PortBindings: portConfig.PortBindings,
 		LogConfig:    getLogConfig(*d.LogConfig, d.Caps),
-		NetworkMode:  ctr.NetworkMode(d.Network),
+		NetworkMode:  ctr.NetworkMode(primaryNetwork),
 		Tmpfs:        d.Service.Tmpfs,
 		ShmSize:      getShmSize(d.Service),
 		Privileged:   d.Privileged,
@@ -176,13 +186,16 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 	}
 	log.Printf("[%d] [CONTAINER_STARTED] [%s] [%s] [%.2fs]", requestId, image, browserContainerId, info.SecondsSince(browserContainerStartTime))
 
-	if len(d.AdditionalNetworks) > 0 {
-		for _, networkName := range d.AdditionalNetworks {
-			err = cl.NetworkConnect(ctx, networkName, browserContainerId, nil)
-			if err != nil {
-				removeContainer(ctx, cl, requestId, browserContainerId)
-				return nil, fmt.Errorf("failed to connect container %s to network %s: %v", browserContainerId, networkName, err)
-			}
+	secondaryNetworks := make([]string, 0, 1+len(d.AdditionalNetworks))
+	if d.BrowserNetwork != "" && d.Network != "" && d.Network != DefaultContainerNetwork && d.Network != d.BrowserNetwork {
+		secondaryNetworks = append(secondaryNetworks, d.Network)
+	}
+	secondaryNetworks = append(secondaryNetworks, d.AdditionalNetworks...)
+	for _, networkName := range secondaryNetworks {
+		err = cl.NetworkConnect(ctx, networkName, browserContainerId, nil)
+		if err != nil {
+			removeContainer(ctx, cl, requestId, browserContainerId)
+			return nil, fmt.Errorf("failed to connect container %s to network %s: %v", browserContainerId, networkName, err)
 		}
 	}
 

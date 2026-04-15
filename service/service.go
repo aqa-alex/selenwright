@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -13,8 +14,38 @@ import (
 
 	"github.com/aqa-alex/selenwright/config"
 	"github.com/aqa-alex/selenwright/session"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 )
+
+// EnsureBrowserNetwork idempotently creates a bridge network with
+// Internal=true so browser containers attached to it have no egress
+// to the host's default gateway. Already-existing networks are left
+// untouched — the call is safe to run on every startup. Returns nil
+// when name is empty so the caller doesn't need to guard.
+func EnsureBrowserNetwork(ctx context.Context, cl *client.Client, name string) error {
+	if name == "" || cl == nil {
+		return nil
+	}
+	if _, err := cl.NetworkInspect(ctx, name, types.NetworkInspectOptions{}); err == nil {
+		return nil
+	} else if !errdefs.IsNotFound(err) {
+		return fmt.Errorf("inspect network %q: %w", name, err)
+	}
+	_, err := cl.NetworkCreate(ctx, name, types.NetworkCreate{
+		Driver:   "bridge",
+		Internal: true,
+		Labels: map[string]string{
+			"io.selenwright.managed":   "true",
+			"io.selenwright.isolation": "browser",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("create network %q: %w", name, err)
+	}
+	return nil
+}
 
 // Environment - all settings that influence browser startup
 type Environment struct {
@@ -23,6 +54,7 @@ type Environment struct {
 	CPU                  int64
 	Memory               int64
 	Network              string
+	BrowserNetwork       string
 	Hostname             string
 	StartupTimeout       time.Duration
 	SessionDeleteTimeout time.Duration

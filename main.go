@@ -108,6 +108,7 @@ func init() {
 	flag.BoolVar(&app.enableMetrics, "enable-metrics", false, "Expose a Prometheus-compatible /metrics endpoint (queue depth, session counts, session duration histogram, auth/caps rejection counters). Path is controlled by -metrics-path")
 	flag.StringVar(&app.metricsPath, "metrics-path", "/metrics", "Path the Prometheus metrics endpoint is served on when -enable-metrics is set. Access is not gated by the configured authenticator; the endpoint is expected to live behind the same network boundary as Prometheus itself")
 	flag.BoolVar(&app.logJSON, "log-json", false, "Emit logs as one JSON object per line (event, request_id, fields, level, time). Default is the legacy bracketed text format. Parses existing log lines structurally so no call-site changes are required")
+	flag.StringVar(&app.browserNetwork, "browser-network", "selenwright-browsers", "Dedicated Docker network that browser containers attach to as their primary network. Created on startup with Internal=true (no external gateway) to limit the blast radius of a sandbox escape. Set empty to disable isolation and revert to -container-network as the primary attachment")
 	flag.Parse()
 
 	slogx.Install(slogx.Config{JSON: app.logJSON})
@@ -226,6 +227,7 @@ func init() {
 		CPU:                  int64(cpu),
 		Memory:               int64(mem),
 		Network:              app.containerNetwork,
+		BrowserNetwork:       app.browserNetwork,
 		StartupTimeout:       app.serviceStartupTimeout,
 		SessionDeleteTimeout: app.sessionDeleteTimeout,
 		CaptureDriverLogs:    app.captureDriverLogs,
@@ -266,6 +268,17 @@ func init() {
 	)
 	if err != nil {
 		log.Fatalf("[-] [INIT] [New docker client: %v]", err)
+	}
+	if app.browserNetwork != "" {
+		if err := service.EnsureBrowserNetwork(context.Background(), app.cli, app.browserNetwork); err != nil {
+			if testing.Testing() {
+				log.Printf("[-] [INIT] [Browser network %s unavailable in test: %v]", app.browserNetwork, err)
+			} else {
+				log.Fatalf("[-] [INIT] [Browser network %s: %v]", app.browserNetwork, err)
+			}
+		} else {
+			log.Printf("[-] [INIT] [Browser network: %s (internal, no external gateway)]", app.browserNetwork)
+		}
 	}
 	app.manager = &service.DefaultManager{Environment: &environment, Client: app.cli, Config: app.conf}
 }
