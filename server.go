@@ -56,6 +56,7 @@ type Server struct {
 	trustedProxyCIDRsRaw     string
 	trustedProxyMTLSCAPath   string
 	capsPolicyFlag           string
+	eventWorkers             int
 
 	// Runtime state (populated in main.init after flag parsing and
 	// after conf/client/manager construction; reloadable via SIGHUP).
