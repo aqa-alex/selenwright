@@ -1,12 +1,6 @@
 //go:build metadata
 // +build metadata
 
-// PR #22 regression tests for metadata path traversal (audit H-5).
-// OnSessionStopped writes stoppedSession.SessionId into a filesystem
-// path — and SessionId originates from the upstream browser container
-// response (processBody), i.e. crosses a trust boundary. A crafted
-// value like "../../etc/cron.d/evil" must be refused, not just cleaned.
-
 package main
 
 import (
@@ -32,9 +26,6 @@ func TestMetadataRejectsTraversalSessionId(t *testing.T) {
 
 	mp := &MetadataProcessor{}
 
-	// A session id with a traversal component must be rejected before
-	// os.WriteFile ever runs. The handler logs and returns; no file
-	// lands on disk under logOutputDir or its parent.
 	mp.OnSessionStopped(event.StoppedSession{
 		Event: event.Event{
 			RequestId: 42,
@@ -45,13 +36,10 @@ func TestMetadataRejectsTraversalSessionId(t *testing.T) {
 		},
 	})
 
-	// Nothing must have been written under the tree.
 	entries, err := os.ReadDir(tmp)
 	assert.NoError(t, err)
 	assert.Empty(t, entries, "traversal session id must not produce any file in logOutputDir")
 
-	// And nothing must have been written one directory up either —
-	// the specific attack the safepath guard blocks.
 	parent := filepath.Dir(tmp)
 	parentEntries, err := os.ReadDir(parent)
 	assert.NoError(t, err)

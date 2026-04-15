@@ -9,14 +9,6 @@ import (
 	assert "github.com/stretchr/testify/require"
 )
 
-// TestNoDeprecatedImports guards against reintroducing archived/deprecated
-// dependencies: github.com/imdario/mergo (archived, superseded by
-// dario.cat/mergo), github.com/pkg/errors (archived since 2021, stdlib
-// errors + fmt.Errorf("%w") cover the API), and golang.org/x/net/websocket
-// (deprecated, gorilla/websocket is the successor). Transitive/indirect
-// references in go.sum are acceptable — only direct imports in .go files
-// are scanned. Build a token from fragments so this file doesn't match
-// itself.
 func TestNoDeprecatedImports(t *testing.T) {
 	slash := "/"
 	quote := `"`
@@ -59,10 +51,6 @@ func TestNoDeprecatedImports(t *testing.T) {
 	assert.Empty(t, offenders, "deprecated imports reintroduced")
 }
 
-// TestNoLegacyOriginGateWrap locks in PR #14's removal of the gateOrigin
-// wrapper around VNC and Logs endpoints. The gorilla upgrader's CheckOrigin
-// now enforces the allow-list directly; reintroducing the wrap would signal
-// a regression toward the pre-PR-14 two-layer defense.
 func TestNoLegacyOriginGateWrap(t *testing.T) {
 	repoRoot, err := os.Getwd()
 	assert.NoError(t, err)

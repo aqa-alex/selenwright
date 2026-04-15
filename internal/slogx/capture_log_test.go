@@ -1,4 +1,4 @@
-package main
+package slogx
 
 import (
 	"bytes"
@@ -6,22 +6,15 @@ import (
 	"log"
 	"testing"
 
-	"github.com/aqa-alex/selenwright/internal/slogx"
 	assert "github.com/stretchr/testify/require"
 )
 
-// TestLogJSONRoutesBracketedOutput feeds a representative log.Printf
-// line through the slogx JSON handler and confirms it parses into the
-// expected event/request_id/fields shape. The test doesn't flip the
-// package-level routing — doing so would fight with every other test
-// that reads human-readable log output — it installs a local
-// redirect on a captured io.Writer instead.
 func TestLogJSONRoutesBracketedOutput(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	prev := log.Default().Writer()
 	prevFlags := log.Flags()
-	log.SetOutput(slogx.CaptureWriter(buf, 0))
+	log.SetOutput(CaptureWriter(buf, 0))
 	log.SetFlags(0)
 	t.Cleanup(func() {
 		log.SetOutput(prev)
@@ -37,14 +30,11 @@ func TestLogJSONRoutesBracketedOutput(t *testing.T) {
 	assert.Equal(t, []any{"quota-a", "attempt-1"}, fields)
 }
 
-// TestLogJSONSentinelRequestId covers the "[-]" form used by init and
-// lifecycle messages so the request_id key is cleanly absent rather
-// than serialized as a dash.
 func TestLogJSONSentinelRequestId(t *testing.T) {
 	buf := &bytes.Buffer{}
 	prev := log.Default().Writer()
 	prevFlags := log.Flags()
-	log.SetOutput(slogx.CaptureWriter(buf, 0))
+	log.SetOutput(CaptureWriter(buf, 0))
 	log.SetFlags(0)
 	t.Cleanup(func() {
 		log.SetOutput(prev)
