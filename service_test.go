@@ -572,6 +572,7 @@ func TestGetVNC(t *testing.T) {
 
 	testTcpServer := testTCPServer("test-data")
 	sessions.Put("test-session", &session.Session{
+		Quota: "unknown",
 		HostPort: session.HostPort{
 			VNC: testTcpServer.Addr().String(),
 		},
@@ -623,6 +624,7 @@ func TestGetLogs(t *testing.T) {
 	defer srv.Close()
 
 	sessions.Put("test-session", &session.Session{
+		Quota: "unknown",
 		Container: &session.Container{
 			ID:        "e90e34656806",
 			IPAddress: "127.0.0.1",

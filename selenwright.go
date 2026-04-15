@@ -27,6 +27,7 @@ import (
 
 	"github.com/aqa-alex/selenwright/info"
 	"github.com/aqa-alex/selenwright/internal/safepath"
+	"github.com/aqa-alex/selenwright/protect"
 
 	"github.com/aqa-alex/selenwright/event"
 	"github.com/aqa-alex/selenwright/jsonerror"
@@ -317,8 +318,13 @@ func create(w http.ResponseWriter, r *http.Request) {
 		cancel()
 		return
 	}
+	identity, _ := protect.IdentityFromContext(r.Context())
+	owner := identity.User
+	if owner == "" {
+		owner = user
+	}
 	sess := &session.Session{
-		Quota:     user,
+		Quota:     owner,
 		Caps:      caps,
 		URL:       u,
 		Container: startedService.Container,
