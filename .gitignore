@@ -4,3 +4,4 @@ selenwright
 selenwright.exe
 coverage.*
 .DS_Store
+dist/
