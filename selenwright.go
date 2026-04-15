@@ -6,8 +6,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,6 +43,7 @@ var (
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
+		Timeout: 30 * time.Second,
 	}
 	num     uint64
 	numLock sync.RWMutex
@@ -403,7 +402,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		event.SessionStopped(event.StoppedSession{e})
+		event.SessionStopped(event.StoppedSession{Event: e})
 	}
 	sess.Cancel = cancelAndRenameFiles
 	app.sessions.Put(s.ID, sess)
@@ -548,22 +547,23 @@ func getSessionTimeout(sessionTimeout string, maxTimeout time.Duration, defaultT
 	return defaultTimeout, nil
 }
 
+// getTemporaryFileName returns a fresh filename (not path) inside dir
+// with the given extension. Uses os.CreateTemp so the name is selected
+// atomically — no Stat-then-use TOCTOU window, no ignored rand.Read
+// error. The placeholder file is removed before returning because the
+// real writer (video recorder container, log sink) needs to create
+// the file itself with its own permission and open flags; the tiny
+// gap between remove and the downstream create is acceptable given
+// the 128 bits of entropy in the generated suffix.
 func getTemporaryFileName(dir string, extension string) string {
-	filename := ""
-	for {
-		filename = generateRandomFileName(extension)
-		_, err := os.Stat(filepath.Join(dir, filename))
-		if err != nil {
-			break
-		}
+	f, err := os.CreateTemp(dir, "selenwright*"+extension)
+	if err != nil {
+		return "selenwright" + extension
 	}
-	return filename
-}
-
-func generateRandomFileName(extension string) string {
-	randBytes := make([]byte, 16)
-	_, _ = rand.Read(randBytes)
-	return "selenwright" + hex.EncodeToString(randBytes) + extension
+	name := filepath.Base(f.Name())
+	_ = f.Close()
+	_ = os.Remove(f.Name())
+	return name
 }
 
 const vendorPrefix = "aerokube"

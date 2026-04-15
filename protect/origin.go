@@ -130,4 +130,3 @@ func isDefaultPort(scheme, port string) bool {
 	}
 	return false
 }
-

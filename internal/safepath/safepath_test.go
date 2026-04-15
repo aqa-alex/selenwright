@@ -1,5 +1,3 @@
-// Modified by [Aleksander R], 2026: PR #2 — path traversal guard helper
-
 package safepath
 
 import (

@@ -39,7 +39,7 @@ func (mp *MetadataProcessor) OnSessionStopped(stoppedSession event.StoppedSessio
 			return
 		}
 		filename := filepath.Join(app.logOutputDir, stoppedSession.SessionId+metadataFileExtension)
-		err = os.WriteFile(filename, data, 0644)
+		err = os.WriteFile(filename, data, 0o644)
 		if err != nil {
 			log.Printf("[%d] [METADATA] [%s] [Failed to save to %s: %v]", stoppedSession.RequestId, stoppedSession.SessionId, filename, err)
 			return

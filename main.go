@@ -476,13 +476,23 @@ func isLoopbackListen(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// onSIGHUP installs a reload handler invoked on every SIGHUP. The
+// handler runs inside a recover so a panicking fn (e.g. htpasswd
+// reload choking on a malformed file) takes down the reload cycle,
+// not the whole process.
 func onSIGHUP(fn func()) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)
 	go func() {
-		for {
-			<-sig
-			fn()
+		for range sig {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("[-] [SIGHUP] [reload panicked: %v]", r)
+					}
+				}()
+				fn()
+			}()
 		}
 	}()
 }

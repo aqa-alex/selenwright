@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -569,21 +570,28 @@ func getContainerIP(networkName string, stat types.ContainerJSON) string {
 	if ns.IPAddress != "" {
 		return stat.NetworkSettings.IPAddress
 	}
-	if len(ns.Networks) > 0 {
-		var possibleAddresses []string
-		for name, nt := range ns.Networks {
-			if nt.IPAddress != "" {
-				if name == networkName {
-					return nt.IPAddress
-				}
-				possibleAddresses = append(possibleAddresses, nt.IPAddress)
-			}
+	if len(ns.Networks) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(ns.Networks))
+	for name := range ns.Networks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var fallback string
+	for _, name := range names {
+		nt := ns.Networks[name]
+		if nt.IPAddress == "" {
+			continue
 		}
-		if len(possibleAddresses) > 0 {
-			return possibleAddresses[0]
+		if name == networkName {
+			return nt.IPAddress
+		}
+		if fallback == "" {
+			fallback = nt.IPAddress
 		}
 	}
-	return ""
+	return fallback
 }
 
 func startVideoContainer(ctx context.Context, cl *client.Client, requestId uint64, browserContainer types.ContainerJSON, environ Environment, service ServiceBase, caps session.Caps) (string, error) {

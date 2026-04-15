@@ -1,6 +1,4 @@
-// Modified by [Aleksander R], 2026: PR #2 — path traversal fixes
-//
-// Regression tests for path traversal hardening:
+// PR #2 regression tests for path traversal hardening:
 //   - DELETE /video/<name> and DELETE /logs/<name> reject `..` payloads
 //   - file upload (zip-slip) rejects entries with traversal names
 //   - new files inside output dirs are still served correctly

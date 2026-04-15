@@ -10,6 +10,7 @@ import (
 	"time"
 
 	gwebsocket "github.com/gorilla/websocket"
+	"golang.org/x/net/http/httpguts"
 )
 
 const upstreamHandshakeTimeout = 15 * time.Second
@@ -29,19 +30,8 @@ func isDevtoolsWebSocketRequest(r *http.Request) bool {
 	if !strings.HasPrefix(r.URL.Path, paths.Devtools) {
 		return false
 	}
-	return headerContainsToken(r.Header, "Connection", "upgrade") &&
+	return httpguts.HeaderValuesContainsToken(r.Header.Values("Connection"), "upgrade") &&
 		strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
-}
-
-func headerContainsToken(header http.Header, key string, token string) bool {
-	for _, value := range header.Values(key) {
-		for _, part := range strings.Split(value, ",") {
-			if strings.EqualFold(strings.TrimSpace(part), token) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func proxyWebSocket(

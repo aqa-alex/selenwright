@@ -15,13 +15,13 @@ const HeaderRouterSecret = "X-Router-Secret"
 var ErrUntrustedSource = errors.New("request did not come from a trusted source")
 
 type SourceTrust struct {
-	mu              sync.RWMutex
-	secret          string
-	trustedCIDRs    []*net.IPNet
-	requireMTLS     bool
-	allowedRootCAs  *x509.CertPool
-	stripHeaders    []string
-	enabled         bool
+	mu             sync.RWMutex
+	secret         string
+	trustedCIDRs   []*net.IPNet
+	requireMTLS    bool
+	allowedRootCAs *x509.CertPool
+	stripHeaders   []string
+	enabled        bool
 }
 
 type SourceTrustConfig struct {

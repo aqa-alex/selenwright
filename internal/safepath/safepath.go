@@ -1,5 +1,3 @@
-// Modified by [Aleksander R], 2026: PR #2 — path traversal guard helper
-//
 // Package safepath provides a defensive [Join] that bounds a user-supplied
 // path component to a fixed root directory. It is intended for handlers that
 // derive filesystem paths from request input — URL fragments, multipart

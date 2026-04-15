@@ -13,7 +13,7 @@ type SeleniumError struct {
 }
 
 func (se *SeleniumError) Error() string {
-	return fmt.Errorf("%s: %v", se.Name, se.Err).Error()
+	return fmt.Sprintf("%s: %v", se.Name, se.Err)
 }
 
 func newSeleniumError(name string, err error, status int) *SeleniumError {

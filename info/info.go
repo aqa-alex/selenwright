@@ -23,5 +23,5 @@ func RequestInfo(r *http.Request) (string, string) {
 }
 
 func SecondsSince(start time.Time) float64 {
-	return time.Now().Sub(start).Seconds()
+	return time.Since(start).Seconds()
 }
