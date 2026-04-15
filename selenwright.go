@@ -449,22 +449,28 @@ func processBody(input []byte, host string) ([]byte, string, error) {
 	if err != nil {
 		return nil, sessionId, fmt.Errorf("parse body response: %v", err)
 	}
-	// handle jsonwp response from older browsers (chrome < 75)
 	if rawId, ok := body["sessionId"]; ok {
 		if si, ok := rawId.(string); ok {
 			sessionId = si
 		}
-	} else {
-		if raw, ok := body["value"]; ok {
-			if v, ok := raw.(map[string]interface{}); ok {
-				if raw, ok := v["capabilities"]; ok {
-					if c, ok := raw.(map[string]interface{}); ok {
-						sessionId = v["sessionId"].(string)
-						c["se:cdp"] = fmt.Sprintf("ws://%s/devtools/%s/", host, sessionId)
-						if rbv, ok := c["browserVersion"]; ok {
-							if bv, ok := rbv.(string); ok {
-								c["se:cdpVersion"] = bv
-							}
+	} else if raw, ok := body["value"]; ok {
+		if v, ok := raw.(map[string]interface{}); ok {
+			if raw, ok := v["capabilities"]; ok {
+				if c, ok := raw.(map[string]interface{}); ok {
+					// Every cast is guarded. A malicious or merely
+					// broken browser container returning
+					// {"value":{"sessionId": 42}} must not panic the
+					// selenwright process — we just skip the CDP
+					// injection and let the raw body through.
+					if rawSid, ok := v["sessionId"]; ok {
+						if sid, ok := rawSid.(string); ok {
+							sessionId = sid
+							c["se:cdp"] = fmt.Sprintf("ws://%s/devtools/%s/", host, sessionId)
+						}
+					}
+					if rbv, ok := c["browserVersion"]; ok {
+						if bv, ok := rbv.(string); ok {
+							c["se:cdpVersion"] = bv
 						}
 					}
 				}
