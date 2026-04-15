@@ -83,11 +83,23 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Early-init cleanup: walks the stack in reverse on any early return
+	// before the request is successfully upgraded and tracked in the
+	// session map. When init reaches the success point we clear the list
+	// so the deferred runner becomes a no-op; from that point the
+	// cleanup closure defined later takes over resource ownership.
+	var earlyCleanup []func()
+	defer func() {
+		for i := len(earlyCleanup) - 1; i >= 0; i-- {
+			earlyCleanup[i]()
+		}
+	}()
+	earlyCleanup = append(earlyCleanup, queue.Drop)
+
 	startedService, err := starter.StartWithCancel()
 	if err != nil {
 		log.Printf("[%d] [SERVICE_STARTUP_FAILED] [%v]", requestId, err)
 		jsonerror.SessionNotCreated(err).Encode(w)
-		queue.Drop()
 		return
 	}
 
@@ -95,13 +107,12 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 	if serviceCancel == nil {
 		serviceCancel = func() {}
 	}
+	earlyCleanup = append(earlyCleanup, serviceCancel)
 
 	if startedService.PlaywrightURL == nil {
 		err := errors.New("playwright upstream url is not configured")
 		log.Printf("[%d] [SERVICE_STARTUP_FAILED] [%v]", requestId, err)
 		jsonerror.SessionNotCreated(err).Encode(w)
-		queue.Drop()
-		serviceCancel()
 		return
 	}
 
@@ -112,24 +123,17 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[%d] [PLAYWRIGHT_DIAL_FAILED] [%v]", requestId, err)
 		jsonerror.SessionNotCreated(err).Encode(w)
-		queue.Drop()
-		serviceCancel()
 		return
 	}
+	earlyCleanup = append(earlyCleanup, func() { _ = upstreamConn.Close() })
 
 	sessionID, err := newPlaywrightSessionID()
 	if err != nil {
 		log.Printf("[%d] [PLAYWRIGHT_SESSION_ID_FAILED] [%v]", requestId, err)
-		_ = upstreamConn.Close()
 		jsonerror.SessionNotCreated(err).Encode(w)
-		queue.Drop()
-		serviceCancel()
 		return
 	}
 
-	// Reuse the package-level originChecker built in main.init from
-	// -allowed-origins. Defends /playwright/ from Cross-Site WebSocket
-	// Hijacking exactly like wsproxy/devtools.
 	upgrader := gwebsocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return originChecker.Check(r)
@@ -142,11 +146,9 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 	clientConn, err := upgrader.Upgrade(w, r, upgradeHeader)
 	if err != nil {
 		log.Printf("[%d] [PLAYWRIGHT_UPGRADE_FAILED] [%v]", requestId, err)
-		_ = upstreamConn.Close()
-		queue.Drop()
-		serviceCancel()
 		return
 	}
+	earlyCleanup = nil
 
 	owner := identity.User
 	if owner == "" {
