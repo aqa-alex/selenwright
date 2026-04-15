@@ -562,6 +562,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 	requestId := serial()
 	(&httputil.ReverseProxy{
 		Director: func(r *http.Request) {
+			stripTrustHeaders(r)
 			fragments := strings.Split(r.URL.Path, slash)
 			id := fragments[2]
 			sess, ok := sessions.Get(id)
@@ -632,6 +633,7 @@ func reverseProxy(hostFn func(sess *session.Session) string, status string) func
 			touchWatchdog(sess)
 			(&httputil.ReverseProxy{
 				Director: func(r *http.Request) {
+					stripTrustHeaders(r)
 					r.URL.Scheme = "http"
 					r.URL.Host = hostFn(sess)
 					r.URL.Path = remainingPath

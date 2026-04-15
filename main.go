@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -73,6 +74,10 @@ var (
 	allowInsecureNone        bool
 	authenticator            protect.Authenticator
 	htpasswdAuth             *protect.HtpasswdAuthenticator
+	sourceTrust              *protect.SourceTrust
+	trustedProxySecretRaw    string
+	trustedProxyCIDRsRaw     string
+	trustedProxyMTLSCAPath   string
 	ggrHost                  *ggr.Host
 	conf                     *config.Config
 	queue                    *protect.Queue
@@ -140,6 +145,9 @@ func init() {
 	flag.StringVar(&adminHeaderFlag, "admin-header", "X-Admin", "Header in -auth-mode=trusted-proxy whose value 'true' marks the request as administrative")
 	flag.StringVar(&adminUsersRaw, "admin-users", "", "Comma-separated list of usernames treated as admin in -auth-mode=embedded")
 	flag.BoolVar(&allowInsecureNone, "allow-insecure-none", false, "Permit -auth-mode=none on a non-loopback listen address. Required acknowledgement that the service is reachable without authentication")
+	flag.StringVar(&trustedProxySecretRaw, "trusted-proxy-secret", "", "Shared secret expected in X-Router-Secret header. When set, every request must present this value or it is rejected with 401 — defends -auth-mode=trusted-proxy from clients that bypass the router")
+	flag.StringVar(&trustedProxyCIDRsRaw, "trusted-proxy-cidr", "", "Comma-separated CIDR allow-list for the source IP. When set, request must originate from one of the listed networks regardless of headers")
+	flag.StringVar(&trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
 	flag.Parse()
 
 	if version {
@@ -163,6 +171,15 @@ func init() {
 			log.Fatalf("[-] [INIT] [%v]", err)
 		}
 	}
+	stCfg, err := buildSourceTrustConfig(authModeFlag, trustedProxySecretRaw, trustedProxyCIDRsRaw, trustedProxyMTLSCAPath, userHeaderFlag, adminHeaderFlag)
+	if err != nil {
+		if testing.Testing() {
+			stCfg = protect.SourceTrustConfig{}
+		} else {
+			log.Fatalf("[-] [INIT] [%v]", err)
+		}
+	}
+	sourceTrust = protect.NewSourceTrust(stCfg)
 	hostname, err = os.Hostname()
 	if err != nil {
 		log.Fatalf("[-] [INIT] [%s: %v]", os.Args[0], err)
@@ -186,6 +203,15 @@ func init() {
 				log.Printf("[-] [INIT] [htpasswd reload failed: %v]", err)
 			} else {
 				log.Printf("[-] [INIT] [htpasswd reloaded]")
+			}
+		}
+		if sourceTrust != nil {
+			cfg, err := buildSourceTrustConfig(authModeFlag, trustedProxySecretRaw, trustedProxyCIDRsRaw, trustedProxyMTLSCAPath, userHeaderFlag, adminHeaderFlag)
+			if err != nil {
+				log.Printf("[-] [INIT] [source-trust reload failed: %v]", err)
+			} else {
+				sourceTrust.Update(cfg)
+				log.Printf("[-] [INIT] [source-trust reloaded]")
 			}
 		}
 	})
@@ -365,6 +391,18 @@ func splitCSV(s string) []string {
 // version OriginChecker.HandlerWrap captures the pointer at construction
 // time, which is the wrong semantics for endpoints registered once at
 // startup against a global checker that may be replaced.
+// stripTrustHeaders removes router-trust headers (X-Router-Secret,
+// X-Forwarded-User, X-Admin) before the request crosses the trust
+// boundary into a browser container. The set is kept in sync with
+// SourceTrust.StripHeaders configured in main.init via -user-header
+// and -admin-header. Defends against credential / identity leakage
+// to upstream containers (PR #6).
+func stripTrustHeaders(r *http.Request) {
+	if sourceTrust != nil {
+		sourceTrust.StripFromRequest(r)
+	}
+}
+
 func gateOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !originChecker.Check(r) {
@@ -406,6 +444,52 @@ func buildAuthenticator(mode, htpasswd string, admins []string, userHeader, admi
 	default:
 		return nil, nil, fmt.Errorf("unknown -auth-mode %q (expected embedded|trusted-proxy|none)", mode)
 	}
+}
+
+func buildSourceTrustConfig(mode, secret, cidrCSV, caPath, userHeader, adminHeader string) (protect.SourceTrustConfig, error) {
+	cfg := protect.SourceTrustConfig{
+		Secret: strings.TrimSpace(secret),
+	}
+	cidrs, err := protect.ParseCIDRs(splitCSV(cidrCSV))
+	if err != nil {
+		return cfg, err
+	}
+	cfg.TrustedCIDRs = cidrs
+	if caPath != "" {
+		pool, err := loadCAPool(caPath)
+		if err != nil {
+			return cfg, fmt.Errorf("loading -trusted-proxy-mtls-ca: %w", err)
+		}
+		cfg.AllowedRootCAs = pool
+		cfg.RequireMTLS = true
+	}
+
+	stripped := []string{protect.HeaderRouterSecret}
+	if userHeader != "" {
+		stripped = append(stripped, userHeader)
+	}
+	if adminHeader != "" {
+		stripped = append(stripped, adminHeader)
+	}
+	cfg.StripHeaders = stripped
+
+	if mode == string(protect.ModeTrustedProxy) && cfg.Secret == "" && len(cfg.TrustedCIDRs) == 0 && !cfg.RequireMTLS {
+		log.Printf("[-] [INIT] [WARN] [auth-mode=trusted-proxy without -trusted-proxy-secret/-cidr/-mtls-ca: any client that can reach the listen address can spoof X-Forwarded-User]")
+	}
+
+	return cfg, nil
+}
+
+func loadCAPool(path string) (*x509.CertPool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(data) {
+		return nil, fmt.Errorf("no PEM certificates found in %s", path)
+	}
+	return pool, nil
 }
 
 func isLoopbackListen(addr string) bool {
@@ -580,7 +664,9 @@ func handler() http.Handler {
 		root.HandleFunc(paths.File, fileUpload)
 	}
 	root.HandleFunc(paths.Welcome, welcome)
-	return protect.AuthMiddleware(func() protect.Authenticator { return authenticator }, protect.AuthMiddlewareOptions{OpenPaths: openPaths})(root)
+	authMw := protect.AuthMiddleware(func() protect.Authenticator { return authenticator }, protect.AuthMiddlewareOptions{OpenPaths: openPaths})
+	sourceTrustMw := protect.SourceTrustMiddleware(func() *protect.SourceTrust { return sourceTrust }, openPaths)
+	return sourceTrustMw(authMw(root))
 }
 
 func showVersion() {
