@@ -25,6 +25,7 @@ import (
 	"github.com/aqa-alex/selenwright/info"
 	"github.com/aqa-alex/selenwright/internal/metrics"
 	"github.com/aqa-alex/selenwright/internal/safepath"
+	"github.com/aqa-alex/selenwright/internal/slogx"
 	"github.com/docker/docker/api"
 
 	ggr "github.com/aerokube/ggr/config"
@@ -106,7 +107,10 @@ func init() {
 	flag.IntVar(&app.eventWorkers, "event-workers", 16, "Number of worker goroutines that dispatch session-lifecycle events (FileCreated, SessionStopped) to registered listeners. Bounds fan-out so a single slow listener (e.g. a hung S3 upload) cannot leak goroutines")
 	flag.BoolVar(&app.enableMetrics, "enable-metrics", false, "Expose a Prometheus-compatible /metrics endpoint (queue depth, session counts, session duration histogram, auth/caps rejection counters). Path is controlled by -metrics-path")
 	flag.StringVar(&app.metricsPath, "metrics-path", "/metrics", "Path the Prometheus metrics endpoint is served on when -enable-metrics is set. Access is not gated by the configured authenticator; the endpoint is expected to live behind the same network boundary as Prometheus itself")
+	flag.BoolVar(&app.logJSON, "log-json", false, "Emit logs as one JSON object per line (event, request_id, fields, level, time). Default is the legacy bracketed text format. Parses existing log lines structurally so no call-site changes are required")
 	flag.Parse()
+
+	slogx.Install(slogx.Config{JSON: app.logJSON})
 
 	if version {
 		showVersion()
