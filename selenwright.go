@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/aqa-alex/selenwright/info"
+	"github.com/aqa-alex/selenwright/internal/safepath"
 
 	"github.com/aqa-alex/selenwright/event"
 	"github.com/aqa-alex/selenwright/jsonerror"
@@ -343,17 +344,25 @@ func create(w http.ResponseWriter, r *http.Request) {
 				finalVideoName = sessionId + videoFileExtension
 				e.Session.Caps.VideoName = finalVideoName
 			}
-			newVideoName := filepath.Join(videoOutputDir, finalVideoName)
-			err := os.Rename(oldVideoName, newVideoName)
-			if err != nil {
-				log.Printf("[%d] [VIDEO_ERROR] [%s]", requestId, fmt.Sprintf("Failed to rename %s to %s: %v", oldVideoName, newVideoName, err))
+			// finalVideoName originates from caps.VideoName supplied by the
+			// client (selenwright.go:177). Without this guard a payload like
+			// "../../etc/cron.d/evil.mp4" would let the user place the
+			// recorded file at an attacker-chosen path on the host.
+			newVideoName, joinErr := safepath.Join(videoOutputDir, finalVideoName)
+			if joinErr != nil {
+				log.Printf("[%d] [VIDEO_ERROR] [Rejected video name %q: %v]", requestId, finalVideoName, joinErr)
 			} else {
-				createdFile := event.CreatedFile{
-					Event: e,
-					Name:  newVideoName,
-					Type:  "video",
+				err := os.Rename(oldVideoName, newVideoName)
+				if err != nil {
+					log.Printf("[%d] [VIDEO_ERROR] [%s]", requestId, fmt.Sprintf("Failed to rename %s to %s: %v", oldVideoName, newVideoName, err))
+				} else {
+					createdFile := event.CreatedFile{
+						Event: e,
+						Name:  newVideoName,
+						Type:  "video",
+					}
+					event.FileCreated(createdFile)
 				}
-				event.FileCreated(createdFile)
 			}
 		}
 		if logOutputDir != "" && (saveAllLogs || caps.Log) {
@@ -364,17 +373,22 @@ func create(w http.ResponseWriter, r *http.Request) {
 				finalLogName = sessionId + logFileExtension
 				e.Session.Caps.LogName = finalLogName
 			}
-			newLogName := filepath.Join(logOutputDir, finalLogName)
-			err := os.Rename(oldLogName, newLogName)
-			if err != nil {
-				log.Printf("[%d] [LOG_ERROR] [%s]", requestId, fmt.Sprintf("Failed to rename %s to %s: %v", oldLogName, newLogName, err))
+			// Same defense as above: finalLogName came from caps.LogName.
+			newLogName, joinErr := safepath.Join(logOutputDir, finalLogName)
+			if joinErr != nil {
+				log.Printf("[%d] [LOG_ERROR] [Rejected log name %q: %v]", requestId, finalLogName, joinErr)
 			} else {
-				createdFile := event.CreatedFile{
-					Event: e,
-					Name:  newLogName,
-					Type:  "log",
+				err := os.Rename(oldLogName, newLogName)
+				if err != nil {
+					log.Printf("[%d] [LOG_ERROR] [%s]", requestId, fmt.Sprintf("Failed to rename %s to %s: %v", oldLogName, newLogName, err))
+				} else {
+					createdFile := event.CreatedFile{
+						Event: e,
+						Name:  newLogName,
+						Type:  "log",
+					}
+					event.FileCreated(createdFile)
 				}
-				event.FileCreated(createdFile)
 			}
 		}
 		event.SessionStopped(event.StoppedSession{e})
@@ -689,13 +703,21 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer src.Close()
 	dir := r.Header.Get(fileUploadDirHeader)
-	err = os.MkdirAll(dir, 0755)
+	err = os.MkdirAll(dir, 0o750)
 	if err != nil {
 		jsonerror.UnknownError(err).Encode(w)
 		return
 	}
-	fileName := filepath.Join(dir, file.Name)
-	dst, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0644)
+	// Resolve the zip entry name against the per-session upload dir while
+	// rejecting traversal attempts (entry names like "../../etc/passwd").
+	// CWE-22 (Zip Slip) — without this guard, filepath.Join would happily
+	// produce a path outside `dir`.
+	fileName, err := safepath.Join(dir, file.Name)
+	if err != nil {
+		jsonerror.InvalidArgument(fmt.Errorf("rejected zip entry name %q: %v", file.Name, err)).Encode(w)
+		return
+	}
+	dst, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0o644)
 	if err != nil {
 		jsonerror.UnknownError(err).Encode(w)
 		return
