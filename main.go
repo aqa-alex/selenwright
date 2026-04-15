@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"testing"
 	"time"
 
 	"github.com/aqa-alex/selenwright/info"
@@ -129,7 +128,7 @@ func init() {
 	}
 	app.authenticator, app.htpasswdAuth, err = buildAuthenticator(app.authModeFlag, app.htpasswdPath, splitCSV(app.adminUsersRaw), app.userHeaderFlag, app.adminHeaderFlag, app.listen, app.allowInsecureNone)
 	if err != nil {
-		if testing.Testing() {
+		if testHooksEnabled {
 			app.authenticator = protect.NoneAuthenticator{}
 		} else {
 			log.Fatalf("[-] [INIT] [%v]", err)
@@ -137,7 +136,7 @@ func init() {
 	}
 	stCfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag)
 	if err != nil {
-		if testing.Testing() {
+		if testHooksEnabled {
 			stCfg = protect.SourceTrustConfig{}
 		} else {
 			log.Fatalf("[-] [INIT] [%v]", err)
@@ -272,7 +271,7 @@ func init() {
 	}
 	if app.browserNetwork != "" {
 		if err := service.EnsureBrowserNetwork(context.Background(), app.cli, app.browserNetwork); err != nil {
-			if testing.Testing() {
+			if testHooksEnabled {
 				log.Printf("[-] [INIT] [Browser network %s unavailable in test: %v]", app.browserNetwork, err)
 			} else {
 				log.Fatalf("[-] [INIT] [Browser network %s: %v]", app.browserNetwork, err)

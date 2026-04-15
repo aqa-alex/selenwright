@@ -86,3 +86,13 @@ var app = &Server{
 	sessions:  session.NewMap(),
 	startTime: time.Now(),
 }
+
+// testHooksEnabled is flipped to true from a package-level var
+// initializer inside a _test.go file (see test_hooks_test.go). It
+// replaces testing.Testing() as the guard around init() error
+// swallowing — testing.Testing() also returns true under coverage
+// builds (`go build -cover`), which silently disabled authentication
+// in any operator-built coverage-instrumented binary (audit H-1).
+// _test.go files are stripped from non-test builds, so this flag is
+// unconditionally false in production.
+var testHooksEnabled bool
