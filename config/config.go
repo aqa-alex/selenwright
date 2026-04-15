@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added BrowserCatalog snapshot for /config endpoint
 
 package config
 
@@ -272,4 +272,53 @@ func (config *Config) State(sessions *session.Map, limit, queued, pending int) *
 		v.Sessions = append(v.Sessions, sess)
 	})
 	return state
+}
+
+// BrowserCatalogVersion is one configured version of a browser, flattened for
+// the /config endpoint consumers.
+type BrowserCatalogVersion struct {
+	Version string `json:"version"`
+	Image   string `json:"image"`
+}
+
+// BrowserCatalogEntry is a single browser with all its configured versions,
+// sorted deterministically for stable output.
+type BrowserCatalogEntry struct {
+	Name     string                  `json:"name"`
+	Default  string                  `json:"default,omitempty"`
+	Versions []BrowserCatalogVersion `json:"versions"`
+}
+
+// BrowserCatalog returns a deterministic snapshot of the configured browser
+// catalog suitable for the /config endpoint. Image values that are not plain
+// strings (legacy driver configs) are rendered via fmt.Sprint.
+func (config *Config) BrowserCatalog() []BrowserCatalogEntry {
+	config.lock.RLock()
+	defer config.lock.RUnlock()
+	catalog := make([]BrowserCatalogEntry, 0, len(config.Browsers))
+	for name, versions := range config.Browsers {
+		entry := BrowserCatalogEntry{Name: name, Default: versions.Default}
+		for version, browser := range versions.Versions {
+			image := ""
+			if browser != nil && browser.Image != nil {
+				if s, ok := browser.Image.(string); ok {
+					image = s
+				} else {
+					image = fmt.Sprint(browser.Image)
+				}
+			}
+			entry.Versions = append(entry.Versions, BrowserCatalogVersion{
+				Version: version,
+				Image:   image,
+			})
+		}
+		sort.Slice(entry.Versions, func(i, j int) bool {
+			return entry.Versions[i].Version < entry.Versions[j].Version
+		})
+		catalog = append(catalog, entry)
+	}
+	sort.Slice(catalog, func(i, j int) bool {
+		return catalog[i].Name < catalog[j].Name
+	})
+	return catalog
 }

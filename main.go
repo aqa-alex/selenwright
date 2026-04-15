@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI
 
 package main
 
@@ -576,24 +576,26 @@ func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request
 }
 
 var paths = struct {
-	Video, VNC, Logs, Devtools, Playwright, Download, Clipboard, File, Ping, Status, Error, WdHub, Welcome string
+	Video, VNC, Logs, Devtools, Playwright, Download, Clipboard, File, Ping, Status, Error, WdHub, Welcome, Config, HistorySettings string
 }{
-	Video:      "/video/",
-	VNC:        "/vnc/",
-	Logs:       "/logs/",
-	Devtools:   "/devtools/",
-	Playwright: "/playwright/",
-	Download:   "/download/",
-	Clipboard:  "/clipboard/",
-	Status:     "/status",
-	File:       "/file",
-	Ping:       "/ping",
-	Error:      "/error",
-	WdHub:      "/wd/hub",
-	Welcome:    "/",
+	Video:           "/video/",
+	VNC:             "/vnc/",
+	Logs:            "/logs/",
+	Devtools:        "/devtools/",
+	Playwright:      "/playwright/",
+	Download:        "/download/",
+	Clipboard:       "/clipboard/",
+	Status:          "/status",
+	File:            "/file",
+	Ping:            "/ping",
+	Error:           "/error",
+	WdHub:           "/wd/hub",
+	Welcome:         "/",
+	Config:          "/config",
+	HistorySettings: "/history/settings",
 }
 
-var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome}
+var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings}
 
 func handler() http.Handler {
 	root := http.NewServeMux()
@@ -612,6 +614,8 @@ func handler() http.Handler {
 		_ = json.NewEncoder(w).Encode(app.conf.State(app.sessions, app.limit, app.queue.Queued(), app.queue.Pending()))
 	})
 	root.HandleFunc(paths.Ping, ping)
+	root.HandleFunc(paths.Config, configInfo)
+	root.HandleFunc(paths.HistorySettings, historySettings)
 	root.Handle(paths.VNC, gateSessionOwner(2, http.HandlerFunc(vnc)))
 	root.Handle(paths.Logs, gateSessionOwner(2, http.HandlerFunc(logs)))
 	root.HandleFunc(paths.Video, video)
