@@ -45,6 +45,7 @@ type Server struct {
 	maxCreateBodyBytes       int64
 	maxUploadBodyBytes       int64
 	maxUploadExtractedBytes  int64
+	maxWSMessageBytes        int64
 	allowedOriginsRaw        string
 	authModeFlag             string
 	htpasswdPath             string

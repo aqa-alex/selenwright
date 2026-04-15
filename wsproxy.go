@@ -26,6 +26,19 @@ var websocketUpgrader = gwebsocket.Upgrader{
 	},
 }
 
+// applyWSReadLimit caps ReadMessage payload size on the given connection.
+// gorilla/websocket allocates the entire frame into a []byte before
+// returning it to the caller, so an unbounded limit lets a hostile peer
+// send a multi-GiB frame and OOM the process. Called on both client-facing
+// and upstream-facing connections for every WebSocket path (Playwright,
+// DevTools, VNC, logs). 0 preserves the library default (no limit).
+func applyWSReadLimit(conn *gwebsocket.Conn) {
+	if conn == nil || app.maxWSMessageBytes <= 0 {
+		return
+	}
+	conn.SetReadLimit(app.maxWSMessageBytes)
+}
+
 func isDevtoolsWebSocketRequest(r *http.Request) bool {
 	if !strings.HasPrefix(r.URL.Path, paths.Devtools) {
 		return false
@@ -45,6 +58,7 @@ func proxyWebSocket(
 	if err != nil {
 		return err
 	}
+	applyWSReadLimit(clientConn)
 
 	dialer := *gwebsocket.DefaultDialer
 	dialer.HandshakeTimeout = upstreamHandshakeTimeout
@@ -53,6 +67,7 @@ func proxyWebSocket(
 		_ = clientConn.Close()
 		return err
 	}
+	applyWSReadLimit(upstreamConn)
 	if onConnect != nil {
 		onConnect()
 	}

@@ -69,6 +69,7 @@ func streamLogs(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%d] [LOGS_UPGRADE_FAILED] [%v]", requestId, err)
 		return
 	}
+	applyWSReadLimit(wsconn)
 	defer wsconn.Close()
 
 	sid, _ := splitRequestPath(r.URL.Path)

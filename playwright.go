@@ -141,6 +141,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		jsonerror.SessionNotCreated(err).Encode(w)
 		return
 	}
+	applyWSReadLimit(upstreamConn)
 	earlyCleanup = append(earlyCleanup, func() { _ = upstreamConn.Close() })
 
 	sessionID, err := newPlaywrightSessionID()
@@ -164,6 +165,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%d] [PLAYWRIGHT_UPGRADE_FAILED] [%v]", requestId, err)
 		return
 	}
+	applyWSReadLimit(clientConn)
 	earlyCleanup = nil
 
 	owner := identity.User

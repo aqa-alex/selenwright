@@ -25,6 +25,7 @@ func vnc(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%d] [VNC_UPGRADE_FAILED] [%v]", requestId, err)
 		return
 	}
+	applyWSReadLimit(wsconn)
 	defer wsconn.Close()
 
 	sid, _ := splitRequestPath(r.URL.Path)
