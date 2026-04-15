@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"encoding/json"
@@ -10,18 +10,11 @@ import (
 	"testing"
 
 	"github.com/aqa-alex/selenwright/config"
-	"github.com/aqa-alex/selenwright/service"
 	"github.com/aqa-alex/selenwright/session"
 	"github.com/docker/docker/client"
 	assert "github.com/stretchr/testify/require"
 )
 
-// TestBrowserNetworkBecomesPrimaryAttachment drives the Docker
-// starter with a BrowserNetwork set and asserts the ContainerCreate
-// request carried NetworkMode = <browser-network> rather than the
-// operator's -container-network. Replays enough of the Docker API
-// on a mock httptest.Server to reach the NetworkMode decision point
-// without touching a real daemon.
 func TestBrowserNetworkBecomesPrimaryAttachment(t *testing.T) {
 	var createPayload map[string]any
 	var secondaryConnects []string
@@ -42,11 +35,6 @@ func TestBrowserNetworkBecomesPrimaryAttachment(t *testing.T) {
 	mux.HandleFunc("/v1.29/containers/abc", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	// Return 500 on inspect so StartWithCancel bails before reaching
-	// getHostPort, which panics unless the inspect response contains
-	// the full ports map. The test's assertions only care about the
-	// ContainerCreate payload and NetworkConnect calls, which have
-	// already been observed by this point.
 	mux.HandleFunc("/v1.29/containers/abc/json", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"message":"test aborts inspect"}`))
@@ -89,11 +77,11 @@ func TestBrowserNetworkBecomesPrimaryAttachment(t *testing.T) {
 			},
 		},
 	}
-	env := &service.Environment{
+	env := &Environment{
 		Network:        "operator-net",
 		BrowserNetwork: "selenwright-browsers",
 	}
-	mgr := service.DefaultManager{Environment: env, Client: cl, Config: cfg}
+	mgr := DefaultManager{Environment: env, Client: cl, Config: cfg}
 	caps := session.Caps{Name: "firefox", Version: "33.0"}
 	starter, ok := mgr.Find(caps, 42)
 	assert.True(t, ok)

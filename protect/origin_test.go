@@ -1,5 +1,3 @@
-// Modified by [Aleksander R], 2026: PR #3 — WebSocket CheckOrigin allow-list
-
 package protect
 
 import (
@@ -65,9 +63,6 @@ func TestNewOriginChecker_RejectsInvalidEntry(t *testing.T) {
 	}
 }
 
-// TestCheck_AbsentOriginAllowed documents the deliberate decision to allow
-// requests without an Origin header — they cannot be CSWSH victims because
-// no browser is involved (browsers always set Origin on WS upgrade).
 func TestCheck_AbsentOriginAllowed(t *testing.T) {
 	c, err := NewOriginChecker([]string{"https://ci.example.com"})
 	require.NoError(t, err)

@@ -115,10 +115,6 @@ func create(w http.ResponseWriter, r *http.Request) {
 	sessionStartTime := time.Now()
 	requestId := serial()
 	user, remote := info.RequestInfo(r)
-	// Cap the request body so a malicious client cannot exhaust memory by
-	// streaming gigabytes of capabilities. MaxBytesReader also closes the
-	// connection after the limit, surfacing a 413 to the client via the
-	// response writer when ReadAll subsequently errors.
 	r.Body = http.MaxBytesReader(w, r.Body, app.maxCreateBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	_ = r.Body.Close()
@@ -234,7 +230,6 @@ func create(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Host = host
 		ctx, done := context.WithTimeout(r.Context(), app.newSessionAttemptTimeout)
-		defer done()
 		log.Printf("[%d] [SESSION_ATTEMPTED] [%s] [%d]", requestId, u.String(), i)
 		rsp, err := httpClient.Do(req.WithContext(ctx))
 		select {
@@ -246,6 +241,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			case context.DeadlineExceeded:
 				log.Printf("[%d] [SESSION_ATTEMPT_TIMED_OUT] [%s]", requestId, app.newSessionAttemptTimeout)
 				if i < app.retryCount {
+					done()
 					continue
 				}
 				err := fmt.Errorf("New session attempts retry count exceeded")
@@ -254,6 +250,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 			case context.Canceled:
 				log.Printf("[%d] [CLIENT_DISCONNECTED] [%s] [%s] [%.2fs]", requestId, user, remote, info.SecondsSince(sessionStartTime))
 			}
+			done()
 			app.queue.Drop()
 			cancel()
 			return
@@ -265,15 +262,18 @@ func create(w http.ResponseWriter, r *http.Request) {
 			}
 			log.Printf("[%d] [SESSION_FAILED] [%s] [%s]", requestId, u.String(), err)
 			jsonerror.SessionNotCreated(err).Encode(w)
+			done()
 			app.queue.Drop()
 			cancel()
 			return
 		}
 		if rsp.StatusCode == http.StatusNotFound && u.Path == "" {
 			u.Path = "/wd/hub"
+			done()
 			continue
 		}
 		resp = rsp
+		done()
 		break
 	}
 	defer resp.Body.Close()
@@ -357,10 +357,6 @@ func create(w http.ResponseWriter, r *http.Request) {
 				finalVideoName = sessionId + videoFileExtension
 				e.Session.Caps.VideoName = finalVideoName
 			}
-			// finalVideoName originates from caps.VideoName supplied by the
-			// client (selenwright.go:177). Without this guard a payload like
-			// "../../etc/cron.d/evil.mp4" would let the user place the
-			// recorded file at an attacker-chosen path on the host.
 			newVideoName, joinErr := safepath.Join(app.videoOutputDir, finalVideoName)
 			if joinErr != nil {
 				log.Printf("[%d] [VIDEO_ERROR] [Rejected video name %q: %v]", requestId, finalVideoName, joinErr)
@@ -386,7 +382,6 @@ func create(w http.ResponseWriter, r *http.Request) {
 				finalLogName = sessionId + logFileExtension
 				e.Session.Caps.LogName = finalLogName
 			}
-			// Same defense as above: finalLogName came from caps.LogName.
 			newLogName, joinErr := safepath.Join(app.logOutputDir, finalLogName)
 			if joinErr != nil {
 				log.Printf("[%d] [LOG_ERROR] [Rejected log name %q: %v]", requestId, finalLogName, joinErr)
@@ -460,11 +455,6 @@ func processBody(input []byte, host string) ([]byte, string, error) {
 		if v, ok := raw.(map[string]interface{}); ok {
 			if raw, ok := v["capabilities"]; ok {
 				if c, ok := raw.(map[string]interface{}); ok {
-					// Every cast is guarded. A malicious or merely
-					// broken browser container returning
-					// {"value":{"sessionId": 42}} must not panic the
-					// selenwright process — we just skip the CDP
-					// injection and let the raw body through.
 					if rawSid, ok := v["sessionId"]; ok {
 						if sid, ok := rawSid.(string); ok {
 							sessionId = sid
@@ -551,14 +541,6 @@ func getSessionTimeout(sessionTimeout string, maxTimeout time.Duration, defaultT
 	return defaultTimeout, nil
 }
 
-// getTemporaryFileName returns a fresh filename (not path) inside dir
-// with the given extension. Uses os.CreateTemp so the name is selected
-// atomically — no Stat-then-use TOCTOU window, no ignored rand.Read
-// error. The placeholder file is removed before returning because the
-// real writer (video recorder container, log sink) needs to create
-// the file itself with its own permission and open flags; the tiny
-// gap between remove and the downstream create is acceptable given
-// the 128 bits of entropy in the generated suffix.
 func getTemporaryFileName(dir string, extension string) string {
 	f, err := os.CreateTemp(dir, "selenwright*"+extension)
 	if err != nil {
@@ -707,9 +689,6 @@ func stopWatchdog(sess *session.Session) {
 }
 
 func fileUpload(w http.ResponseWriter, r *http.Request) {
-	// Cap the JSON envelope size before decoding. The upload endpoint accepts
-	// a base64-encoded zip in `file`, which expands ~33% on the wire — we
-	// allow generous headroom but still bound it.
 	r.Body = http.MaxBytesReader(w, r.Body, app.maxUploadBodyBytes)
 	var jsonRequest struct {
 		File []byte `json:"file"`
@@ -730,9 +709,6 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	file := z.File[0]
-	// Reject zip-bomb attempts whose declared uncompressed size already
-	// exceeds the limit. The header can lie, so we re-check the actual
-	// extracted byte count below.
 	if file.UncompressedSize64 > uint64(app.maxUploadExtractedBytes) {
 		jsonerror.InvalidArgument(fmt.Errorf("uncompressed file size %d exceeds limit %d", file.UncompressedSize64, app.maxUploadExtractedBytes)).Encode(w)
 		return
@@ -749,10 +725,6 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 		jsonerror.UnknownError(err).Encode(w)
 		return
 	}
-	// Resolve the zip entry name against the per-session upload dir while
-	// rejecting traversal attempts (entry names like "../../etc/passwd").
-	// CWE-22 (Zip Slip) — without this guard, filepath.Join would happily
-	// produce a path outside `dir`.
 	fileName, err := safepath.Join(dir, file.Name)
 	if err != nil {
 		jsonerror.InvalidArgument(fmt.Errorf("rejected zip entry name %q: %v", file.Name, err)).Encode(w)
@@ -764,9 +736,6 @@ func fileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer dst.Close()
-	// Bound the actual decompressed bytes regardless of the header. We read
-	// one byte beyond the limit to detect overshoot and reject without
-	// committing a partial-but-still-huge file to disk.
 	limited := io.LimitReader(src, app.maxUploadExtractedBytes+1)
 	written, err := io.Copy(dst, limited)
 	if err != nil {

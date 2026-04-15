@@ -13,18 +13,11 @@ import (
 	assert "github.com/stretchr/testify/require"
 )
 
-// TestEnsureBrowserNetworkEmptyIsNoOp — passing an empty name is a
-// legal signal that the operator wants to disable isolation. Must
-// not hit the Docker API and must return nil.
 func TestEnsureBrowserNetworkEmptyIsNoOp(t *testing.T) {
 	err := EnsureBrowserNetwork(context.Background(), nil, "")
 	assert.NoError(t, err)
 }
 
-// TestEnsureBrowserNetworkIdempotent — the common steady-state case:
-// the network already exists, EnsureBrowserNetwork does a
-// NetworkInspect, sees the 200 response, and returns without trying
-// to create anything.
 func TestEnsureBrowserNetworkIdempotent(t *testing.T) {
 	var createCalls, inspectCalls int
 	mux := http.NewServeMux()
@@ -47,11 +40,6 @@ func TestEnsureBrowserNetworkIdempotent(t *testing.T) {
 	assert.Equal(t, 0, createCalls)
 }
 
-// TestEnsureBrowserNetworkCreatesWhenMissing — the first-run case:
-// NetworkInspect returns 404, EnsureBrowserNetwork posts a
-// NetworkCreate with Internal=true and Driver=bridge. Asserts the
-// create payload so a regression that drops Internal:true (and
-// silently lets browsers reach the host gateway) gets caught.
 func TestEnsureBrowserNetworkCreatesWhenMissing(t *testing.T) {
 	var createBody []byte
 	mux := http.NewServeMux()
@@ -81,10 +69,6 @@ func TestEnsureBrowserNetworkCreatesWhenMissing(t *testing.T) {
 	assert.Equal(t, "browser", labels["io.selenwright.isolation"])
 }
 
-// TestEnsureBrowserNetworkPropagatesInspectErrors — daemon flake or
-// TLS misconfiguration returns a non-404 error; EnsureBrowserNetwork
-// must surface it so startup fails loudly instead of proceeding as
-// if isolation was in place.
 func TestEnsureBrowserNetworkPropagatesInspectErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1.29/networks/selenwright-browsers", func(w http.ResponseWriter, r *http.Request) {

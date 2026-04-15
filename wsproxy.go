@@ -1,5 +1,3 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
-
 package main
 
 import (
@@ -15,15 +13,17 @@ import (
 
 const upstreamHandshakeTimeout = 15 * time.Second
 
-// websocketUpgrader is the shared upgrader used by the generic WS reverse
-// proxy (devtools, etc.). CheckOrigin delegates to the package-level
-// originChecker built in main.init from -allowed-origins; without an
-// allow-list this preserves the legacy permissive behavior but logs a
-// startup warning so operators notice.
 var websocketUpgrader = gwebsocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return app.originChecker.Check(r)
 	},
+}
+
+func applyWSReadLimit(conn *gwebsocket.Conn) {
+	if conn == nil || app.maxWSMessageBytes <= 0 {
+		return
+	}
+	conn.SetReadLimit(app.maxWSMessageBytes)
 }
 
 func isDevtoolsWebSocketRequest(r *http.Request) bool {
@@ -45,6 +45,7 @@ func proxyWebSocket(
 	if err != nil {
 		return err
 	}
+	applyWSReadLimit(clientConn)
 
 	dialer := *gwebsocket.DefaultDialer
 	dialer.HandshakeTimeout = upstreamHandshakeTimeout
@@ -53,6 +54,7 @@ func proxyWebSocket(
 		_ = clientConn.Close()
 		return err
 	}
+	applyWSReadLimit(upstreamConn)
 	if onConnect != nil {
 		onConnect()
 	}

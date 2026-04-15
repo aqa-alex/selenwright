@@ -1,5 +1,3 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
-
 package main
 
 import (
@@ -25,6 +23,7 @@ func vnc(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%d] [VNC_UPGRADE_FAILED] [%v]", requestId, err)
 		return
 	}
+	applyWSReadLimit(wsconn)
 	defer wsconn.Close()
 
 	sid, _ := splitRequestPath(r.URL.Path)
@@ -60,11 +59,6 @@ func vnc(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[%d] [VNC_CLIENT_DISCONNECTED] [%s]", requestId, sid)
 }
 
-// copyWithWatchdog is io.Copy plus a Touch of the session watchdog after
-// every non-empty chunk. Without it a long-running VNC session would
-// still count as idle — the watchdog fires, container is killed, user
-// sees their screen go black mid-work. Buffer size matches io.Copy's
-// internal default (32 KiB) so we don't penalize throughput.
 func copyWithWatchdog(dst io.Writer, src io.Reader, sess *session.Session) (int64, error) {
 	buf := make([]byte, 32*1024)
 	var total int64
@@ -92,11 +86,6 @@ func copyWithWatchdog(dst io.Writer, src io.Reader, sess *session.Session) (int6
 	}
 }
 
-// wsMessageReader adapts a gorilla *websocket.Conn to io.Reader by
-// concatenating successive messages into one byte stream. Message
-// boundaries are irrelevant for the VNC byte-for-byte tunnel — the
-// remote TCP endpoint (x11vnc) just needs bytes in order. Not
-// goroutine-safe; callers own the conn for reading.
 type wsMessageReader struct {
 	conn *websocket.Conn
 	cur  io.Reader
@@ -123,11 +112,6 @@ func (r *wsMessageReader) Read(p []byte) (int, error) {
 	}
 }
 
-// wsBinaryWriter adapts a gorilla *websocket.Conn to io.Writer by
-// emitting each Write as a single binary message. Both VNC (one frame
-// per 32 KiB chunk) and container-log streaming (one frame per stdcopy
-// multiplex slice) tolerate per-Write framing because the other side
-// reassembles the byte stream irrespective of message boundaries.
 type wsBinaryWriter struct {
 	conn *websocket.Conn
 }

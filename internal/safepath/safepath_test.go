@@ -57,13 +57,7 @@ func TestJoin_RejectsTraversal(t *testing.T) {
 	}
 }
 
-// TestJoin_PrefixIsNotEnough guards against a naive HasPrefix-only check
-// that would let "/var/lib/sw-evil" pass for root "/var/lib/sw".
 func TestJoin_PrefixIsNotEnough(t *testing.T) {
-	// Construct: root=/var/lib/sw, attempt name that, after Join+Clean,
-	// resolves to /var/lib/sw-evil/x. Because filepath.Join can't escape
-	// to a sibling directory via subdirectory traversal alone (it goes
-	// "up" then "across"), this is more about documenting the boundary.
 	_, err := Join("/var/lib/sw", "../sw-evil/x")
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ErrEscapesRoot))

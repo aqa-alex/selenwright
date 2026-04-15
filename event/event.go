@@ -55,13 +55,6 @@ type SessionStoppedListener interface {
 	OnSessionStopped(stoppedSession StoppedSession)
 }
 
-// StartPool starts workers goroutines that consume listener
-// invocations from a buffered channel. Workers < 1 or bufSize < 1
-// fall back to the package defaults (16 workers, 64-slot buffer).
-// Safe to call once per process; additional calls are no-ops so
-// tests that re-import the package don't fight over the pool. Without
-// a call, FileCreated/SessionStopped fall back to spawning one
-// goroutine per listener — the legacy unbounded fan-out behavior.
 func StartPool(workers, bufSize int) {
 	poolOnce.Do(func() {
 		if workers < 1 {
@@ -84,11 +77,6 @@ func StartPool(workers, bufSize int) {
 	})
 }
 
-// Shutdown closes the work channel, waits for workers to drain any
-// enqueued jobs, and returns once either all work finishes or ctx
-// expires. After Shutdown begins, publish falls back to the legacy
-// inline-goroutine path so late events from orphaned handler
-// goroutines still reach their listeners. Idempotent.
 func Shutdown(ctx context.Context) error {
 	if poolWork == nil {
 		return nil
@@ -110,10 +98,6 @@ func Shutdown(ctx context.Context) error {
 	}
 }
 
-// publish dispatches a listener invocation through the pool. If the
-// pool has not been started (e.g. unit tests) or shutdown has been
-// initiated, fall back to a one-off goroutine so callers never
-// observe a silent drop. This matches the upstream behavior.
 func publish(job func()) {
 	if poolWork == nil {
 		go job()

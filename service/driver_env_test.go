@@ -24,7 +24,6 @@ func TestFilterClientEnv_DropsEntriesWithoutEquals(t *testing.T) {
 }
 
 func TestFilterClientEnv_DropsPrefixSuffixOnlyMatches(t *testing.T) {
-	// Ensure "FOO_SELENWRIGHT_X=1" is NOT accepted (prefix must be at start).
 	in := []string{"FOO_SELENWRIGHT_X=1", "SELENWRIGHT_OK=1"}
 	out := filterClientEnv(in)
 	require.Equal(t, []string{"SELENWRIGHT_OK=1"}, out)

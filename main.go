@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI
 
 package main
 
@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"testing"
 	"time"
 
 	"github.com/aqa-alex/selenwright/info"
@@ -45,16 +44,6 @@ var (
 	buildStamp  = "unknown"
 )
 
-// HTTP server hardening defaults.
-//
-// ReadHeaderTimeout caps how long a client can take to send the request line
-// and headers — the primary defense against Slowloris-style attacks. ReadTimeout
-// bounds the entire request body read for non-streaming endpoints. IdleTimeout
-// closes idle keep-alive connections to free file descriptors. WriteTimeout is
-// deliberately omitted on the server (left at 0) because long-lived WebSocket
-// tunnels (Playwright, DevTools, VNC, log streams) and the WebDriver reverse
-// proxy must outlive any per-request write deadline; per-handler timeouts are
-// applied where appropriate.
 const (
 	readHeaderTimeout = 10 * time.Second
 	readTimeout       = 60 * time.Second
@@ -93,6 +82,7 @@ func init() {
 	flag.Int64Var(&app.maxCreateBodyBytes, "max-create-body-bytes", 4<<20, "Maximum POST body size for /session create requests in bytes (default 4 MiB)")
 	flag.Int64Var(&app.maxUploadBodyBytes, "max-upload-body-bytes", 256<<20, "Maximum POST body size for /file upload requests in bytes (default 256 MiB)")
 	flag.Int64Var(&app.maxUploadExtractedBytes, "max-upload-extracted-bytes", 1<<30, "Maximum total extracted size for /file uploaded zip archives in bytes (default 1 GiB)")
+	flag.Int64Var(&app.maxWSMessageBytes, "max-ws-message-bytes", 64<<20, "Maximum single WebSocket message size in bytes for Playwright, DevTools, VNC and log streams. gorilla/websocket materializes each frame in memory before returning it to the handler, so without this limit a single multi-gigabyte frame can OOM the process. 0 disables the limit (legacy behavior). Default 64 MiB is ample for CDP screenshots and Playwright traces while capping the blast radius of a hostile peer.")
 	flag.StringVar(&app.allowedOriginsRaw, "allowed-origins", "", "Comma-separated list of allowed Origin values for WebSocket upgrades (devtools, playwright, vnc, logs). Empty (default) keeps the legacy permissive behavior; '*' is explicit allow-all. Recommended: configure to your CI/QA hosts to defend against Cross-Site WebSocket Hijacking")
 	flag.StringVar(&app.authModeFlag, "auth-mode", string(protect.ModeEmbedded), "Authentication mode: 'embedded' (built-in BasicAuth + htpasswd), 'trusted-proxy' (read pre-validated user from -user-header), 'none' (no auth — only allowed when -listen is bound to loopback unless -allow-insecure-none is set)")
 	flag.StringVar(&app.htpasswdPath, "htpasswd", "", "Path to bcrypt-format htpasswd file used by -auth-mode=embedded. Generate with `htpasswd -B users.htpasswd alice` (apache2-utils) or `docker run --rm httpd:alpine htpasswd -nbB alice pass`")
@@ -128,7 +118,7 @@ func init() {
 	}
 	app.authenticator, app.htpasswdAuth, err = buildAuthenticator(app.authModeFlag, app.htpasswdPath, splitCSV(app.adminUsersRaw), app.userHeaderFlag, app.adminHeaderFlag, app.listen, app.allowInsecureNone)
 	if err != nil {
-		if testing.Testing() {
+		if testHooksEnabled {
 			app.authenticator = protect.NoneAuthenticator{}
 		} else {
 			log.Fatalf("[-] [INIT] [%v]", err)
@@ -136,7 +126,7 @@ func init() {
 	}
 	stCfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag)
 	if err != nil {
-		if testing.Testing() {
+		if testHooksEnabled {
 			stCfg = protect.SourceTrustConfig{}
 		} else {
 			log.Fatalf("[-] [INIT] [%v]", err)
@@ -189,9 +179,6 @@ func init() {
 		if err != nil {
 			log.Fatalf("[-] [INIT] [Invalid video output dir %s: %v]", app.videoOutputDir, err)
 		}
-		// 0o750 — the previous 0o644 omitted the execute bit and made the
-		// directory unenterable for the owning process, which only worked
-		// in production because it ran as root.
 		err = os.MkdirAll(app.videoOutputDir, 0o750)
 		if err != nil {
 			log.Fatalf("[-] [INIT] [Failed to create video output dir %s: %v]", app.videoOutputDir, err)
@@ -271,7 +258,7 @@ func init() {
 	}
 	if app.browserNetwork != "" {
 		if err := service.EnsureBrowserNetwork(context.Background(), app.cli, app.browserNetwork); err != nil {
-			if testing.Testing() {
+			if testHooksEnabled {
 				log.Printf("[-] [INIT] [Browser network %s unavailable in test: %v]", app.browserNetwork, err)
 			} else {
 				log.Fatalf("[-] [INIT] [Browser network %s: %v]", app.browserNetwork, err)
@@ -351,10 +338,6 @@ func parseGgrHost(s string) *ggr.Host {
 	return host
 }
 
-// splitCSV parses a comma-separated flag value into a list of trimmed,
-// non-empty entries. Used for multi-value string flags (-allowed-origins).
-// Returns nil when the result is empty so callers can treat "no entries"
-// uniformly regardless of whether the input was "" or ",,,".
 func splitCSV(s string) []string {
 	if s == "" {
 		return nil
@@ -369,23 +352,12 @@ func splitCSV(s string) []string {
 	return out
 }
 
-// stripTrustHeaders removes router-trust headers (X-Router-Secret,
-// X-Forwarded-User, X-Admin) before the request crosses the trust
-// boundary into a browser container. The set is kept in sync with
-// SourceTrust.StripHeaders configured in main.init via -user-header
-// and -admin-header. Defends against credential / identity leakage
-// to upstream containers (PR #6).
 func stripTrustHeaders(r *http.Request) {
 	if app.sourceTrust != nil {
 		app.sourceTrust.StripFromRequest(r)
 	}
 }
 
-// gateSessionOwner extracts the session ID from the URL path at the given
-// fragment index, looks up the session, and forbids access when the
-// authenticated identity is neither the session owner nor an admin.
-// Unknown sessions pass through so the next handler can render its
-// standard 404 (or proceed when the path doesn't address one).
 func gateSessionOwner(idIndex int, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sid := protect.ExtractSessionID(r.URL.Path, idIndex)
@@ -502,10 +474,6 @@ func isLoopbackListen(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// onSIGHUP installs a reload handler invoked on every SIGHUP. The
-// handler runs inside a recover so a panicking fn (e.g. htpasswd
-// reload choking on a malformed file) takes down the reload cycle,
-// not the whole process.
 func onSIGHUP(fn func()) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)
@@ -588,12 +556,6 @@ func video(w http.ResponseWriter, r *http.Request) {
 func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request, dir string, prefix string, status string) {
 	user, remote := info.RequestInfo(r)
 	fileName := strings.TrimPrefix(r.URL.Path, prefix)
-	// Resolve the URL-supplied filename against the output dir while
-	// rejecting traversal attempts (e.g. DELETE /video/../../etc/passwd
-	// would otherwise let any caller wipe arbitrary files in the
-	// process's reach). Without auth in front of these endpoints — see
-	// PR #5 — this gate is the only thing standing between the wire and
-	// `os.Remove` on attacker-chosen paths.
 	filePath, err := safepath.Join(dir, fileName)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid file name %s", fileName), http.StatusBadRequest)
@@ -614,24 +576,26 @@ func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request
 }
 
 var paths = struct {
-	Video, VNC, Logs, Devtools, Playwright, Download, Clipboard, File, Ping, Status, Error, WdHub, Welcome string
+	Video, VNC, Logs, Devtools, Playwright, Download, Clipboard, File, Ping, Status, Error, WdHub, Welcome, Config, HistorySettings string
 }{
-	Video:      "/video/",
-	VNC:        "/vnc/",
-	Logs:       "/logs/",
-	Devtools:   "/devtools/",
-	Playwright: "/playwright/",
-	Download:   "/download/",
-	Clipboard:  "/clipboard/",
-	Status:     "/status",
-	File:       "/file",
-	Ping:       "/ping",
-	Error:      "/error",
-	WdHub:      "/wd/hub",
-	Welcome:    "/",
+	Video:           "/video/",
+	VNC:             "/vnc/",
+	Logs:            "/logs/",
+	Devtools:        "/devtools/",
+	Playwright:      "/playwright/",
+	Download:        "/download/",
+	Clipboard:       "/clipboard/",
+	Status:          "/status",
+	File:            "/file",
+	Ping:            "/ping",
+	Error:           "/error",
+	WdHub:           "/wd/hub",
+	Welcome:         "/",
+	Config:          "/config",
+	HistorySettings: "/history/settings",
 }
 
-var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome}
+var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings}
 
 func handler() http.Handler {
 	root := http.NewServeMux()
@@ -650,6 +614,8 @@ func handler() http.Handler {
 		_ = json.NewEncoder(w).Encode(app.conf.State(app.sessions, app.limit, app.queue.Queued(), app.queue.Pending()))
 	})
 	root.HandleFunc(paths.Ping, ping)
+	root.HandleFunc(paths.Config, configInfo)
+	root.HandleFunc(paths.HistorySettings, historySettings)
 	root.Handle(paths.VNC, gateSessionOwner(2, http.HandlerFunc(vnc)))
 	root.Handle(paths.Logs, gateSessionOwner(2, http.HandlerFunc(logs)))
 	root.HandleFunc(paths.Video, video)
@@ -700,8 +666,6 @@ func main() {
 		ReadTimeout:       readTimeout,
 		IdleTimeout:       idleTimeout,
 		MaxHeaderBytes:    maxHeaderBytes,
-		// WriteTimeout intentionally left zero: long-lived WebSocket and
-		// log-stream connections must outlive any per-request write deadline.
 	}
 	e := make(chan error)
 	go func() {

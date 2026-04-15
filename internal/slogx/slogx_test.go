@@ -8,9 +8,6 @@ import (
 	"testing"
 )
 
-// logOutput feeds a single log line through a freshly constructed
-// bracketed-JSON handler and returns the decoded JSON object plus
-// the raw output for debugging.
 func logOutput(t *testing.T, msg string) (map[string]any, string) {
 	t.Helper()
 	buf := &bytes.Buffer{}
@@ -68,7 +65,6 @@ func TestNonBracketedMessageFallsBackToMsg(t *testing.T) {
 }
 
 func TestMalformedBracketFallsBackToMsg(t *testing.T) {
-	// First bracket isn't a number or '-' — treat as plain message.
 	obj, raw := logOutput(t, "[oops] [EVENT] [x]")
 	if obj["msg"] != "[oops] [EVENT] [x]" {
 		t.Fatalf("should fall through: %s", raw)

@@ -21,10 +21,6 @@ type Identity struct {
 	IsAdmin bool
 }
 
-// AnonymousIdentity is the placeholder returned by NoneAuthenticator and
-// used as the fallback when no Authenticator was set. The user string
-// matches selenwright's legacy info.RequestInfo convention so log output
-// and quota maps remain stable across the auth-mode rollout.
 var AnonymousIdentity = Identity{User: "unknown", IsAdmin: false}
 
 var (
@@ -80,18 +76,9 @@ func (a *TrustedProxyAuthenticator) Realm() string { return "" }
 
 type AuthMiddlewareOptions struct {
 	OpenPaths []string
-	// OnFailure is called whenever the middleware rejects a request
-	// with 401. Intended for metrics / audit logging — callers wire
-	// a counter increment or log line here without touching the
-	// middleware's core logic.
 	OnFailure func()
 }
 
-// AuthMiddleware returns a middleware that authenticates incoming requests
-// using the Authenticator returned by authFn. The function is invoked per
-// request so callers can swap the active Authenticator atomically (SIGHUP
-// reload, runtime reconfiguration, tests). OnFailure (if set) is invoked
-// for every rejection — hook it up to metrics or audit logging.
 func AuthMiddleware(authFn func() Authenticator, opts AuthMiddlewareOptions) func(http.Handler) http.Handler {
 	openExact := make(map[string]struct{}, len(opts.OpenPaths))
 	for _, p := range opts.OpenPaths {

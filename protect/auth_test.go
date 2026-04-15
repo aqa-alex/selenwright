@@ -11,8 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// --- htpasswd parser -------------------------------------------------------
-
 func TestParseHtpasswd_AcceptsBcryptVariants(t *testing.T) {
 	in := []byte(`# comment
 alice:$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
@@ -69,8 +67,6 @@ func TestParseHtpasswd_EmptyFileRejected(t *testing.T) {
 	_, err := parseHtpasswd([]byte("# only comments\n\n"))
 	require.Error(t, err)
 }
-
-// --- htpasswd authenticator end-to-end -------------------------------------
 
 func writeHtpasswd(t *testing.T, lines ...string) string {
 	t.Helper()
@@ -171,8 +167,6 @@ func TestHtpasswdAuthenticator_Reload(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// --- TrustedProxyAuthenticator ---------------------------------------------
-
 func TestTrustedProxyAuthenticator_ReadsHeader(t *testing.T) {
 	a := &TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User", AdminHeader: "X-Admin"}
 
@@ -206,15 +200,11 @@ func TestTrustedProxyAuthenticator_MissingHeader(t *testing.T) {
 func TestTrustedProxyAuthenticator_RejectsControlChars(t *testing.T) {
 	a := &TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"}
 
-	// Go's http library actually strips raw \r\n on header set, so we
-	// validate the defense-in-depth check directly with a tab.
 	req, _ := http.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("X-Forwarded-User", "alice\tinjection")
 	_, err := a.Authenticate(req)
 	require.ErrorIs(t, err, ErrAuthFailed)
 }
-
-// --- middleware ------------------------------------------------------------
 
 func TestAuthMiddleware_OpenPathBypassesAuth(t *testing.T) {
 	mw := AuthMiddleware(func() Authenticator { return NoneAuthenticator{} }, AuthMiddlewareOptions{OpenPaths: []string{"/ping"}})

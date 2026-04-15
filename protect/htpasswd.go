@@ -62,8 +62,6 @@ func (a *HtpasswdAuthenticator) Authenticate(r *http.Request) (Identity, error) 
 	_, isAdmin := a.admins[user]
 	a.mu.RUnlock()
 	if !known {
-		// bcrypt against a known-bad hash so the response time does not
-		// reveal whether the username exists. Cost matches a real entry.
 		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(pass))
 		return Identity{}, ErrAuthFailed
 	}
@@ -75,9 +73,6 @@ func (a *HtpasswdAuthenticator) Authenticate(r *http.Request) (Identity, error) 
 
 func (a *HtpasswdAuthenticator) Realm() string { return HtpasswdRealm }
 
-// dummyHash is a real bcrypt hash for a never-used password. Used to keep
-// the failure code path roughly equal in cost to the success path so an
-// attacker cannot enumerate valid usernames by timing.
 var dummyHash = []byte(`$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy`)
 
 func parseHtpasswd(data []byte) (map[string][]byte, error) {
@@ -132,8 +127,6 @@ func stringSet(in []string) map[string]struct{} {
 	return out
 }
 
-// ConstantTimeStringEqual is a small re-export so callers in main can do
-// secret comparisons without importing crypto/subtle directly.
 func ConstantTimeStringEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
