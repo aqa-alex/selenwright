@@ -240,11 +240,10 @@ func parsePlaywrightPath(r *http.Request) (string, string, error) {
 func dialPlaywrightUpstream(r *http.Request, upstreamURL *url.URL) (*gwebsocket.Conn, error) {
 	dialer := *gwebsocket.DefaultDialer
 	dialer.Subprotocols = gwebsocket.Subprotocols(r)
+	dialer.HandshakeTimeout = playwrightUpstreamHandshakeTimeout
 
 	header := http.Header{}
 	copyPlaywrightHeader(header, r.Header, "Origin")
-	copyPlaywrightHeader(header, r.Header, "Authorization")
-	copyPlaywrightHeader(header, r.Header, "Cookie")
 
 	upstreamConn, resp, err := dialer.DialContext(r.Context(), upstreamURL.String(), header)
 	if err != nil {
@@ -256,6 +255,8 @@ func dialPlaywrightUpstream(r *http.Request, upstreamURL *url.URL) (*gwebsocket.
 
 	return upstreamConn, nil
 }
+
+const playwrightUpstreamHandshakeTimeout = 15 * time.Second
 
 func copyPlaywrightHeader(dst http.Header, src http.Header, key string) {
 	for _, value := range src.Values(key) {

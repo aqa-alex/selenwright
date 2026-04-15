@@ -7,9 +7,12 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	gwebsocket "github.com/gorilla/websocket"
 )
+
+const upstreamHandshakeTimeout = 15 * time.Second
 
 // websocketUpgrader is the shared upgrader used by the generic WS reverse
 // proxy (devtools, etc.). CheckOrigin delegates to the package-level
@@ -53,7 +56,9 @@ func proxyWebSocket(
 		return err
 	}
 
-	upstreamConn, _, err := gwebsocket.DefaultDialer.DialContext(r.Context(), upstreamURL.String(), nil)
+	dialer := *gwebsocket.DefaultDialer
+	dialer.HandshakeTimeout = upstreamHandshakeTimeout
+	upstreamConn, _, err := dialer.DialContext(r.Context(), upstreamURL.String(), nil)
 	if err != nil {
 		_ = clientConn.Close()
 		return err
