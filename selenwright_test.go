@@ -19,6 +19,7 @@ import (
 
 	ggr "github.com/aerokube/ggr/config"
 	"github.com/aqa-alex/selenwright/config"
+	"github.com/aqa-alex/selenwright/protect"
 	"github.com/gorilla/websocket"
 	"github.com/mafredri/cdp"
 	"github.com/mafredri/cdp/rpcc"
@@ -44,6 +45,10 @@ func init() {
 	maxCreateBodyBytes = 4 << 20
 	maxUploadBodyBytes = 256 << 20
 	maxUploadExtractedBytes = 1 << 30
+	// Default to legacy permissive origin behavior so existing tests
+	// (which never set Origin) continue to pass; per-test overrides
+	// reassign originChecker to a strict instance.
+	originChecker, _ = protect.NewOriginChecker(nil)
 	ggrHost = &ggr.Host{
 		Name: "some-host.example.com",
 		Port: 4444,

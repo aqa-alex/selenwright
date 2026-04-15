@@ -118,9 +118,12 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reuse the package-level originChecker built in main.init from
+	// -allowed-origins. Defends /playwright/ from Cross-Site WebSocket
+	// Hijacking exactly like wsproxy/devtools.
 	upgrader := gwebsocket.Upgrader{
-		CheckOrigin: func(_ *http.Request) bool {
-			return true
+		CheckOrigin: func(r *http.Request) bool {
+			return originChecker.Check(r)
 		},
 	}
 	upgradeHeader := http.Header{}
