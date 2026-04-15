@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/aqa-alex/selenwright/info"
+	"github.com/aqa-alex/selenwright/internal/safepath"
 	"github.com/docker/docker/api"
 
 	ggr "github.com/aerokube/ggr/config"
@@ -159,7 +160,10 @@ func init() {
 		if err != nil {
 			log.Fatalf("[-] [INIT] [Invalid video output dir %s: %v]", videoOutputDir, err)
 		}
-		err = os.MkdirAll(videoOutputDir, os.FileMode(0644))
+		// 0o750 — the previous 0o644 omitted the execute bit and made the
+		// directory unenterable for the owning process, which only worked
+		// in production because it ran as root.
+		err = os.MkdirAll(videoOutputDir, 0o750)
 		if err != nil {
 			log.Fatalf("[-] [INIT] [Failed to create video output dir %s: %v]", videoOutputDir, err)
 		}
@@ -170,7 +174,7 @@ func init() {
 		if err != nil {
 			log.Fatalf("[-] [INIT] [Invalid log output dir %s: %v]", logOutputDir, err)
 		}
-		err = os.MkdirAll(logOutputDir, os.FileMode(0644))
+		err = os.MkdirAll(logOutputDir, 0o750)
 		if err != nil {
 			log.Fatalf("[-] [INIT] [Failed to create log output dir %s: %v]", logOutputDir, err)
 		}
@@ -374,8 +378,19 @@ func video(w http.ResponseWriter, r *http.Request) {
 func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request, dir string, prefix string, status string) {
 	user, remote := info.RequestInfo(r)
 	fileName := strings.TrimPrefix(r.URL.Path, prefix)
-	filePath := filepath.Join(dir, fileName)
-	_, err := os.Stat(filePath)
+	// Resolve the URL-supplied filename against the output dir while
+	// rejecting traversal attempts (e.g. DELETE /video/../../etc/passwd
+	// would otherwise let any caller wipe arbitrary files in the
+	// process's reach). Without auth in front of these endpoints — see
+	// PR #5 — this gate is the only thing standing between the wire and
+	// `os.Remove` on attacker-chosen paths.
+	filePath, err := safepath.Join(dir, fileName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid file name %s", fileName), http.StatusBadRequest)
+		log.Printf("[%d] [%s] [%s] [%s] [REJECTED_TRAVERSAL] [%s]", requestId, status, user, remote, fileName)
+		return
+	}
+	_, err = os.Stat(filePath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Unknown file %s", filePath), http.StatusNotFound)
 		return
