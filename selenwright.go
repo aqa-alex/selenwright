@@ -563,65 +563,82 @@ func generateRandomFileName(extension string) string {
 const vendorPrefix = "aerokube"
 
 func proxy(w http.ResponseWriter, r *http.Request) {
-	done := make(chan func())
-	go func() {
-		(<-done)()
-	}()
-	cancel := func() {}
-	defer func() {
-		done <- cancel
-	}()
 	requestId := serial()
+	fragments := strings.Split(r.URL.Path, slash)
+	if len(fragments) < 3 {
+		r.URL.Path = paths.Error
+		(&httputil.ReverseProxy{Director: func(*http.Request) {}, ErrorHandler: defaultErrorHandler(requestId)}).ServeHTTP(w, r)
+		return
+	}
+	id := fragments[2]
+	sess, ok := sessions.Get(id)
+	if !ok {
+		r.URL.Path = paths.Error
+		(&httputil.ReverseProxy{Director: func(*http.Request) {}, ErrorHandler: defaultErrorHandler(requestId)}).ServeHTTP(w, r)
+		return
+	}
+
+	if len(fragments) >= 4 && fragments[3] == vendorPrefix {
+		newFragments := []string{"", fragments[4], id}
+		if len(fragments) >= 5 {
+			newFragments = append(newFragments, fragments[5:]...)
+		}
+		rewritten := path.Clean(strings.Join(newFragments, slash))
+		(&httputil.ReverseProxy{
+			Director: func(r *http.Request) {
+				stripTrustHeaders(r)
+				r.URL.Host = (&request{r}).localaddr()
+				r.URL.Path = rewritten
+			},
+			ErrorHandler: defaultErrorHandler(requestId),
+		}).ServeHTTP(w, r)
+		return
+	}
+
+	isSessionDelete := r.Method == http.MethodDelete && len(fragments) == 3
+	var postCleanup func()
+
+	if isSessionDelete {
+		sess.Lock.Lock()
+		if enableFileUpload {
+			_ = os.RemoveAll(filepath.Join(os.TempDir(), id))
+		}
+		stopWatchdog(sess)
+		sessions.Remove(id)
+		queue.Release()
+		log.Printf("[%d] [SESSION_DELETED] [%s]", requestId, id)
+		postCleanup = sess.Cancel
+		sess.Lock.Unlock()
+	} else {
+		touchWatchdog(sess)
+	}
+
+	director := func(r *http.Request) {
+		stripTrustHeaders(r)
+		if len(fragments) == 4 && fragments[len(fragments)-1] == "file" && enableFileUpload {
+			r.Header.Set(fileUploadDirHeader, filepath.Join(os.TempDir(), id))
+			r.URL.Path = "/file"
+			return
+		}
+		seUploadPath, uploadPath := "/se/file", "/file"
+		if strings.HasSuffix(r.URL.Path, seUploadPath) {
+			r.URL.Path = strings.TrimSuffix(r.URL.Path, seUploadPath) + uploadPath
+		}
+		r.URL.Host, r.URL.Path = sess.URL.Host, path.Clean(sess.URL.Path+r.URL.Path)
+		r.Host = "localhost"
+		if sess.Origin != "" {
+			r.Host = sess.Origin
+		}
+	}
+
 	(&httputil.ReverseProxy{
-		Director: func(r *http.Request) {
-			stripTrustHeaders(r)
-			fragments := strings.Split(r.URL.Path, slash)
-			id := fragments[2]
-			sess, ok := sessions.Get(id)
-			if ok {
-				if len(fragments) >= 4 && fragments[3] == vendorPrefix {
-					newFragments := []string{"", fragments[4], id}
-					if len(fragments) >= 5 {
-						newFragments = append(newFragments, fragments[5:]...)
-					}
-					r.URL.Host = (&request{r}).localaddr()
-					r.URL.Path = path.Clean(strings.Join(newFragments, slash))
-					return
-				}
-				sess.Lock.Lock()
-				defer sess.Lock.Unlock()
-				if r.Method == http.MethodDelete && len(fragments) == 3 {
-					if enableFileUpload {
-						_ = os.RemoveAll(filepath.Join(os.TempDir(), id))
-					}
-					stopWatchdog(sess)
-					cancel = sess.Cancel
-					sessions.Remove(id)
-					queue.Release()
-					log.Printf("[%d] [SESSION_DELETED] [%s]", requestId, id)
-				} else {
-					touchWatchdog(sess)
-					if len(fragments) == 4 && fragments[len(fragments)-1] == "file" && enableFileUpload {
-						r.Header.Set(fileUploadDirHeader, filepath.Join(os.TempDir(), id))
-						r.URL.Path = "/file"
-						return
-					}
-				}
-				seUploadPath, uploadPath := "/se/file", "/file"
-				if strings.HasSuffix(r.URL.Path, seUploadPath) {
-					r.URL.Path = strings.TrimSuffix(r.URL.Path, seUploadPath) + uploadPath
-				}
-				r.URL.Host, r.URL.Path = sess.URL.Host, path.Clean(sess.URL.Path+r.URL.Path)
-				r.Host = "localhost"
-				if sess.Origin != "" {
-					r.Host = sess.Origin
-				}
-				return
-			}
-			r.URL.Path = paths.Error
-		},
+		Director:     director,
 		ErrorHandler: defaultErrorHandler(requestId),
 	}).ServeHTTP(w, r)
+
+	if postCleanup != nil {
+		postCleanup()
+	}
 }
 
 func defaultErrorHandler(requestId uint64) func(http.ResponseWriter, *http.Request, error) {
