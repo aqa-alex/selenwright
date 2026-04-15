@@ -96,10 +96,6 @@ func (st *SourceTrust) Check(r *http.Request) error {
 	return nil
 }
 
-// StripFromRequest removes headers that should not propagate beyond the
-// trust boundary. Called by upstream-facing reverse proxies to scrub the
-// X-Router-Secret and identity headers before forwarding to browser
-// containers, where leaking them would defeat the whole trust model.
 func (st *SourceTrust) StripFromRequest(r *http.Request) {
 	st.mu.RLock()
 	headers := st.stripHeaders
@@ -109,22 +105,10 @@ func (st *SourceTrust) StripFromRequest(r *http.Request) {
 	}
 }
 
-// SourceTrustMiddleware returns an http middleware that calls Check on each
-// request. stFn is invoked per request so the trust config can be swapped
-// at runtime (SIGHUP reload, tests). openPaths bypass the gate so health
-// checks from load balancers (which don't carry the router secret) keep
-// working.
-// SourceTrustMiddleware is the signature preserved for existing
-// callers that only care about the open-paths set. When wiring
-// observability, pass an OnFailure callback via
-// SourceTrustMiddlewareWithHooks.
 func SourceTrustMiddleware(stFn func() *SourceTrust, openPaths []string) func(http.Handler) http.Handler {
 	return SourceTrustMiddlewareWithHooks(stFn, openPaths, nil)
 }
 
-// SourceTrustMiddlewareWithHooks accepts an optional callback invoked
-// whenever the source-trust check rejects a request. Callers wire it
-// to metrics.AuthFailure so rejection counters stay centralised.
 func SourceTrustMiddlewareWithHooks(stFn func() *SourceTrust, openPaths []string, onFailure func()) func(http.Handler) http.Handler {
 	openExact := make(map[string]struct{}, len(openPaths))
 	for _, p := range openPaths {

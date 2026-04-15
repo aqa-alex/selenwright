@@ -41,13 +41,9 @@ func init() {
 	app.logOutputDir, _ = os.MkdirTemp("", "selenwright-test")
 	app.saveAllLogs = true
 	gitRevision = "test-revision"
-	// Match production defaults from main.init(); tests bypass flag.Parse.
 	app.maxCreateBodyBytes = 4 << 20
 	app.maxUploadBodyBytes = 256 << 20
 	app.maxUploadExtractedBytes = 1 << 30
-	// Default to legacy permissive origin behavior so existing tests
-	// (which never set Origin) continue to pass; per-test overrides
-	// reassign originChecker to a strict instance.
 	app.originChecker, _ = protect.NewOriginChecker(nil)
 	app.authenticator = protect.NoneAuthenticator{}
 	app.ggrHost = &ggr.Host{

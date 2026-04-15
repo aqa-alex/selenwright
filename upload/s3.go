@@ -39,12 +39,6 @@ func init() {
 	AddUploader(s3)
 }
 
-// maskAccessKey returns a log-safe representation of an AWS access key:
-// the first 4 characters (enough to disambiguate which key was used,
-// AKIA-prefix is always public) plus a fixed redaction suffix. Anyone
-// with read access to logs otherwise obtains the full key, which —
-// combined with the endpoint and bucket name (both also logged) — is
-// sufficient for bucket-wide access.
 func maskAccessKey(k string) string {
 	if len(k) <= 4 {
 		return "***"

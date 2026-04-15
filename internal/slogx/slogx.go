@@ -1,16 +1,3 @@
-// Package slogx routes the stdlib log package through log/slog so a
-// single -log-json flag can flip the entire process's output from the
-// legacy bracketed-text format to structured JSON without touching
-// any of the ~150 log.Printf call sites scattered across the
-// codebase.
-//
-// The bracketed format selenwright has used since upstream Selenoid
-// is already structured — positionally — so when JSON mode is on,
-// the handler parses `[requestId] [EVENT] [field1] [field2] ...`
-// back into request_id / event / fields triples and emits them as
-// proper JSON attributes. When JSON mode is off, Install is a no-op
-// and the default log.Printf output path is left untouched so
-// operator tail views look identical to pre-slog builds.
 package slogx
 
 import (
@@ -27,19 +14,12 @@ import (
 	"time"
 )
 
-// Config controls how Install wires slog into the process.
 type Config struct {
-	// JSON enables JSON output. When false Install is a no-op.
-	JSON bool
-	// Level sets the minimum slog level written to Out. Defaults to
-	// slog.LevelInfo when zero.
+	JSON  bool
 	Level slog.Level
-	// Out is the destination writer. Defaults to os.Stderr when nil.
-	Out io.Writer
+	Out   io.Writer
 }
 
-// Install wires the process logging according to cfg. Safe to call
-// once at startup; calling twice replaces the previous routing.
 func Install(cfg Config) {
 	if !cfg.JSON {
 		return
@@ -58,10 +38,6 @@ func Install(cfg Config) {
 	log.SetOutput(&slogWriter{h: h})
 }
 
-// slogWriter implements io.Writer by forwarding each line written by
-// the stdlib log package into the slog handler as an Info record. The
-// stdlib log package always writes one log line per Write call, so
-// there's no framing work to do here.
 type slogWriter struct {
 	h slog.Handler
 }
@@ -75,11 +51,6 @@ func (w *slogWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// bracketJSONHandler renders records as one-line JSON, parsing the
-// legacy bracketed message format into request_id / event / fields
-// attributes when it matches. The mutex is lifted into a shared
-// writeLock so WithAttrs can safely clone the handler; copying a
-// sync.Mutex value would trip go vet.
 type bracketJSONHandler struct {
 	out       io.Writer
 	level     slog.Level
@@ -144,11 +115,6 @@ func (h *bracketJSONHandler) WithGroup(_ string) slog.Handler {
 	return h
 }
 
-// parseBracketedMessage splits a message that looks like
-// "[42] [SESSION_CREATED] [id] [count]" into ("42",
-// "SESSION_CREATED", ["id", "count"]). Messages not in that shape
-// return ("", "", nil) and the handler falls back to emitting the
-// full string as msg.
 func parseBracketedMessage(msg string) (reqID, event string, rest []string) {
 	msg = strings.TrimSpace(msg)
 	if !strings.HasPrefix(msg, "[") {
@@ -176,9 +142,6 @@ func parseBracketedMessage(msg string) (reqID, event string, rest []string) {
 	if reqID == "-" {
 		reqID = ""
 	} else if _, err := strconv.Atoi(reqID); err != nil {
-		// The first bracket wasn't a request id sentinel; treat the
-		// whole thing as an unstructured message rather than
-		// inventing a bogus request_id field.
 		return "", "", nil
 	}
 	if len(parts) > 2 {
@@ -187,8 +150,6 @@ func parseBracketedMessage(msg string) (reqID, event string, rest []string) {
 	return reqID, event, rest
 }
 
-// CaptureWriter returns a writer the tests can feed log.Printf output
-// through to assert JSON shape without redirecting os.Stderr.
 func CaptureWriter(buf *bytes.Buffer, level slog.Level) io.Writer {
 	h := &bracketJSONHandler{
 		out:       buf,

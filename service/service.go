@@ -19,11 +19,6 @@ import (
 	"github.com/docker/docker/errdefs"
 )
 
-// EnsureBrowserNetwork idempotently creates a bridge network with
-// Internal=true so browser containers attached to it have no egress
-// to the host's default gateway. Already-existing networks are left
-// untouched — the call is safe to run on every startup. Returns nil
-// when name is empty so the caller doesn't need to guard.
 func EnsureBrowserNetwork(ctx context.Context, cl *client.Client, name string) error {
 	if name == "" || cl == nil {
 		return nil

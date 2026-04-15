@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-// resetRegistry restores package state between tests. The pool uses a
-// sync.Once so it can only be started in one test per process; tests
-// that need the pool share a single call via ensurePool. Registry
-// mutation is safe after reset because there are no workers yet.
 func resetRegistry() {
 	reg.mu.Lock()
 	reg.file = nil
@@ -31,9 +27,6 @@ type sessionListener struct {
 
 func (l *sessionListener) OnSessionStopped(ss StoppedSession) { l.fn(ss) }
 
-// TestConcurrentAddAndPublish stresses the registry under concurrent
-// append + range. Without the RWMutex the race detector fires on the
-// legacy fileCreatedListeners slice access.
 func TestConcurrentAddAndPublish(t *testing.T) {
 	resetRegistry()
 
@@ -73,14 +66,6 @@ func TestConcurrentAddAndPublish(t *testing.T) {
 	wg.Wait()
 }
 
-// TestSlowListenerDoesNotBlockFastOnes verifies bounded fan-out is
-// asynchronous — one hung listener must not starve the rest. Without
-// the worker pool a synchronous-dispatch model would still pass this
-// because each listener runs on its own goroutine; the pool's job is
-// to bound the TOTAL number of goroutines under load, which is what
-// TestPoolCapsGoroutines covers. This test asserts the behavioral
-// contract: all registered listeners eventually observe the event
-// within a bounded deadline regardless of each other's speed.
 func TestSlowListenerDoesNotBlockFastOnes(t *testing.T) {
 	resetRegistry()
 
@@ -109,9 +94,6 @@ func TestSlowListenerDoesNotBlockFastOnes(t *testing.T) {
 	}
 }
 
-// TestInitIfNeededRunsOnce verifies the InitRequired hook fires
-// exactly once per registration, preserving the legacy contract for
-// uploaders that self-configure from flags at registration time.
 func TestInitIfNeededRunsOnce(t *testing.T) {
 	var initCount int32
 	l := &initOnceListener{onInit: func() { atomic.AddInt32(&initCount, 1) }}
@@ -129,9 +111,6 @@ func (l *initOnceListener) Init()                           { l.onInit() }
 func (l *initOnceListener) OnFileCreated(cf CreatedFile)    {}
 func (l *initOnceListener) OnSessionStopped(StoppedSession) {}
 
-// TestShutdownBeforeStartIsNoOp ensures Shutdown is safe to call when
-// the pool was never started — production shutdown paths may run
-// before StartPool has been reached during early init failure.
 func TestShutdownBeforeStartIsNoOp(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
@@ -140,12 +119,6 @@ func TestShutdownBeforeStartIsNoOp(t *testing.T) {
 	}
 }
 
-// TestShutdownDrainsPendingWork drives the pool through a full
-// lifecycle and asserts enqueued work completes before Shutdown
-// returns. Kept last in the file and guarded behind a "pool" subtest
-// so we only start the pool once per process (the sync.Once contract
-// would refuse a restart anyway); previous tests run against the
-// fallback inline-goroutine path.
 func TestShutdownDrainsPendingWork(t *testing.T) {
 	resetRegistry()
 	StartPool(2, 4)

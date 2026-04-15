@@ -118,7 +118,6 @@ func TestQueue_ClientDisconnectDuringWait(t *testing.T) {
 			waited <- nil
 		}()
 
-		// The waiter is now inside Acquire; Queued must increment.
 		require.Eventually(t, func() bool { return q.Queued() == 1 }, time.Second, time.Millisecond)
 
 		cancel()

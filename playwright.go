@@ -1,5 +1,3 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
-
 package main
 
 import (
@@ -25,11 +23,6 @@ import (
 	gwebsocket "github.com/gorilla/websocket"
 )
 
-// metricsReason normalizes the free-form reason tag passed to
-// cleanup() (which also feeds the PLAYWRIGHT_* log prefixes) into the
-// short stable label the session_ended counter uses. Anything not in
-// the explicit set collapses to "close" so the cardinality stays
-// bounded.
 func metricsReason(reason string) string {
 	switch reason {
 	case "client", "upstream", "timeout", "shutdown":
@@ -99,11 +92,6 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Early-init cleanup: walks the stack in reverse on any early return
-	// before the request is successfully upgraded and tracked in the
-	// session map. When init reaches the success point we clear the list
-	// so the deferred runner becomes a no-op; from that point the
-	// cleanup closure defined later takes over resource ownership.
 	var earlyCleanup []func()
 	defer func() {
 		for i := len(earlyCleanup) - 1; i >= 0; i-- {

@@ -11,14 +11,7 @@ import (
 	"github.com/docker/docker/client"
 )
 
-// Server bundles runtime state and flag-derived configuration so
-// handlers can be written as methods with a single receiver instead of
-// reading a zoo of package-level globals. One instance is constructed
-// in main.init and accessed via the package-level app pointer; tests
-// reassign its fields through the same pointer.
 type Server struct {
-	// Flag-derived config (bound during main.init; read-only after that
-	// in production, mutable from tests to exercise specific paths).
 	hostname                 string
 	disableDocker            bool
 	disableQueue             bool
@@ -63,8 +56,6 @@ type Server struct {
 	logJSON                  bool
 	browserNetwork           string
 
-	// Runtime state (populated in main.init after flag parsing and
-	// after conf/client/manager construction; reloadable via SIGHUP).
 	sessions      *session.Map
 	queue         *protect.Queue
 	manager       service.Manager
@@ -79,20 +70,9 @@ type Server struct {
 	startTime time.Time
 }
 
-// app is the single Server instance used throughout the package. It is
-// populated during main.init() and becomes the receiver of every
-// handler method. Tests reassign its fields to install fakes.
 var app = &Server{
 	sessions:  session.NewMap(),
 	startTime: time.Now(),
 }
 
-// testHooksEnabled is flipped to true from a package-level var
-// initializer inside a _test.go file (see test_hooks_test.go). It
-// replaces testing.Testing() as the guard around init() error
-// swallowing — testing.Testing() also returns true under coverage
-// builds (`go build -cover`), which silently disabled authentication
-// in any operator-built coverage-instrumented binary (audit H-1).
-// _test.go files are stripped from non-test builds, so this flag is
-// unconditionally false in production.
 var testHooksEnabled bool

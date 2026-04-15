@@ -16,11 +16,6 @@ import (
 	"github.com/aqa-alex/selenwright/session"
 )
 
-// driverEnvAllowedPrefixes lists env-var prefixes allowed from client caps
-// into a driver subprocess on the host. Caps.Env lands directly in the
-// host process, so blanket pass-through gives callers a trivial
-// LD_PRELOAD / PATH hijack. The whitelist limits what can flow through
-// even if the caps sanitizer is disabled or an admin opts into passing env.
 var driverEnvAllowedPrefixes = []string{"SELENWRIGHT_", "SE_"}
 
 func filterClientEnv(env []string) []string {

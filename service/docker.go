@@ -118,12 +118,6 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 	image := d.Service.Image
 	ctx := context.Background()
 	log.Printf("[%d] [CREATING_CONTAINER] [%s]", requestId, image)
-	// When -browser-network is set, join the browser container to the
-	// isolated internal network as its primary attachment. The operator
-	// network from -container-network, if distinct and not the Docker
-	// sentinel "default", is added as a secondary network below so
-	// legacy multi-tenant routing setups keep working without egress
-	// via the default gateway.
 	primaryNetwork := d.Network
 	if d.BrowserNetwork != "" {
 		primaryNetwork = d.BrowserNetwork

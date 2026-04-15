@@ -44,16 +44,6 @@ var (
 	buildStamp  = "unknown"
 )
 
-// HTTP server hardening defaults.
-//
-// ReadHeaderTimeout caps how long a client can take to send the request line
-// and headers — the primary defense against Slowloris-style attacks. ReadTimeout
-// bounds the entire request body read for non-streaming endpoints. IdleTimeout
-// closes idle keep-alive connections to free file descriptors. WriteTimeout is
-// deliberately omitted on the server (left at 0) because long-lived WebSocket
-// tunnels (Playwright, DevTools, VNC, log streams) and the WebDriver reverse
-// proxy must outlive any per-request write deadline; per-handler timeouts are
-// applied where appropriate.
 const (
 	readHeaderTimeout = 10 * time.Second
 	readTimeout       = 60 * time.Second
@@ -189,9 +179,6 @@ func init() {
 		if err != nil {
 			log.Fatalf("[-] [INIT] [Invalid video output dir %s: %v]", app.videoOutputDir, err)
 		}
-		// 0o750 — the previous 0o644 omitted the execute bit and made the
-		// directory unenterable for the owning process, which only worked
-		// in production because it ran as root.
 		err = os.MkdirAll(app.videoOutputDir, 0o750)
 		if err != nil {
 			log.Fatalf("[-] [INIT] [Failed to create video output dir %s: %v]", app.videoOutputDir, err)
@@ -351,10 +338,6 @@ func parseGgrHost(s string) *ggr.Host {
 	return host
 }
 
-// splitCSV parses a comma-separated flag value into a list of trimmed,
-// non-empty entries. Used for multi-value string flags (-allowed-origins).
-// Returns nil when the result is empty so callers can treat "no entries"
-// uniformly regardless of whether the input was "" or ",,,".
 func splitCSV(s string) []string {
 	if s == "" {
 		return nil
@@ -369,23 +352,12 @@ func splitCSV(s string) []string {
 	return out
 }
 
-// stripTrustHeaders removes router-trust headers (X-Router-Secret,
-// X-Forwarded-User, X-Admin) before the request crosses the trust
-// boundary into a browser container. The set is kept in sync with
-// SourceTrust.StripHeaders configured in main.init via -user-header
-// and -admin-header. Defends against credential / identity leakage
-// to upstream containers (PR #6).
 func stripTrustHeaders(r *http.Request) {
 	if app.sourceTrust != nil {
 		app.sourceTrust.StripFromRequest(r)
 	}
 }
 
-// gateSessionOwner extracts the session ID from the URL path at the given
-// fragment index, looks up the session, and forbids access when the
-// authenticated identity is neither the session owner nor an admin.
-// Unknown sessions pass through so the next handler can render its
-// standard 404 (or proceed when the path doesn't address one).
 func gateSessionOwner(idIndex int, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sid := protect.ExtractSessionID(r.URL.Path, idIndex)
@@ -502,10 +474,6 @@ func isLoopbackListen(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// onSIGHUP installs a reload handler invoked on every SIGHUP. The
-// handler runs inside a recover so a panicking fn (e.g. htpasswd
-// reload choking on a malformed file) takes down the reload cycle,
-// not the whole process.
 func onSIGHUP(fn func()) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)
@@ -588,12 +556,6 @@ func video(w http.ResponseWriter, r *http.Request) {
 func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request, dir string, prefix string, status string) {
 	user, remote := info.RequestInfo(r)
 	fileName := strings.TrimPrefix(r.URL.Path, prefix)
-	// Resolve the URL-supplied filename against the output dir while
-	// rejecting traversal attempts (e.g. DELETE /video/../../etc/passwd
-	// would otherwise let any caller wipe arbitrary files in the
-	// process's reach). Without auth in front of these endpoints — see
-	// PR #5 — this gate is the only thing standing between the wire and
-	// `os.Remove` on attacker-chosen paths.
 	filePath, err := safepath.Join(dir, fileName)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid file name %s", fileName), http.StatusBadRequest)
@@ -700,8 +662,6 @@ func main() {
 		ReadTimeout:       readTimeout,
 		IdleTimeout:       idleTimeout,
 		MaxHeaderBytes:    maxHeaderBytes,
-		// WriteTimeout intentionally left zero: long-lived WebSocket and
-		// log-stream connections must outlive any per-request write deadline.
 	}
 	e := make(chan error)
 	go func() {

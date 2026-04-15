@@ -8,9 +8,6 @@ import (
 	"testing"
 )
 
-// TestMaskAccessKey covers the log-redaction helper used by S3Uploader.Init.
-// The full key must never round-trip to the masked output; short inputs
-// collapse to a fixed redaction placeholder with no partial leak.
 func TestMaskAccessKey(t *testing.T) {
 	cases := []struct {
 		name string

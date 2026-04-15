@@ -54,10 +54,9 @@ type State struct {
 
 // Browser configuration
 type Browser struct {
-	Image interface{} `json:"image"`
-	Port  string      `json:"port"`
-	Path  string      `json:"path"`
-	// Protocol selects the upstream contract; empty preserves WebDriver behavior for backward compatibility.
+	Image           interface{}       `json:"image"`
+	Port            string            `json:"port"`
+	Path            string            `json:"path"`
 	Protocol        string            `json:"protocol,omitempty"`
 	Tmpfs           map[string]string `json:"tmpfs,omitempty"`
 	Volumes         []string          `json:"volumes,omitempty"`

@@ -23,17 +23,6 @@ var (
 	labelRe    = regexp.MustCompile(`^[\x20-\x7E]{0,128}$`)
 )
 
-// Sanitize validates and normalizes user-supplied capabilities according
-// to policy. Strict mode is the default for production: capabilities that
-// would let a tenant influence the host (custom DNS, extra Docker
-// networks, arbitrary process env vars) are rejected unless the caller is
-// an admin. String fields that flow into Docker labels, hostnames or
-// filenames are checked against conservative regexes to keep CRLF and
-// path traversal out of downstream subsystems regardless of policy.
-//
-// Permissive mode preserves the legacy upstream-Selenoid behavior and
-// only enforces the structural string checks; it should be used only
-// when the operator trusts every caller to supply benign input.
 func Sanitize(caps *Caps, policy CapsPolicy, isAdmin bool) error {
 	if caps == nil {
 		return nil
