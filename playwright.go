@@ -18,11 +18,26 @@ import (
 
 	"github.com/aqa-alex/selenwright/event"
 	"github.com/aqa-alex/selenwright/info"
+	"github.com/aqa-alex/selenwright/internal/metrics"
 	"github.com/aqa-alex/selenwright/jsonerror"
 	"github.com/aqa-alex/selenwright/protect"
 	"github.com/aqa-alex/selenwright/session"
 	gwebsocket "github.com/gorilla/websocket"
 )
+
+// metricsReason normalizes the free-form reason tag passed to
+// cleanup() (which also feeds the PLAYWRIGHT_* log prefixes) into the
+// short stable label the session_ended counter uses. Anything not in
+// the explicit set collapses to "close" so the cardinality stays
+// bounded.
+func metricsReason(reason string) string {
+	switch reason {
+	case "client", "upstream", "timeout", "shutdown":
+		return reason
+	default:
+		return "close"
+	}
+}
 
 type playwrightTunnelResult struct {
 	source string
@@ -69,6 +84,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 
 	identity, _ := protect.IdentityFromContext(r.Context())
 	if err := session.Sanitize(&caps, session.CapsPolicy(app.capsPolicyFlag), identity.IsAdmin); err != nil {
+		metrics.CapsRejected()
 		log.Printf("[%d] [REJECTED_CAPS] [%v]", requestId, err)
 		jsonerror.InvalidArgument(err).Encode(w)
 		app.queue.Drop()
@@ -187,6 +203,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 			app.sessions.Remove(sessionID)
 			app.queue.Release()
 			event.SessionStopped(event.StoppedSession{Event: playwrightEvent})
+			metrics.SessionEnded("playwright", metricsReason(reason), info.SecondsSince(sess.Started))
 
 			switch reason {
 			case "timeout":
@@ -206,6 +223,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 
 	app.sessions.Put(sessionID, sess)
 	app.queue.Create()
+	metrics.SessionCreated("playwright")
 	log.Printf("[%d] [PLAYWRIGHT_SESSION_CREATED] [%s] [%s] [%s] [%.2fs]", requestId, sessionID, browserName, playwrightVersion, info.SecondsSince(sessionStartTime))
 
 	resultCh := make(chan playwrightTunnelResult, 2)

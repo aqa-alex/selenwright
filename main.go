@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/aqa-alex/selenwright/info"
+	"github.com/aqa-alex/selenwright/internal/metrics"
 	"github.com/aqa-alex/selenwright/internal/safepath"
 	"github.com/docker/docker/api"
 
@@ -103,6 +104,8 @@ func init() {
 	flag.StringVar(&app.trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
 	flag.StringVar(&app.capsPolicyFlag, "caps-policy", string(session.PolicyStrict), "Capability policy: 'strict' rejects dangerous caps (env, dnsServers, hostsEntries, additionalNetworks, applicationContainers) for non-admin callers; 'permissive' preserves the legacy upstream-Selenoid behavior")
 	flag.IntVar(&app.eventWorkers, "event-workers", 16, "Number of worker goroutines that dispatch session-lifecycle events (FileCreated, SessionStopped) to registered listeners. Bounds fan-out so a single slow listener (e.g. a hung S3 upload) cannot leak goroutines")
+	flag.BoolVar(&app.enableMetrics, "enable-metrics", false, "Expose a Prometheus-compatible /metrics endpoint (queue depth, session counts, session duration histogram, auth/caps rejection counters). Path is controlled by -metrics-path")
+	flag.StringVar(&app.metricsPath, "metrics-path", "/metrics", "Path the Prometheus metrics endpoint is served on when -enable-metrics is set. Access is not gated by the configured authenticator; the endpoint is expected to live behind the same network boundary as Prometheus itself")
 	flag.Parse()
 
 	if version {
@@ -207,6 +210,12 @@ func init() {
 
 	upload.Init()
 	event.StartPool(app.eventWorkers, 0)
+	metrics.BindQueueGauges(app.queue.Used, app.queue.Pending, app.queue.Queued)
+	metrics.BindSessionsGauge(app.sessions.Len)
+	if app.enableMetrics {
+		metrics.Enable()
+		log.Printf("[-] [INIT] [Metrics enabled at %s]", app.metricsPath)
+	}
 
 	environment := service.Environment{
 		InDocker:             inDocker,
@@ -635,8 +644,23 @@ func handler() http.Handler {
 		root.HandleFunc(paths.File, fileUpload)
 	}
 	root.HandleFunc(paths.Welcome, welcome)
-	authMw := protect.AuthMiddleware(func() protect.Authenticator { return app.authenticator }, protect.AuthMiddlewareOptions{OpenPaths: openPaths})
-	sourceTrustMw := protect.SourceTrustMiddleware(func() *protect.SourceTrust { return app.sourceTrust }, openPaths)
+	metricsOpen := openPaths
+	if app.enableMetrics {
+		root.Handle(app.metricsPath, metrics.Handler())
+		metricsOpen = append([]string{app.metricsPath}, openPaths...)
+	}
+	authMw := protect.AuthMiddleware(
+		func() protect.Authenticator { return app.authenticator },
+		protect.AuthMiddlewareOptions{
+			OpenPaths: metricsOpen,
+			OnFailure: func() { metrics.AuthFailure(app.authModeFlag) },
+		},
+	)
+	sourceTrustMw := protect.SourceTrustMiddlewareWithHooks(
+		func() *protect.SourceTrust { return app.sourceTrust },
+		metricsOpen,
+		func() { metrics.AuthFailure("source-trust") },
+	)
 	return sourceTrustMw(authMw(root))
 }
 

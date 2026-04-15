@@ -57,6 +57,8 @@ type Server struct {
 	trustedProxyMTLSCAPath   string
 	capsPolicyFlag           string
 	eventWorkers             int
+	enableMetrics            bool
+	metricsPath              string
 
 	// Runtime state (populated in main.init after flag parsing and
 	// after conf/client/manager construction; reloadable via SIGHUP).
