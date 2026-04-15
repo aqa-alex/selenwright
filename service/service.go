@@ -32,6 +32,7 @@ type Environment struct {
 	LogOutputDir         string
 	SaveAllLogs          bool
 	Privileged           bool
+	CapAddSysAdmin       bool
 }
 
 const (
