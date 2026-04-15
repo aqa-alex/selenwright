@@ -62,6 +62,8 @@ var (
 	maxCreateBodyBytes       int64
 	maxUploadBodyBytes       int64
 	maxUploadExtractedBytes  int64
+	allowedOriginsRaw        string
+	originChecker            *protect.OriginChecker
 	ggrHost                  *ggr.Host
 	conf                     *config.Config
 	queue                    *protect.Queue
@@ -122,6 +124,7 @@ func init() {
 	flag.Int64Var(&maxCreateBodyBytes, "max-create-body-bytes", 4<<20, "Maximum POST body size for /session create requests in bytes (default 4 MiB)")
 	flag.Int64Var(&maxUploadBodyBytes, "max-upload-body-bytes", 256<<20, "Maximum POST body size for /file upload requests in bytes (default 256 MiB)")
 	flag.Int64Var(&maxUploadExtractedBytes, "max-upload-extracted-bytes", 1<<30, "Maximum total extracted size for /file uploaded zip archives in bytes (default 1 GiB)")
+	flag.StringVar(&allowedOriginsRaw, "allowed-origins", "", "Comma-separated list of allowed Origin values for WebSocket upgrades (devtools, playwright, vnc, logs). Empty (default) keeps the legacy permissive behavior; '*' is explicit allow-all. Recommended: configure to your CI/QA hosts to defend against Cross-Site WebSocket Hijacking")
 	flag.Parse()
 
 	if version {
@@ -130,6 +133,13 @@ func init() {
 	}
 
 	var err error
+	originChecker, err = protect.NewOriginChecker(splitCSV(allowedOriginsRaw))
+	if err != nil {
+		log.Fatalf("[-] [INIT] [Invalid -allowed-origins: %v]", err)
+	}
+	if originChecker.AllowsAll() {
+		log.Printf("[-] [INIT] [WARN] [WebSocket Origin check is permissive — set -allowed-origins to defend against Cross-Site WebSocket Hijacking]")
+	}
 	hostname, err = os.Hostname()
 	if err != nil {
 		log.Fatalf("[-] [INIT] [%s: %v]", os.Args[0], err)
@@ -302,6 +312,39 @@ func parseGgrHost(s string) *ggr.Host {
 	return host
 }
 
+// splitCSV parses a comma-separated flag value into a list of trimmed,
+// non-empty entries. Used for multi-value string flags (-allowed-origins).
+// Returns nil when the result is empty so callers can treat "no entries"
+// uniformly regardless of whether the input was "" or ",,,".
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	var out []string
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// gateOrigin wraps an http.Handler with the live originChecker so reloads
+// (SIGHUP, tests) take effect without re-registering routes. The receiver
+// version OriginChecker.HandlerWrap captures the pointer at construction
+// time, which is the wrong semantics for endpoints registered once at
+// startup against a global checker that may be replaced.
+func gateOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !originChecker.Check(r) {
+			http.Error(w, "Forbidden Origin", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func onSIGHUP(fn func()) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)
@@ -438,8 +481,15 @@ func handler() http.Handler {
 		_ = json.NewEncoder(w).Encode(conf.State(sessions, limit, queue.Queued(), queue.Pending()))
 	})
 	root.HandleFunc(paths.Ping, ping)
-	root.Handle(paths.VNC, websocket.Handler(vnc))
-	root.HandleFunc(paths.Logs, logs)
+	// VNC and /logs/ rely on golang.org/x/net/websocket which has no
+	// CheckOrigin equivalent; gate them with the same Origin allow-list
+	// applied to gorilla-based endpoints (devtools, playwright). Each
+	// request reads the originChecker global at fire time (not at
+	// registration) so SIGHUP reload of -allowed-origins or test
+	// reassignment takes effect immediately. Removable once PR #14
+	// migrates these to gorilla/websocket.
+	root.Handle(paths.VNC, gateOrigin(websocket.Handler(vnc)))
+	root.Handle(paths.Logs, gateOrigin(http.HandlerFunc(logs)))
 	root.HandleFunc(paths.Video, video)
 	root.HandleFunc(paths.Download, reverseProxy(func(sess *session.Session) string { return sess.HostPort.Fileserver }, "DOWNLOADING_FILE"))
 	root.HandleFunc(paths.Clipboard, reverseProxy(func(sess *session.Session) string { return sess.HostPort.Clipboard }, "CLIPBOARD"))

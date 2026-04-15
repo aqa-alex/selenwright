@@ -11,9 +11,14 @@ import (
 	gwebsocket "github.com/gorilla/websocket"
 )
 
+// websocketUpgrader is the shared upgrader used by the generic WS reverse
+// proxy (devtools, etc.). CheckOrigin delegates to the package-level
+// originChecker built in main.init from -allowed-origins; without an
+// allow-list this preserves the legacy permissive behavior but logs a
+// startup warning so operators notice.
 var websocketUpgrader = gwebsocket.Upgrader{
-	CheckOrigin: func(_ *http.Request) bool {
-		return true
+	CheckOrigin: func(r *http.Request) bool {
+		return originChecker.Check(r)
 	},
 }
 
