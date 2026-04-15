@@ -28,6 +28,7 @@ import (
 
 	ggr "github.com/aerokube/ggr/config"
 	"github.com/aqa-alex/selenwright/config"
+	"github.com/aqa-alex/selenwright/event"
 	"github.com/aqa-alex/selenwright/jsonerror"
 	"github.com/aqa-alex/selenwright/protect"
 	"github.com/aqa-alex/selenwright/service"
@@ -101,6 +102,7 @@ func init() {
 	flag.StringVar(&app.trustedProxyCIDRsRaw, "trusted-proxy-cidr", "", "Comma-separated CIDR allow-list for the source IP. When set, request must originate from one of the listed networks regardless of headers")
 	flag.StringVar(&app.trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
 	flag.StringVar(&app.capsPolicyFlag, "caps-policy", string(session.PolicyStrict), "Capability policy: 'strict' rejects dangerous caps (env, dnsServers, hostsEntries, additionalNetworks, applicationContainers) for non-admin callers; 'permissive' preserves the legacy upstream-Selenoid behavior")
+	flag.IntVar(&app.eventWorkers, "event-workers", 16, "Number of worker goroutines that dispatch session-lifecycle events (FileCreated, SessionStopped) to registered listeners. Bounds fan-out so a single slow listener (e.g. a hung S3 upload) cannot leak goroutines")
 	flag.Parse()
 
 	if version {
@@ -204,6 +206,7 @@ func init() {
 	}
 
 	upload.Init()
+	event.StartPool(app.eventWorkers, 0)
 
 	environment := service.Environment{
 		InDocker:             inDocker,
@@ -682,6 +685,10 @@ func main() {
 		if activeSession.session != nil && activeSession.session.Cancel != nil {
 			activeSession.session.Cancel()
 		}
+	}
+
+	if err := event.Shutdown(ctx); err != nil {
+		log.Printf("[-] [SHUTTING_DOWN] [Event pool drain %v]", err)
 	}
 
 	if !app.disableDocker {
