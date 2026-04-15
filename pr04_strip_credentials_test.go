@@ -18,10 +18,10 @@ import (
 
 func TestPlaywrightDoesNotForwardAuthorizationOrCookie(t *testing.T) {
 	upstream := newCapturingUpstream(t)
-	prevManager := manager
-	prevTimeout := timeout
-	timeout = 200 * time.Millisecond
-	manager = &StaticService{
+	prevManager := app.manager
+	prevTimeout := app.timeout
+	app.timeout = 200 * time.Millisecond
+	app.manager = &StaticService{
 		Available: true,
 		StartedService: service.StartedService{
 			PlaywrightURL: upstream.url,
@@ -30,8 +30,8 @@ func TestPlaywrightDoesNotForwardAuthorizationOrCookie(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		cancelPlaywrightSessions()
-		manager = prevManager
-		timeout = prevTimeout
+		app.manager = prevManager
+		app.timeout = prevTimeout
 	})
 
 	hdr := http.Header{}

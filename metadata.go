@@ -26,7 +26,7 @@ type MetadataProcessor struct {
 }
 
 func (mp *MetadataProcessor) OnSessionStopped(stoppedSession event.StoppedSession) {
-	if logOutputDir != "" {
+	if app.logOutputDir != "" {
 		meta := session.Metadata{
 			ID:           stoppedSession.SessionId,
 			Started:      stoppedSession.Session.Started,
@@ -38,7 +38,7 @@ func (mp *MetadataProcessor) OnSessionStopped(stoppedSession event.StoppedSessio
 			log.Printf("[%d] [METADATA] [%s] [Failed to marshal: %v]", stoppedSession.RequestId, stoppedSession.SessionId, err)
 			return
 		}
-		filename := filepath.Join(logOutputDir, stoppedSession.SessionId+metadataFileExtension)
+		filename := filepath.Join(app.logOutputDir, stoppedSession.SessionId+metadataFileExtension)
 		err = os.WriteFile(filename, data, 0644)
 		if err != nil {
 			log.Printf("[%d] [METADATA] [%s] [Failed to save to %s: %v]", stoppedSession.RequestId, stoppedSession.SessionId, filename, err)

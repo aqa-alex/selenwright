@@ -19,7 +19,7 @@ import (
 // leave the cancel callback invoked or not depending on timing.
 func TestProxyCancelOnDelete_RunsExactlyOnce(t *testing.T) {
 	handler := HTTPTest{Handler: Selenium()}
-	manager = &handler
+	app.manager = &handler
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", strings.NewReader("{}"))
 	assert.NoError(t, err)
@@ -37,7 +37,7 @@ func TestProxyCancelOnDelete_RunsExactlyOnce(t *testing.T) {
 	assert.NoError(t, err)
 	defer rsp.Body.Close()
 
-	_, stillThere := sessions.Get(sid)
+	_, stillThere := app.sessions.Get(sid)
 	assert.False(t, stillThere, "session must be removed from the map after DELETE")
 }
 
@@ -48,7 +48,7 @@ func TestProxyCancelOnDelete_RunsExactlyOnce(t *testing.T) {
 // upstream proxy.
 func TestProxyConcurrentGETAndDELETE(t *testing.T) {
 	handler := HTTPTest{Handler: Selenium()}
-	manager = &handler
+	app.manager = &handler
 
 	resp, err := http.Post(With(srv.URL).Path("/wd/hub/session"), "", strings.NewReader("{}"))
 	assert.NoError(t, err)
@@ -86,7 +86,7 @@ func TestProxyConcurrentGETAndDELETE(t *testing.T) {
 	close(stop)
 	wg.Wait()
 
-	_, stillThere := sessions.Get(sid)
+	_, stillThere := app.sessions.Get(sid)
 	assert.False(t, stillThere)
 }
 

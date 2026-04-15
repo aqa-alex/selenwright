@@ -12,11 +12,11 @@ import (
 func TestSessionACL_OwnerCanAccessOwnSession(t *testing.T) {
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
 
-	sessions.Put("alice-vnc-owner", &session.Session{
+	app.sessions.Put("alice-vnc-owner", &session.Session{
 		Quota:    "alice",
 		HostPort: session.HostPort{VNC: "127.0.0.1:0"},
 	})
-	t.Cleanup(func() { sessions.Remove("alice-vnc-owner") })
+	t.Cleanup(func() { app.sessions.Remove("alice-vnc-owner") })
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+paths.VNC+"alice-vnc-owner", nil)
 	req.Header.Set("Upgrade", "websocket")
@@ -35,11 +35,11 @@ func TestSessionACL_OwnerCanAccessOwnSession(t *testing.T) {
 func TestSessionACL_NonOwnerForbidden(t *testing.T) {
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
 
-	sessions.Put("alice-download", &session.Session{
+	app.sessions.Put("alice-download", &session.Session{
 		Quota:    "alice",
 		HostPort: session.HostPort{Fileserver: "127.0.0.1:0"},
 	})
-	t.Cleanup(func() { sessions.Remove("alice-download") })
+	t.Cleanup(func() { app.sessions.Remove("alice-download") })
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+paths.Download+"alice-download/file.txt", nil)
 	req.Header.Set("X-Forwarded-User", "bob")
@@ -53,11 +53,11 @@ func TestSessionACL_NonOwnerForbidden(t *testing.T) {
 func TestSessionACL_AdminBypass(t *testing.T) {
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User", AdminHeader: "X-Admin"})
 
-	sessions.Put("alice-vnc-admin", &session.Session{
+	app.sessions.Put("alice-vnc-admin", &session.Session{
 		Quota:    "alice",
 		HostPort: session.HostPort{VNC: "127.0.0.1:0"},
 	})
-	t.Cleanup(func() { sessions.Remove("alice-vnc-admin") })
+	t.Cleanup(func() { app.sessions.Remove("alice-vnc-admin") })
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+paths.VNC+"alice-vnc-admin", nil)
 	req.Header.Set("Upgrade", "websocket")
@@ -77,11 +77,11 @@ func TestSessionACL_AdminBypass(t *testing.T) {
 func TestSessionACL_VNCRejectsNonOwner(t *testing.T) {
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
 
-	sessions.Put("alice-vnc", &session.Session{
+	app.sessions.Put("alice-vnc", &session.Session{
 		Quota:    "alice",
 		HostPort: session.HostPort{VNC: "127.0.0.1:0"},
 	})
-	t.Cleanup(func() { sessions.Remove("alice-vnc") })
+	t.Cleanup(func() { app.sessions.Remove("alice-vnc") })
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+paths.VNC+"alice-vnc", nil)
 	req.Header.Set("Upgrade", "websocket")
@@ -101,11 +101,11 @@ func TestSessionACL_VNCRejectsNonOwner(t *testing.T) {
 func TestSessionACL_DevtoolsRejectsNonOwner(t *testing.T) {
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
 
-	sessions.Put("alice-dt", &session.Session{
+	app.sessions.Put("alice-dt", &session.Session{
 		Quota:    "alice",
 		HostPort: session.HostPort{Devtools: "127.0.0.1:0"},
 	})
-	t.Cleanup(func() { sessions.Remove("alice-dt") })
+	t.Cleanup(func() { app.sessions.Remove("alice-dt") })
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+paths.Devtools+"alice-dt/page", nil)
 	req.Header.Set("X-Forwarded-User", "bob")
@@ -142,4 +142,3 @@ func TestSessionACL_UnknownSessionWithVNC(t *testing.T) {
 	defer resp.Body.Close()
 	assert.NotEqual(t, http.StatusForbidden, resp.StatusCode)
 }
-

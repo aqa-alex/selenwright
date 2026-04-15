@@ -13,15 +13,15 @@ import (
 
 func withCapsPolicy(t *testing.T, policy string) {
 	t.Helper()
-	prev := capsPolicyFlag
-	capsPolicyFlag = policy
-	t.Cleanup(func() { capsPolicyFlag = prev })
+	prev := app.capsPolicyFlag
+	app.capsPolicyFlag = policy
+	t.Cleanup(func() { app.capsPolicyFlag = prev })
 }
 
 func TestCapsSanitizer_StrictRejectsDnsServersForNonAdmin(t *testing.T) {
 	withCapsPolicy(t, "strict")
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	body := []byte(`{"desiredCapabilities":{"browserName":"firefox","dnsServers":["8.8.8.8"]}}`)
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/wd/hub/session", bytes.NewReader(body))
@@ -40,7 +40,7 @@ func TestCapsSanitizer_StrictRejectsDnsServersForNonAdmin(t *testing.T) {
 func TestCapsSanitizer_StrictRejectsEnv(t *testing.T) {
 	withCapsPolicy(t, "strict")
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	body := []byte(`{"desiredCapabilities":{"browserName":"firefox","env":["LD_PRELOAD=/tmp/x"]}}`)
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/wd/hub/session", bytes.NewReader(body))
@@ -54,7 +54,7 @@ func TestCapsSanitizer_StrictRejectsEnv(t *testing.T) {
 func TestCapsSanitizer_AdminBypassesStrict(t *testing.T) {
 	withCapsPolicy(t, "strict")
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User", AdminHeader: "X-Admin"})
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	body := []byte(`{"desiredCapabilities":{"browserName":"firefox","env":["FOO=bar"]}}`)
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/wd/hub/session", bytes.NewReader(body))
@@ -68,14 +68,14 @@ func TestCapsSanitizer_AdminBypassesStrict(t *testing.T) {
 
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestCapsSanitizer_PermissivePassesEverything(t *testing.T) {
 	withCapsPolicy(t, "permissive")
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	body := []byte(`{"desiredCapabilities":{"browserName":"firefox","env":["FOO=bar"],"dnsServers":["8.8.8.8"]}}`)
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/wd/hub/session", bytes.NewReader(body))
@@ -88,14 +88,14 @@ func TestCapsSanitizer_PermissivePassesEverything(t *testing.T) {
 
 	var sess map[string]string
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
-	sessions.Remove(sess["sessionId"])
-	queue.Release()
+	app.sessions.Remove(sess["sessionId"])
+	app.queue.Release()
 }
 
 func TestCapsSanitizer_RejectsTraversalInVideoName(t *testing.T) {
 	withCapsPolicy(t, "strict")
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	body := []byte(`{"desiredCapabilities":{"browserName":"firefox","videoName":"../escape.mp4"}}`)
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/wd/hub/session", bytes.NewReader(body))
@@ -109,7 +109,7 @@ func TestCapsSanitizer_RejectsTraversalInVideoName(t *testing.T) {
 func TestCapsSanitizer_RejectsCRLFInTestName(t *testing.T) {
 	withCapsPolicy(t, "strict")
 	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
-	manager = &HTTPTest{Handler: Selenium()}
+	app.manager = &HTTPTest{Handler: Selenium()}
 
 	body := []byte(`{"desiredCapabilities":{"browserName":"firefox","name":"evil\ninjection"}}`)
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/wd/hub/session", bytes.NewReader(body))

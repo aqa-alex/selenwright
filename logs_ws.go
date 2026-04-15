@@ -22,25 +22,25 @@ const (
 
 var logsUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return originChecker.Check(r)
+		return app.originChecker.Check(r)
 	},
 }
 
 func logs(w http.ResponseWriter, r *http.Request) {
 	requestId := serial()
 	fileNameOrSessionID := strings.TrimPrefix(r.URL.Path, paths.Logs)
-	if logOutputDir != "" && (fileNameOrSessionID == "" || strings.HasSuffix(fileNameOrSessionID, logFileExtension)) {
+	if app.logOutputDir != "" && (fileNameOrSessionID == "" || strings.HasSuffix(fileNameOrSessionID, logFileExtension)) {
 		if r.Method == http.MethodDelete {
-			deleteFileIfExists(requestId, w, r, logOutputDir, paths.Logs, "DELETED_LOG_FILE")
+			deleteFileIfExists(requestId, w, r, app.logOutputDir, paths.Logs, "DELETED_LOG_FILE")
 			return
 		}
 		user, remote := info.RequestInfo(r)
 		if _, ok := r.URL.Query()[jsonParam]; ok {
-			listFilesAsJson(requestId, w, logOutputDir, "LOG_ERROR")
+			listFilesAsJson(requestId, w, app.logOutputDir, "LOG_ERROR")
 			return
 		}
 		log.Printf("[%d] [LOG_LISTING] [%s] [%s]", requestId, user, remote)
-		fileServer := http.StripPrefix(paths.Logs, http.FileServer(http.Dir(logOutputDir)))
+		fileServer := http.StripPrefix(paths.Logs, http.FileServer(http.Dir(app.logOutputDir)))
 		fileServer.ServeHTTP(w, r)
 		return
 	}
@@ -50,7 +50,7 @@ func logs(w http.ResponseWriter, r *http.Request) {
 func listFilesAsJson(requestId uint64, w http.ResponseWriter, dir string, errStatus string) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("[%d] [%s] [%s]", requestId, errStatus, fmt.Sprintf("Failed to list directory %s: %v", logOutputDir, err))
+		log.Printf("[%d] [%s] [%s]", requestId, errStatus, fmt.Sprintf("Failed to list directory %s: %v", app.logOutputDir, err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -72,14 +72,14 @@ func streamLogs(w http.ResponseWriter, r *http.Request) {
 	defer wsconn.Close()
 
 	sid, _ := splitRequestPath(r.URL.Path)
-	sess, ok := sessions.Get(sid)
+	sess, ok := app.sessions.Get(sid)
 	if !ok || sess.Container == nil {
 		log.Printf("[%d] [SESSION_NOT_FOUND] [%s]", requestId, sid)
 		return
 	}
 
 	log.Printf("[%d] [CONTAINER_LOGS] [%s]", requestId, sess.Container.ID)
-	rc, err := cli.ContainerLogs(r.Context(), sess.Container.ID, container.LogsOptions{
+	rc, err := app.cli.ContainerLogs(r.Context(), sess.Container.ID, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,

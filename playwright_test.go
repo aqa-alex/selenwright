@@ -28,7 +28,7 @@ func TestPlaywrightSessionTimeout(t *testing.T) {
 
 	waitForPlaywrightSessionCleanup(t, sessionID)
 	waitForChannelReceive(t, cancelCh, time.Second)
-	assert.Equal(t, 0, queue.Used())
+	assert.Equal(t, 0, app.queue.Used())
 }
 
 func TestPlaywrightSessionTrafficKeepsItAlive(t *testing.T) {
@@ -52,16 +52,16 @@ func TestPlaywrightSessionTrafficKeepsItAlive(t *testing.T) {
 		assert.Equal(t, payload, echoedPayload)
 
 		time.Sleep(40 * time.Millisecond)
-		_, ok := sessions.Get(sessionID)
+		_, ok := app.sessions.Get(sessionID)
 		assert.True(t, ok)
 	}
 
 	time.Sleep(40 * time.Millisecond)
-	_, ok := sessions.Get(sessionID)
+	_, ok := app.sessions.Get(sessionID)
 	assert.True(t, ok)
 
 	waitForPlaywrightSessionCleanup(t, sessionID)
-	assert.Equal(t, 0, queue.Used())
+	assert.Equal(t, 0, app.queue.Used())
 }
 
 func TestPlaywrightClientDisconnectCleansUpSession(t *testing.T) {
@@ -78,7 +78,7 @@ func TestPlaywrightClientDisconnectCleansUpSession(t *testing.T) {
 	waitForPlaywrightSessionCleanup(t, sessionID)
 	waitForChannelReceive(t, cancelCh, time.Second)
 	waitForChannelReceive(t, upstream.disconnected, time.Second)
-	assert.Equal(t, 0, queue.Used())
+	assert.Equal(t, 0, app.queue.Used())
 }
 
 func TestPlaywrightUpstreamDisconnectCleansUpSession(t *testing.T) {
@@ -99,18 +99,18 @@ func TestPlaywrightUpstreamDisconnectCleansUpSession(t *testing.T) {
 
 	waitForPlaywrightSessionCleanup(t, sessionID)
 	waitForChannelReceive(t, cancelCh, time.Second)
-	assert.Equal(t, 0, queue.Used())
+	assert.Equal(t, 0, app.queue.Used())
 }
 
 func stubPlaywrightManager(t *testing.T, upstream *mockPlaywrightServer) <-chan struct{} {
 	t.Helper()
 
-	previousManager := manager
-	previousTimeout := timeout
+	previousManager := app.manager
+	previousTimeout := app.timeout
 	cancelCh := make(chan struct{}, 1)
 
-	timeout = 100 * time.Millisecond
-	manager = &StaticService{
+	app.timeout = 100 * time.Millisecond
+	app.manager = &StaticService{
 		Available: true,
 		StartedService: service.StartedService{
 			PlaywrightURL: upstream.URL(),
@@ -129,8 +129,8 @@ func stubPlaywrightManager(t *testing.T, upstream *mockPlaywrightServer) <-chan 
 			_, _, ok := currentPlaywrightSession()
 			return !ok
 		}, time.Second, 10*time.Millisecond)
-		manager = previousManager
-		timeout = previousTimeout
+		app.manager = previousManager
+		app.timeout = previousTimeout
 	})
 
 	return cancelCh
@@ -162,7 +162,7 @@ func waitForPlaywrightSessionCleanup(t *testing.T, sessionID string) {
 	t.Helper()
 
 	assert.Eventually(t, func() bool {
-		_, ok := sessions.Get(sessionID)
+		_, ok := app.sessions.Get(sessionID)
 		return !ok
 	}, 2*time.Second, 10*time.Millisecond)
 }
@@ -172,7 +172,7 @@ func waitForChannelReceive(t *testing.T, ch <-chan struct{}, timeout time.Durati
 
 	select {
 	case <-ch:
-	case <-time.After(timeout):
+	case <-time.After(app.timeout):
 		t.Fatalf("timed out waiting for channel receive")
 	}
 }
@@ -180,7 +180,7 @@ func waitForChannelReceive(t *testing.T, ch <-chan struct{}, timeout time.Durati
 func currentPlaywrightSession() (string, *session.Session, bool) {
 	var sessionID string
 	var sess *session.Session
-	sessions.Each(func(id string, current *session.Session) {
+	app.sessions.Each(func(id string, current *session.Session) {
 		if sess != nil || current == nil || current.Protocol != session.ProtocolPlaywright {
 			return
 		}
@@ -192,7 +192,7 @@ func currentPlaywrightSession() (string, *session.Session, bool) {
 
 func cancelPlaywrightSessions() {
 	var active []*session.Session
-	sessions.Each(func(_ string, current *session.Session) {
+	app.sessions.Each(func(_ string, current *session.Session) {
 		if current == nil || current.Protocol != session.ProtocolPlaywright || current.Cancel == nil {
 			return
 		}

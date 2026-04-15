@@ -12,16 +12,16 @@ import (
 // any of these shapes; none must crash the selenwright process.
 func TestProcessBody_DoesNotPanicOnMalformedJSON(t *testing.T) {
 	cases := map[string]string{
-		"session-id-not-string":        `{"sessionId": 42}`,
-		"value-not-object":             `{"value": 42}`,
-		"capabilities-not-object":      `{"value": {"capabilities": 42}}`,
-		"session-id-in-value-not-str":  `{"value": {"sessionId": 42, "capabilities": {}}}`,
-		"session-id-in-value-null":     `{"value": {"sessionId": null, "capabilities": {}}}`,
-		"browserVersion-not-string":    `{"value": {"sessionId": "abc", "capabilities": {"browserVersion": 42}}}`,
-		"capabilities-nested-garbage":  `{"value": {"sessionId": "abc", "capabilities": [1,2,3]}}`,
-		"entirely-empty-object":        `{}`,
-		"only-null-value":              `{"value": null}`,
-		"array-at-root":                `[1,2,3]`,
+		"session-id-not-string":       `{"sessionId": 42}`,
+		"value-not-object":            `{"value": 42}`,
+		"capabilities-not-object":     `{"value": {"capabilities": 42}}`,
+		"session-id-in-value-not-str": `{"value": {"sessionId": 42, "capabilities": {}}}`,
+		"session-id-in-value-null":    `{"value": {"sessionId": null, "capabilities": {}}}`,
+		"browserVersion-not-string":   `{"value": {"sessionId": "abc", "capabilities": {"browserVersion": 42}}}`,
+		"capabilities-nested-garbage": `{"value": {"sessionId": "abc", "capabilities": [1,2,3]}}`,
+		"entirely-empty-object":       `{}`,
+		"only-null-value":             `{"value": null}`,
+		"array-at-root":               `[1,2,3]`,
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {

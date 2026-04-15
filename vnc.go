@@ -14,7 +14,7 @@ import (
 
 var vncUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return originChecker.Check(r)
+		return app.originChecker.Check(r)
 	},
 }
 
@@ -28,7 +28,7 @@ func vnc(w http.ResponseWriter, r *http.Request) {
 	defer wsconn.Close()
 
 	sid, _ := splitRequestPath(r.URL.Path)
-	sess, ok := sessions.Get(sid)
+	sess, ok := app.sessions.Get(sid)
 	if !ok {
 		log.Printf("[%d] [SESSION_NOT_FOUND] [%s]", requestId, sid)
 		return

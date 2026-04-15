@@ -19,9 +19,9 @@ import (
 
 func withSourceTrust(t *testing.T, st *protect.SourceTrust) {
 	t.Helper()
-	prev := sourceTrust
-	sourceTrust = st
-	t.Cleanup(func() { sourceTrust = prev })
+	prev := app.sourceTrust
+	app.sourceTrust = st
+	t.Cleanup(func() { app.sourceTrust = prev })
 }
 
 func TestSourceTrust_RejectsRequestWithoutSecret(t *testing.T) {

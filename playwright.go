@@ -38,13 +38,13 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[%d] [BAD_PLAYWRIGHT_PATH] [%v]", requestId, err)
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		queue.Drop()
+		app.queue.Drop()
 		return
 	}
 	if !gwebsocket.IsWebSocketUpgrade(r) {
 		log.Printf("[%d] [BAD_PLAYWRIGHT_REQUEST] [expected websocket upgrade]", requestId)
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		queue.Drop()
+		app.queue.Drop()
 		return
 	}
 
@@ -63,23 +63,23 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 			caps.ScreenResolution = screenResolution
 		}
 	}
-	if logOutputDir != "" && saveAllLogs {
-		caps.LogName = getTemporaryFileName(logOutputDir, logFileExtension)
+	if app.logOutputDir != "" && app.saveAllLogs {
+		caps.LogName = getTemporaryFileName(app.logOutputDir, logFileExtension)
 	}
 
 	identity, _ := protect.IdentityFromContext(r.Context())
-	if err := session.Sanitize(&caps, session.CapsPolicy(capsPolicyFlag), identity.IsAdmin); err != nil {
+	if err := session.Sanitize(&caps, session.CapsPolicy(app.capsPolicyFlag), identity.IsAdmin); err != nil {
 		log.Printf("[%d] [REJECTED_CAPS] [%v]", requestId, err)
 		jsonerror.InvalidArgument(err).Encode(w)
-		queue.Drop()
+		app.queue.Drop()
 		return
 	}
 
-	starter, ok := manager.Find(caps, requestId)
+	starter, ok := app.manager.Find(caps, requestId)
 	if !ok {
 		log.Printf("[%d] [ENVIRONMENT_NOT_AVAILABLE] [%s] [%s]", requestId, caps.BrowserName(), caps.Version)
 		jsonerror.InvalidArgument(errors.New("Requested environment is not available")).Encode(w)
-		queue.Drop()
+		app.queue.Drop()
 		return
 	}
 
@@ -94,7 +94,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 			earlyCleanup[i]()
 		}
 	}()
-	earlyCleanup = append(earlyCleanup, queue.Drop)
+	earlyCleanup = append(earlyCleanup, app.queue.Drop)
 
 	startedService, err := starter.StartWithCancel()
 	if err != nil {
@@ -136,7 +136,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 
 	upgrader := gwebsocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			return originChecker.Check(r)
+			return app.originChecker.Check(r)
 		},
 	}
 	upgradeHeader := http.Header{}
@@ -161,7 +161,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		Container: startedService.Container,
 		HostPort:  startedService.HostPort,
 		Origin:    startedService.Origin,
-		Timeout:   timeout,
+		Timeout:   app.timeout,
 		Protocol:  session.ProtocolPlaywright,
 		Started:   time.Now(),
 	}
@@ -184,8 +184,8 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 			}
 
 			finalizePlaywrightLog(sess, playwrightEvent, preprocessedID)
-			sessions.Remove(sessionID)
-			queue.Release()
+			app.sessions.Remove(sessionID)
+			app.queue.Release()
 			event.SessionStopped(event.StoppedSession{Event: playwrightEvent})
 
 			switch reason {
@@ -197,15 +197,15 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	sess.Watchdog = session.NewWatchdog(timeout, func() {
+	sess.Watchdog = session.NewWatchdog(app.timeout, func() {
 		cleanup("timeout")
 	})
 	sess.Cancel = func() {
 		cleanup("shutdown")
 	}
 
-	sessions.Put(sessionID, sess)
-	queue.Create()
+	app.sessions.Put(sessionID, sess)
+	app.queue.Create()
 	log.Printf("[%d] [PLAYWRIGHT_SESSION_CREATED] [%s] [%s] [%s] [%.2fs]", requestId, sessionID, browserName, playwrightVersion, info.SecondsSince(sessionStartTime))
 
 	resultCh := make(chan playwrightTunnelResult, 2)
@@ -287,7 +287,7 @@ func newPlaywrightSessionID() (string, error) {
 		}
 
 		sessionID := hex.EncodeToString(randomBytes)
-		if _, exists := sessions.Get(sessionID); exists {
+		if _, exists := app.sessions.Get(sessionID); exists {
 			continue
 		}
 		return sessionID, nil
@@ -312,7 +312,7 @@ func tunnelPlaywrightWebSocket(resultCh chan<- playwrightTunnelResult, source st
 }
 
 func finalizePlaywrightLog(sess *session.Session, playwrightEvent event.Event, preprocessedID string) {
-	if sess == nil || logOutputDir == "" || !saveAllLogs || sess.Caps.LogName == "" {
+	if sess == nil || app.logOutputDir == "" || !app.saveAllLogs || sess.Caps.LogName == "" {
 		return
 	}
 
@@ -320,8 +320,8 @@ func finalizePlaywrightLog(sess *session.Session, playwrightEvent event.Event, p
 	finalLogName := preprocessedID + logFileExtension
 	sess.Caps.LogName = finalLogName
 
-	oldLogName := filepath.Join(logOutputDir, temporaryLogName)
-	newLogName := filepath.Join(logOutputDir, finalLogName)
+	oldLogName := filepath.Join(app.logOutputDir, temporaryLogName)
+	newLogName := filepath.Join(app.logOutputDir, finalLogName)
 	if err := os.Rename(oldLogName, newLogName); err != nil {
 		log.Printf("[%d] [LOG_ERROR] [%s]", playwrightEvent.RequestId, fmt.Sprintf("Failed to rename %s to %s: %v", oldLogName, newLogName, err))
 		return
