@@ -628,9 +628,12 @@ var paths = struct {
 	AdoptBrowser:       "/browsers/adopt",
 	DismissBrowser:     "/browsers/dismiss",
 	RescanBrowsers:     "/browsers/rescan",
+	StackStatus:        "/stack/status",
+	StackPull:          "/stack/pull",
+	StackRecreate:      "/stack/recreate",
 }
 
-var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings, paths.Downloads}
+var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings, paths.Downloads, paths.StackStatus}
 
 func handler() http.Handler {
 	ensureArtifactHistoryManager()
@@ -669,6 +672,9 @@ func handler() http.Handler {
 	root.HandleFunc(paths.AdoptBrowser, adoptBrowser)
 	root.HandleFunc(paths.DismissBrowser, dismissBrowser)
 	root.HandleFunc(paths.RescanBrowsers, rescanBrowsers)
+	root.HandleFunc(paths.StackStatus, get(stackStatusHandler))
+	root.HandleFunc(paths.StackPull, post(stackPullHandler))
+	root.HandleFunc(paths.StackRecreate, post(stackRecreateHandler))
 	root.HandleFunc(paths.Welcome, welcome)
 	metricsOpen := openPaths
 	if app.enableMetrics {
