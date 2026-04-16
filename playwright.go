@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -35,6 +36,127 @@ func metricsReason(reason string) string {
 type playwrightTunnelResult struct {
 	source string
 	err    error
+}
+
+type pwProtoSummary struct {
+	ID     *int64                     `json:"id,omitempty"`
+	GUID   string                     `json:"guid,omitempty"`
+	Method string                     `json:"method,omitempty"`
+	Params map[string]json.RawMessage `json:"params,omitempty"`
+	Error  *pwProtoError              `json:"error,omitempty"`
+	Result json.RawMessage            `json:"result,omitempty"`
+}
+
+type pwProtoError struct {
+	Name    string `json:"name,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+var pwInterestingParams = []string{"url", "selector", "value", "text", "key", "expression", "name", "state"}
+
+const pwMaxValueLen = 120
+
+func extractPlaywrightParams(params map[string]json.RawMessage) string {
+	if len(params) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, key := range pwInterestingParams {
+		raw, ok := params[key]
+		if !ok {
+			continue
+		}
+		var s string
+		if json.Unmarshal(raw, &s) != nil {
+			continue
+		}
+		if s == "" {
+			continue
+		}
+		s = strings.Join(strings.Fields(s), " ")
+		if len(s) > pwMaxValueLen {
+			s = s[:pwMaxValueLen-3] + "..."
+		}
+		parts = append(parts, key+"="+s)
+	}
+	return strings.Join(parts, " ")
+}
+
+func formatPlaywrightFrame(source string, messageType int, payload []byte) string {
+	ts := time.Now().Format("15:04:05.000")
+
+	if messageType != gwebsocket.TextMessage {
+		dir := "c→s"
+		if source != "client" {
+			dir = "s→c"
+		}
+		return fmt.Sprintf("%s ⊞ binary %d bytes %s", ts, len(payload), dir)
+	}
+
+	var msg pwProtoSummary
+	if json.Unmarshal(payload, &msg) != nil {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString(ts)
+
+	switch source {
+	case "client":
+		b.WriteString(" → ")
+		if msg.Method != "" {
+			b.WriteString(msg.Method)
+		}
+		if msg.ID != nil {
+			fmt.Fprintf(&b, " [id=%d]", *msg.ID)
+		}
+		if msg.GUID != "" {
+			fmt.Fprintf(&b, " [%s]", msg.GUID)
+		}
+		if p := extractPlaywrightParams(msg.Params); p != "" {
+			b.WriteString(" ")
+			b.WriteString(p)
+		}
+	default:
+		if msg.Error != nil {
+			b.WriteString(" ✕ ")
+			if msg.ID != nil {
+				fmt.Fprintf(&b, "[id=%d] ", *msg.ID)
+			}
+			errType := msg.Error.Name
+			if errType == "" {
+				errType = msg.Error.Error
+			}
+			if errType != "" {
+				b.WriteString(errType)
+			}
+			if msg.Error.Message != "" {
+				b.WriteString(": ")
+				m := msg.Error.Message
+				if len(m) > pwMaxValueLen {
+					m = m[:pwMaxValueLen-3] + "..."
+				}
+				b.WriteString(strings.Join(strings.Fields(m), " "))
+			}
+		} else if msg.Method != "" {
+			b.WriteString(" ← ")
+			b.WriteString(msg.Method)
+			if msg.GUID != "" {
+				fmt.Fprintf(&b, " [%s]", msg.GUID)
+			}
+		} else if msg.ID != nil {
+			b.WriteString(" ← ")
+			fmt.Fprintf(&b, "[id=%d]", *msg.ID)
+			if len(msg.Result) > 0 {
+				b.WriteString(" ok")
+			}
+		} else {
+			return ""
+		}
+	}
+
+	return b.String()
 }
 
 func playwright(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +201,8 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 	}
 	historyEnabled := ensureArtifactHistoryManager().IsEnabledForNewSessions()
 	configureLogCapture(&caps, historyEnabled)
+
+	logSink := session.NewLogSink()
 
 	identity, _ := protect.IdentityFromContext(r.Context())
 	if err := session.Sanitize(&caps, session.CapsPolicy(app.capsPolicyFlag), identity.IsAdmin); err != nil {
@@ -170,6 +294,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		Caps:                   caps,
 		URL:                    clonePlaywrightURL(upstreamURL),
 		Container:              startedService.Container,
+		LogSink:                logSink,
 		HostPort:               startedService.HostPort,
 		Origin:                 startedService.Origin,
 		Timeout:                app.timeout,
@@ -184,6 +309,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 			if sess.Watchdog != nil {
 				_ = sess.Watchdog.Stop()
 			}
+			logSink.Close()
 			_ = clientConn.Close()
 			_ = upstreamConn.Close()
 			serviceCancel()
@@ -322,6 +448,9 @@ func tunnelPlaywrightWebSocket(resultCh chan<- playwrightTunnelResult, source st
 		if sess != nil && sess.Watchdog != nil {
 			_ = sess.Watchdog.Touch()
 		}
+		if line := formatPlaywrightFrame(source, messageType, payload); line != "" {
+			sess.LogSink.WriteLine(line)
+		}
 	}
 }
 
@@ -335,6 +464,17 @@ func finalizePlaywrightLog(sess *session.Session, playwrightEvent event.Event, p
 	sess.Caps.LogName = finalLogName
 
 	oldLogName := filepath.Join(app.logOutputDir, temporaryLogName)
+
+	sinkContent := sess.LogSink.Content()
+	if sinkContent != "" {
+		f, err := os.OpenFile(oldLogName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			_, _ = f.WriteString("\n--- playwright protocol activity ---\n")
+			_, _ = f.WriteString(sinkContent)
+			_ = f.Close()
+		}
+	}
+
 	newLogName := filepath.Join(app.logOutputDir, finalLogName)
 	if err := os.Rename(oldLogName, newLogName); err != nil {
 		log.Printf("[%d] [LOG_ERROR] [%s]", playwrightEvent.RequestId, fmt.Sprintf("Failed to rename %s to %s: %v", oldLogName, newLogName, err))

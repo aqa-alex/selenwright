@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -199,4 +202,128 @@ func cancelPlaywrightSessions() {
 	for _, sess := range active {
 		sess.Cancel()
 	}
+}
+
+func TestPlaywrightProtocolLogging(t *testing.T) {
+	upstream := newMockPlaywrightServer(t, mockPlaywrightOptions{Echo: true})
+	cancelCh := stubPlaywrightManager(t, upstream)
+
+	previousLogOutputDir := app.logOutputDir
+	app.logOutputDir = t.TempDir()
+	app.saveAllLogs = true
+	t.Cleanup(func() {
+		app.logOutputDir = previousLogOutputDir
+	})
+
+	conn := connectPlaywrightClient(t, "/playwright/chromium/1.49.1")
+	waitForChannelReceive(t, upstream.connected, time.Second)
+	sessionID, sess := waitForPlaywrightSession(t)
+	assert.NotNil(t, sess.LogSink)
+
+	payload := []byte(`{"id":5,"guid":"page-1","method":"Page.goto","params":{"url":"https://example.com"}}`)
+	assert.NoError(t, conn.WriteMessage(gwebsocket.TextMessage, payload))
+	assert.NoError(t, conn.SetReadDeadline(time.Now().Add(time.Second)))
+	_, _, err := conn.ReadMessage()
+	assert.NoError(t, err)
+
+	assert.NoError(t, conn.Close())
+	waitForPlaywrightSessionCleanup(t, sessionID)
+	waitForChannelReceive(t, cancelCh, time.Second)
+
+	logFiles, _ := filepath.Glob(filepath.Join(app.logOutputDir, "*.log"))
+	assert.NotEmpty(t, logFiles)
+
+	logContent, err := os.ReadFile(logFiles[0])
+	assert.NoError(t, err)
+
+	content := string(logContent)
+	assert.Contains(t, content, "--- playwright protocol activity ---")
+	assert.Contains(t, content, "Page.goto")
+	assert.Contains(t, content, "[id=5]")
+	assert.Contains(t, content, "[page-1]")
+	assert.Contains(t, content, "→")
+}
+
+func TestPlaywrightProtocolLoggingBinaryFrame(t *testing.T) {
+	upstream := newMockPlaywrightServer(t, mockPlaywrightOptions{Echo: true})
+	cancelCh := stubPlaywrightManager(t, upstream)
+
+	previousLogOutputDir := app.logOutputDir
+	app.logOutputDir = t.TempDir()
+	app.saveAllLogs = true
+	t.Cleanup(func() {
+		app.logOutputDir = previousLogOutputDir
+	})
+
+	conn := connectPlaywrightClient(t, "/playwright/chromium/1.49.1")
+	waitForChannelReceive(t, upstream.connected, time.Second)
+	sessionID, _ := waitForPlaywrightSession(t)
+
+	binaryPayload := make([]byte, 256)
+	for i := range binaryPayload {
+		binaryPayload[i] = byte(i)
+	}
+	assert.NoError(t, conn.WriteMessage(gwebsocket.BinaryMessage, binaryPayload))
+	assert.NoError(t, conn.SetReadDeadline(time.Now().Add(time.Second)))
+	_, _, err := conn.ReadMessage()
+	assert.NoError(t, err)
+
+	assert.NoError(t, conn.Close())
+	waitForPlaywrightSessionCleanup(t, sessionID)
+	waitForChannelReceive(t, cancelCh, time.Second)
+
+	logFiles, _ := filepath.Glob(filepath.Join(app.logOutputDir, "*.log"))
+	assert.NotEmpty(t, logFiles)
+
+	logContent, err := os.ReadFile(logFiles[0])
+	assert.NoError(t, err)
+
+	content := string(logContent)
+	assert.Contains(t, content, "⊞ binary 256 bytes")
+}
+
+func TestPlaywrightProtocolLoggingErrorFrame(t *testing.T) {
+	upstream := newMockPlaywrightServer(t, mockPlaywrightOptions{Echo: true})
+	cancelCh := stubPlaywrightManager(t, upstream)
+
+	conn := connectPlaywrightClient(t, "/playwright/chromium/1.49.1")
+	waitForChannelReceive(t, upstream.connected, time.Second)
+	sessionID, sess := waitForPlaywrightSession(t)
+
+	payload := []byte(`{"id":6,"error":{"name":"TimeoutError","message":"page closed unexpectedly"}}`)
+	assert.NoError(t, conn.WriteMessage(gwebsocket.TextMessage, payload))
+	assert.NoError(t, conn.SetReadDeadline(time.Now().Add(time.Second)))
+	_, _, err := conn.ReadMessage()
+	assert.NoError(t, err)
+
+	assert.NoError(t, conn.Close())
+	waitForPlaywrightSessionCleanup(t, sessionID)
+	waitForChannelReceive(t, cancelCh, time.Second)
+
+	content := sess.LogSink.Content()
+	assert.Contains(t, content, "✕")
+	assert.Contains(t, content, "[id=6]")
+	assert.Contains(t, content, "TimeoutError")
+	assert.Contains(t, content, "page closed unexpectedly")
+}
+
+func TestPlaywrightLogSinkStreamsInRealTime(t *testing.T) {
+	upstream := newMockPlaywrightServer(t, mockPlaywrightOptions{Echo: true})
+	stubPlaywrightManager(t, upstream)
+
+	conn := connectPlaywrightClient(t, "/playwright/chromium/1.49.1")
+	waitForChannelReceive(t, upstream.connected, time.Second)
+	_, sess := waitForPlaywrightSession(t)
+
+	payload := []byte(`{"id":1,"guid":"Playwright","method":"BrowserType.connect"}`)
+	assert.NoError(t, conn.WriteMessage(gwebsocket.TextMessage, payload))
+	assert.NoError(t, conn.SetReadDeadline(time.Now().Add(time.Second)))
+	_, _, err := conn.ReadMessage()
+	assert.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		return strings.Contains(sess.LogSink.Content(), "BrowserType.connect")
+	}, time.Second, 10*time.Millisecond, "LogSink should contain protocol line before session ends")
+
+	conn.Close()
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aqa-alex/selenwright/info"
+	"github.com/aqa-alex/selenwright/session"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/gorilla/websocket"
@@ -65,6 +66,13 @@ func streamLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sess.Protocol == session.ProtocolPlaywright && sess.LogSink != nil {
+		log.Printf("[%d] [PLAYWRIGHT_LOGS] [%s]", requestId, sid)
+		streamPlaywrightLogs(wsconn, sess.LogSink, r)
+		log.Printf("[%d] [PLAYWRIGHT_LOGS_DISCONNECTED] [%s]", requestId, sid)
+		return
+	}
+
 	log.Printf("[%d] [CONTAINER_LOGS] [%s]", requestId, sess.Container.ID)
 	rc, err := app.cli.ContainerLogs(r.Context(), sess.Container.ID, container.LogsOptions{
 		ShowStdout: true,
@@ -80,4 +88,25 @@ func streamLogs(w http.ResponseWriter, r *http.Request) {
 	ww := &wsBinaryWriter{conn: wsconn}
 	_, _ = stdcopy.StdCopy(ww, ww, rc)
 	log.Printf("[%d] [CONTAINER_LOGS_DISCONNECTED] [%s]", requestId, sid)
+}
+
+func streamPlaywrightLogs(wsconn *websocket.Conn, sink *session.LogSink, r *http.Request) {
+	index := 0
+	for {
+		lines, nextIndex, closed, notify := sink.ReadFrom(index)
+		for _, line := range lines {
+			if err := wsconn.WriteMessage(websocket.BinaryMessage, []byte(line)); err != nil {
+				return
+			}
+		}
+		index = nextIndex
+		if closed {
+			return
+		}
+		select {
+		case <-notify:
+		case <-r.Context().Done():
+			return
+		}
+	}
 }

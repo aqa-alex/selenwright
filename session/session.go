@@ -85,6 +85,7 @@ type Session struct {
 	Container              *Container
 	HostPort               HostPort
 	Origin                 string
+	LogSink                *LogSink
 	Cancel                 func()
 	Timeout                time.Duration
 	Watchdog               *Watchdog
