@@ -1,10 +1,12 @@
 package main
 
 import (
+	"sync"
 	"time"
 
 	ggr "github.com/aerokube/ggr/config"
 	"github.com/aqa-alex/selenwright/config"
+	"github.com/aqa-alex/selenwright/discovery"
 	"github.com/aqa-alex/selenwright/protect"
 	"github.com/aqa-alex/selenwright/service"
 	"github.com/aqa-alex/selenwright/session"
@@ -56,6 +58,7 @@ type Server struct {
 	metricsPath              string
 	logJSON                  bool
 	browserNetwork           string
+	stateDir                 string
 
 	artifactHistoryDir          string
 	artifactHistorySettingsPath string
@@ -65,6 +68,8 @@ type Server struct {
 	manager       service.Manager
 	cli           *client.Client
 	conf          *config.Config
+	adoptedStore  *discovery.AdoptedStore
+	rescanMu      sync.Mutex
 	originChecker *protect.OriginChecker
 	authenticator protect.Authenticator
 	htpasswdAuth  *protect.HtpasswdAuthenticator

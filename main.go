@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI; added label-based browser discovery
 
 package main
 
@@ -29,6 +29,7 @@ import (
 
 	ggr "github.com/aerokube/ggr/config"
 	"github.com/aqa-alex/selenwright/config"
+	"github.com/aqa-alex/selenwright/discovery"
 	"github.com/aqa-alex/selenwright/event"
 	"github.com/aqa-alex/selenwright/jsonerror"
 	"github.com/aqa-alex/selenwright/protect"
@@ -101,6 +102,7 @@ func init() {
 	flag.BoolVar(&app.logJSON, "log-json", false, "Emit logs as one JSON object per line (event, request_id, fields, level, time). Default is the legacy bracketed text format. Parses existing log lines structurally so no call-site changes are required")
 	flag.StringVar(&app.artifactHistoryDir, "artifact-history-dir", "artifacts", "Directory to store artifact history manifests and persisted downloads. Must be writable and ideally on a volume mount so data survives container recreation")
 	flag.StringVar(&app.artifactHistorySettingsPath, "artifact-history-settings", filepath.Join("state", "artifact-history.json"), "JSON file storing artifact history settings (enabled, retentionDays). Survives restarts when placed on a volume mount")
+	flag.StringVar(&app.stateDir, "state-dir", "state", "Directory for persistent state (adopted browser set). Created on startup if missing")
 	flag.StringVar(&app.browserNetwork, "browser-network", "selenwright-browsers", "Dedicated Docker network that browser containers attach to as their primary network. Created on startup with Internal=true (no external gateway) to limit the blast radius of a sandbox escape. Set empty to disable isolation and revert to -container-network as the primary attachment")
 	flag.Parse()
 
@@ -145,14 +147,21 @@ func init() {
 	}
 	app.queue = protect.New(app.limit, app.disableQueue)
 	app.conf = config.NewConfig()
-	err = app.conf.Load(app.confPath, app.logConfPath)
-	if err != nil {
-		log.Fatalf("[-] [INIT] [%s: %v]", os.Args[0], err)
-	}
+	// Browser catalog is loaded later: via label discovery when Docker is enabled,
+	// or via JSON when Docker is disabled. See setupDocker() and the disableDocker branch.
 	onSIGHUP(func() {
-		err := app.conf.Load(app.confPath, app.logConfPath)
-		if err != nil {
-			log.Printf("[-] [INIT] [%s: %v]", os.Args[0], err)
+		app.rescanMu.Lock()
+		defer app.rescanMu.Unlock()
+		if !app.disableDocker && app.adoptedStore != nil {
+			if err := discovery.AssembleCatalog(context.Background(), app.cli, app.adoptedStore, app.conf, app.confPath, app.logConfPath); err != nil {
+				log.Printf("[-] [SIGHUP] [discovery rescan: %v]", err)
+			} else {
+				log.Printf("[-] [SIGHUP] [browser catalog reloaded via discovery]")
+			}
+		} else {
+			if err := app.conf.Load(app.confPath, app.logConfPath); err != nil {
+				log.Printf("[-] [INIT] [%s: %v]", os.Args[0], err)
+			}
 		}
 		if app.htpasswdAuth != nil {
 			if err := app.htpasswdAuth.Reload(); err != nil {
@@ -244,6 +253,9 @@ func init() {
 		CapAddSysAdmin:       app.capAddSysAdmin,
 	}
 	if app.disableDocker {
+		if err := app.conf.Load(app.confPath, app.logConfPath); err != nil {
+			log.Fatalf("[-] [INIT] [%s: %v]", os.Args[0], err)
+		}
 		app.manager = &service.DefaultManager{Environment: &environment, Config: app.conf}
 		if app.logOutputDir != "" && app.captureDriverLogs {
 			log.Fatalf("[-] [INIT] [In drivers mode only one of -capture-driver-logs and -log-output-dir flags is allowed]")
@@ -284,6 +296,13 @@ func init() {
 		} else {
 			log.Printf("[-] [INIT] [Browser network: %s (internal, no external gateway)]", app.browserNetwork)
 		}
+	}
+	app.adoptedStore, err = discovery.NewAdoptedStore(app.stateDir)
+	if err != nil {
+		log.Fatalf("[-] [INIT] [adopted store: %v]", err)
+	}
+	if err := discovery.AssembleCatalog(context.Background(), app.cli, app.adoptedStore, app.conf, app.confPath, app.logConfPath); err != nil {
+		log.Fatalf("[-] [INIT] [browser catalog: %v]", err)
 	}
 	app.manager = &service.DefaultManager{Environment: &environment, Client: app.cli, Config: app.conf}
 }
@@ -586,23 +605,29 @@ func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request
 
 var paths = struct {
 	Video, VNC, Logs, Devtools, Playwright, Download, Downloads, Clipboard, File, Ping, Status, Error, WdHub, Welcome, Config, HistorySettings string
+	DiscoveredBrowsers, AdoptBrowser, DismissBrowser, RescanBrowsers string
+	StackStatus, StackPull, StackRecreate                           string
 }{
-	Video:           "/video/",
-	VNC:             "/vnc/",
-	Logs:            "/logs/",
-	Devtools:        "/devtools/",
-	Playwright:      "/playwright/",
-	Download:        "/download/",
-	Downloads:       "/downloads/",
-	Clipboard:       "/clipboard/",
-	Status:          "/status",
-	File:            "/file",
-	Ping:            "/ping",
-	Error:           "/error",
-	WdHub:           "/wd/hub",
-	Welcome:         "/",
-	Config:          "/config",
-	HistorySettings: "/history/settings",
+	Video:              "/video/",
+	VNC:                "/vnc/",
+	Logs:               "/logs/",
+	Devtools:           "/devtools/",
+	Playwright:         "/playwright/",
+	Download:           "/download/",
+	Downloads:          "/downloads/",
+	Clipboard:          "/clipboard/",
+	Status:             "/status",
+	File:               "/file",
+	Ping:               "/ping",
+	Error:              "/error",
+	WdHub:              "/wd/hub",
+	Welcome:            "/",
+	Config:             "/config",
+	HistorySettings:    "/history/settings",
+	DiscoveredBrowsers: "/browsers/discovered",
+	AdoptBrowser:       "/browsers/adopt",
+	DismissBrowser:     "/browsers/dismiss",
+	RescanBrowsers:     "/browsers/rescan",
 }
 
 var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings, paths.Downloads}
@@ -640,6 +665,10 @@ func handler() http.Handler {
 	if app.enableFileUpload {
 		root.HandleFunc(paths.File, fileUpload)
 	}
+	root.HandleFunc(paths.DiscoveredBrowsers, discoveredBrowsers)
+	root.HandleFunc(paths.AdoptBrowser, adoptBrowser)
+	root.HandleFunc(paths.DismissBrowser, dismissBrowser)
+	root.HandleFunc(paths.RescanBrowsers, rescanBrowsers)
 	root.HandleFunc(paths.Welcome, welcome)
 	metricsOpen := openPaths
 	if app.enableMetrics {

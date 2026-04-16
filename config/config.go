@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added BrowserCatalog snapshot for /config endpoint; added ReloadStatus/Snapshot for artifact history
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added BrowserCatalog snapshot for /config endpoint; added ReloadStatus/Snapshot for artifact history; added Replace() for label-based discovery
 
 package config
 
@@ -193,6 +193,15 @@ func (config *Config) Snapshot() Snapshot {
 			LastReloadError:       config.LastReloadError,
 		},
 	}
+}
+
+// Replace atomically swaps the browser catalog, e.g. when label-based
+// discovery rebuilds the catalog from Docker image labels.
+func (config *Config) Replace(browsers map[string]Versions) {
+	config.lock.Lock()
+	defer config.lock.Unlock()
+	config.Browsers = browsers
+	config.LastReloadTime = time.Now()
 }
 
 // Find - find concrete browser
