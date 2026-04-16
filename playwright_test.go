@@ -208,11 +208,15 @@ func TestPlaywrightProtocolLogging(t *testing.T) {
 	upstream := newMockPlaywrightServer(t, mockPlaywrightOptions{Echo: true})
 	cancelCh := stubPlaywrightManager(t, upstream)
 
+	artifactHistoryMu.Lock()
 	previousLogOutputDir := app.logOutputDir
 	app.logOutputDir = t.TempDir()
 	app.saveAllLogs = true
+	artifactHistoryMu.Unlock()
 	t.Cleanup(func() {
+		artifactHistoryMu.Lock()
 		app.logOutputDir = previousLogOutputDir
+		artifactHistoryMu.Unlock()
 	})
 
 	conn := connectPlaywrightClient(t, "/playwright/chromium/1.49.1")
@@ -248,11 +252,15 @@ func TestPlaywrightProtocolLoggingBinaryFrame(t *testing.T) {
 	upstream := newMockPlaywrightServer(t, mockPlaywrightOptions{Echo: true})
 	cancelCh := stubPlaywrightManager(t, upstream)
 
+	artifactHistoryMu.Lock()
 	previousLogOutputDir := app.logOutputDir
 	app.logOutputDir = t.TempDir()
 	app.saveAllLogs = true
+	artifactHistoryMu.Unlock()
 	t.Cleanup(func() {
+		artifactHistoryMu.Lock()
 		app.logOutputDir = previousLogOutputDir
+		artifactHistoryMu.Unlock()
 	})
 
 	conn := connectPlaywrightClient(t, "/playwright/chromium/1.49.1")

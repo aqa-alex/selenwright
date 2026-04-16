@@ -132,7 +132,15 @@ func TestServerTimeoutsConfigured(t *testing.T) {
 }
 
 func TestDeleteVideoRejectsTraversal(t *testing.T) {
-	parent := filepath.Dir(filepath.Dir(app.videoOutputDir))
+	root := t.TempDir()
+	videoDir := filepath.Join(root, "deep", "video")
+	assert.NoError(t, os.MkdirAll(videoDir, 0o750))
+
+	prev := app.videoOutputDir
+	app.videoOutputDir = videoDir
+	t.Cleanup(func() { app.videoOutputDir = prev })
+
+	parent := filepath.Dir(filepath.Dir(videoDir))
 	canary := filepath.Join(parent, "selenwright-canary.txt")
 	assert.NoError(t, os.WriteFile(canary, []byte("canary"), 0o600))
 	t.Cleanup(func() { _ = os.Remove(canary) })
@@ -153,7 +161,15 @@ func TestDeleteVideoRejectsTraversal(t *testing.T) {
 }
 
 func TestDeleteLogsRejectsTraversal(t *testing.T) {
-	parent := filepath.Dir(filepath.Dir(app.logOutputDir))
+	root := t.TempDir()
+	logDir := filepath.Join(root, "deep", "logs")
+	assert.NoError(t, os.MkdirAll(logDir, 0o750))
+
+	prev := app.logOutputDir
+	app.logOutputDir = logDir
+	t.Cleanup(func() { app.logOutputDir = prev })
+
+	parent := filepath.Dir(filepath.Dir(logDir))
 	canary := filepath.Join(parent, "selenwright-log-canary.log")
 	assert.NoError(t, os.WriteFile(canary, []byte("canary"), 0o600))
 	t.Cleanup(func() { _ = os.Remove(canary) })
