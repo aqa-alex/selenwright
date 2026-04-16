@@ -1,0 +1,185 @@
+== Authentication and Authorization
+
+Selenwright controls who can create browser sessions and what they can do. There are two roles: **regular user** and **admin**. By default authentication is enabled and requires a password file.
+
+=== Quick Start: Adding Users
+
+Selenwright uses a standard htpasswd file with bcrypt passwords. Create it with Docker:
+
+----
+docker run --rm httpd:alpine htpasswd -nbB alice MyPassword123 >> users.htpasswd
+docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 >> users.htpasswd
+----
+
+This creates a file `users.htpasswd` with two users: `alice` and `bob`. To add more users later, run the same command again — it appends to the file.
+
+Pass the `-htpasswd` flag pointing to this file. As a binary:
+
+----
+./selenwright -htpasswd users.htpasswd
+----
+
+As a Docker container — mount the file and pass the flag:
+
+----
+docker run -d --name selenwright             \
+  -p 4444:4444                               \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/users.htpasswd:/etc/selenwright/users.htpasswd:ro \
+  aqa-alex/selenwright:latest-release        \
+  -htpasswd /etc/selenwright/users.htpasswd
+----
+
+Or in Docker Compose:
+
+[source,yaml]
+----
+services:
+  selenwright:
+    image: aqa-alex/selenwright:latest-release
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./users.htpasswd:/etc/selenwright/users.htpasswd:ro
+    command: ["-htpasswd", "/etc/selenwright/users.htpasswd"]
+    ports:
+      - "4444:4444"
+----
+
+Now `alice` and `bob` can create sessions using HTTP Basic Auth:
+
+----
+curl -u alice:MyPassword123 http://localhost:4444/status
+----
+
+=== Making a User an Admin
+
+By default all users are regular (non-admin). To promote users to admin, list them in `-admin-users`:
+
+----
+./selenwright -htpasswd users.htpasswd -admin-users=alice
+----
+
+Now `alice` is admin, `bob` is a regular user. Admins can:
+
+* Access any user's sessions (VNC, logs, devtools)
+* Use restricted capabilities (`env`, `dnsServers`, `hostsEntries`, `additionalNetworks`, `applicationContainers`)
+* Adopt and dismiss browsers in the <<Browser Discovery>> UI
+
+=== Updating Users Without Restart
+
+Edit the htpasswd file (add/remove/change passwords), then send `SIGHUP`:
+
+----
+docker kill -s HUP selenwright
+----
+
+Selenwright reloads the file without dropping running sessions.
+
+=== Disabling Authentication (Development)
+
+For local development you can disable auth entirely:
+
+----
+./selenwright -auth-mode=none -listen=127.0.0.1:4444
+----
+
+This only works on loopback addresses. To force it on a real network address (not recommended), add `-allow-insecure-none`.
+
+=== Authentication Modes
+
+Controlled by `-auth-mode` (default: `embedded`).
+
+==== `embedded` — Built-in BasicAuth
+
+The default mode described above. Uses an htpasswd file with bcrypt hashes.
+
+[cols="1,3"]
+|===
+| Flag | Description
+
+| `-htpasswd` (required)
+| Path to the bcrypt htpasswd file
+
+| `-admin-users`
+| Comma-separated list of admin usernames
+|===
+
+==== `trusted-proxy` — Behind a Reverse Proxy
+
+Use this when an upstream proxy (nginx, Envoy, OAuth2 Proxy) handles authentication and passes the user identity via HTTP headers.
+
+----
+./selenwright \
+  -auth-mode=trusted-proxy \
+  -user-header=X-Forwarded-User \
+  -admin-header=X-Admin
+----
+
+[cols="1,3"]
+|===
+| Flag | Description
+
+| `-user-header` (default `X-Forwarded-User`)
+| Header containing the authenticated username
+
+| `-admin-header` (default `X-Admin`)
+| Header whose value `"true"` marks the caller as admin
+|===
+
+WARNING: Without source trust validation (see below), any client can forge these headers. Always combine with at least one source trust check.
+
+==== `none` — No Authentication
+
+All requests are anonymous non-admin. Restricted to loopback unless `-allow-insecure-none` is set.
+
+=== Source Trust (Protecting the Proxy)
+
+When using `trusted-proxy` mode, you need to ensure that only your proxy can reach Selenwright — otherwise anyone can set the `X-Forwarded-User` header. Source trust adds that protection. When multiple checks are configured, **all** must pass.
+
+[cols="1,3"]
+|===
+| Flag | What it checks
+
+| `-trusted-proxy-secret=mysecret`
+| Request must have `X-Router-Secret: mysecret` header
+
+| `-trusted-proxy-cidr=10.0.0.0/8`
+| Request source IP must be in the listed CIDR range
+
+| `-trusted-proxy-mtls-ca=/path/to/ca.pem`
+| Request must present a client certificate signed by this CA
+|===
+
+.Example: proxy + shared secret + CIDR
+----
+./selenwright \
+  -auth-mode=trusted-proxy \
+  -user-header=X-Forwarded-User \
+  -admin-header=X-Admin \
+  -trusted-proxy-secret=s3cret \
+  -trusted-proxy-cidr=10.0.0.0/8
+----
+
+Source trust configuration is reloaded on `SIGHUP`.
+
+=== Capability Policy
+
+Controlled by `-caps-policy` (default: `strict`).
+
+Some capabilities give the user control over the container environment. Under `strict` policy, these are **admin-only**:
+
+* `env` — environment variables
+* `dnsServers` — custom DNS servers
+* `hostsEntries` — custom /etc/hosts entries
+* `additionalNetworks` — extra Docker networks
+* `applicationContainers` — sidecar containers
+
+Regular users requesting these get a 400 error. Set `-caps-policy=permissive` to allow all users to use all capabilities (legacy behavior).
+
+=== Session Ownership
+
+Every session is bound to the user who created it:
+
+* **Owner** — full access to their own sessions (VNC, logs, devtools, downloads)
+* **Admin** — full access to all sessions
+* **Other users** — 403 Forbidden

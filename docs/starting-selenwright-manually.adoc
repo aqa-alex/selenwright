@@ -2,23 +2,48 @@
 
 [NOTE]
 ====
-. This guide shows how to start Selenwright manually. When in doubt take a look at Configuration Manager first.
+. This guide shows how to start Selenwright manually.
 . This guide assumes you already know how to deal with command line and know basic Docker commands.
 ====
 
-=== Prepare Configuration
+=== Prepare Browsers
 
-. Create `config/browsers.json` configuration file with content:
-+
+There are two ways to populate the browser catalog:
+
+==== Option A: Browser Discovery (recommended)
+
+Pull the browser images you need and let Selenwright discover them automatically:
+
+----
+$ docker pull selenwright/chrome:130.0
+$ docker pull selenwright/firefox:131.0
+----
+
+Start Selenwright — it will detect the pulled images via Docker labels. Then open <<Browser Discovery, Selenwright UI>> and **adopt** the discovered images into the catalog. No configuration file needed.
+
+==== Option B: Manual `browsers.json`
+
+Create `config/browsers.json` configuration file:
+
 .config/browsers.json
 [source,json]
 ----
 {
-    "firefox": {
-        "default": "57.0",
+    "chrome": {
+        "default": "130.0",
         "versions": {
-            "57.0": {
-                "image": "selenwright/firefox:88.0",
+            "130.0": {
+                "image": "selenwright/chrome:130.0",
+                "port": "4444",
+                "path": "/"
+            }
+        }
+    },
+    "firefox": {
+        "default": "131.0",
+        "versions": {
+            "131.0": {
+                "image": "selenwright/firefox:131.0",
                 "port": "4444",
                 "path": "/wd/hub"
             }
@@ -26,44 +51,21 @@
     }
 }
 ----
-+
-NOTE: For Chrome and Opera images "path" is "/" instead of "/wd/hub"
-+
-. Pull browser Docker image:
-+
-`$ docker pull selenwright/firefox:88.0`.
 
-=== Browser Images
-We maintain a set of prebuilt Docker container images for different browsers including:
+NOTE: For Chrome and Opera images `path` is `"/"`. For Firefox images `path` is `"/wd/hub"`. For Playwright images set `"protocol": "playwright"` — see <<Browsers Configuration File>> for all fields.
 
-* https://hub.docker.com/r/selenwright/android/[Android]
-* https://hub.docker.com/r/selenwright/firefox/[Firefox]
-* https://hub.docker.com/r/selenwright/chrome/[Google Chrome]
-* https://hub.docker.com/r/selenwright/opera/[Opera]
+Pull the images:
 
-All these images are free to use. See image tags for a list of supported versions. Build files are stored in https://github.com/aqa-alex/selenwright-images[selenwright-images] repository.
-Feel free to create issues or request images for new versions.
-
-[NOTE]
-====
-. Complete list of browser images can be found in <<Browser Image information>>
-. These images support all UTF-8 locales. This can be important if you want to save files using national alphabet symbols. You can enable your preferred locale in browsers configuration file by setting respective environment variables:
-[source,json]
 ----
-{
-    "chrome": {
-        "default": "64.0",
-        "versions": {
-            "64.0": {
-                "image": "selenwright/chrome:90.0",
-                //...
-                "env" : ["LANG=ru_RU.UTF-8", "LANGUAGE=ru:en", "LC_ALL=ru_RU.UTF-8"]
-            }
-        }
-    }
-}
+$ docker pull selenwright/chrome:130.0
+$ docker pull selenwright/firefox:131.0
 ----
-====
+
+Selenwright falls back to this file when no adopted images are found.
+
+==== Browser Images
+
+TBA
 
 === Start Selenwright
 ==== Option 1: start Selenwright binary
@@ -99,7 +101,7 @@ selenwright.exe
 ==== Option 2: start Selenwright container
 
 If you have https://docs.docker.com/engine/installation/[Docker] installed you can omit downloading binary and run it inside container.
-Prepare config, pull browser image, then run:
+Pull browser images, then run:
 
 .*nix
 [source,bash,subs="attributes+"]
@@ -108,56 +110,7 @@ docker run -d                                   \
 --name selenwright                                 \
 -p 4444:4444                                    \
 -v /var/run/docker.sock:/var/run/docker.sock    \
--v /your/directory/config/:/etc/selenwright/:ro              \
 aqa-alex/selenwright:latest-release
 ----
 
-.Windows PowerShell
-[source,bash,subs="attributes+"]
-----
-> $current = $PWD -replace "\\", "/" -replace "C", "c"  <1>
-> docker run -d                                         `
---name selenwright                                         `
--p 4444:4444                                            `
--v //var/run/docker.sock:/var/run/docker.sock           `
--v ${current}/config/:/etc/selenwright/:ro                 `
-aqa-alex/selenwright:latest-release
-----
-<1> Simple macros to get $PWD with compatible form assumed your directory located on `C:` drive
-
-=== Selenwright under Windows
-
-While we normally recommend to start Selenwright using https://github.com/aerokube/cm/releases/latest[Configuration Manager] on any platform,
-it is possible to start it under Windows manually.
-
-NOTE: Most of the differences are related to Docker, so please refer to Docker documentation on any errors first.
-
-The main difference from Unix operating systems is how volumes are mounted.
-In any Windows paths back slashes (`\`) should be replaced by forward slashes (`/`) and drive letter should be lower cased.
-Also start with forward slash and remove colon.
-
-.Mount directory
-====
-`C:\Users\admin` becomes `/c/Users/admin`
-====
-
-NOTE: Another story with `docker.sock`, which should be mounted as `-v //var/run/docker.sock:/var/run/docker.sock` (note two forward slashes at the beginning)
-
-So assuming that configuration file is located at `C:\Users\admin\selenwright` a typical startup command can look like:
-
-----
-docker run -d --name selenwright                   `
--p 4444:4444                                    `
--v //var/run/docker.sock:/var/run/docker.sock   `
--v /c/Users/admin/selenwright:/etc/selenwright:ro                 `
-aqa-alex/selenwright:latest-release
-----
-
-[TIP]
-====
-You can use simple Powershell macros to automatically get correct `$PWD` value (assumed you are on `C:`):
-
-----
-> $current = $PWD -replace "\\", "/" -replace "C", "c"
-----
-====
+TIP: If you use a manual `browsers.json` (Option B above), mount it as a volume: `-v /your/directory/config/:/etc/selenwright/:ro` and add `-conf /etc/selenwright/browsers.json` to the command.

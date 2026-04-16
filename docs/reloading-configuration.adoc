@@ -20,9 +20,10 @@ $ curl -s http://example.com:4444/ping
 ----
 {
     "uptime": "2m46.854829503s",
-    "lastReloadTime": "2017-05-12 12:33:06.322038542 +0300 MSK",
-    "numRequests": 42
+    "lastReloadTime": "2026-04-16T12:33:06+03:00",
+    "numRequests": 42,
+    "version": "HEAD"
 }
 ----
 
-It returns `200 OK` when Selenwright operates normally. Additionally server uptime, last quota reload time and overall number of session requests from service startup are returned in JSON format.
+It returns `200 OK` when Selenwright operates normally. Fields: server uptime, last configuration reload time (RFC3339), total session requests since startup, and build version.

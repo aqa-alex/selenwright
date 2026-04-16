@@ -3,14 +3,12 @@
 === Start Selenwright
 
 . Make sure you have recent https://www.docker.com/[Docker] version installed.
-. Download https://github.com/aerokube/cm/releases/latest[Configuration Manager] (Selenwright quick installation binary) for your platform from https://github.com/aerokube/cm/releases/latest[releases] page.
+. Download Selenwright binary for your platform from https://github.com/aqa-alex/selenwright/releases/latest[releases] page.
 . On Linux or Mac give execution permissions to binary:
 
-    $ chmod +x cm
+    $ chmod +x selenwright
 
-. Run one command to start Selenwright:
-
-    $ ./cm selenwright start --vnc
+. Run Selenwright:
 +
 [WARNING]
 ====
@@ -22,9 +20,7 @@ $ sudo usermod -aG docker $USER
 ====
 +
 
-. Optionally run one more command to start Selenwright UI:
-
-    $ ./cm selenwright-ui start
+. Optionally start https://github.com/aqa-alex/selenwright-ui[Selenwright UI] to see live browser sessions.
 
 === Run Your Tests
 

@@ -85,7 +85,7 @@ videoCodec: "mpeg4"
 To obtain the full list of https://stackoverflow.com/questions/3377300/what-are-all-codecs-and-formats-supported-by-ffmpeg[supported values]:
 +
 ```
-$ docker run -it --rm --entrypoint /usr/bin/ffmpeg selenwright/video-recorder -codecs
+$ docker run -it --rm --entrypoint /usr/bin/ffmpeg selenoid/video-recorder -codecs
 ```
 
 === Saving Session Logs: enableLog, logName
@@ -141,15 +141,24 @@ To achieve this with Selenwright use:
 
 .Type: string
 ----
-timeZone: "Europe/Moscow"
+timeZone: "Europe/Berlin"
 ----
 
 You can find most of available time zones https://en.wikipedia.org/wiki/List_of_tz_database_time_zones[here].
 Without this capability launched browser containers will have the same timezone as Selenwright one.
 
+=== Per-session Container Hostname: containerHostname
+
+Override the hostname of the browser container:
+
+.Type: string
+----
+containerHostname: "my-browser-host"
+----
+
 === Per-session Environment Variables: env
 
-Sometimes you may want to set some environment variables for every test case (for example to test with different default locales). To achieve this pass one more capability: 
+Sometimes you may want to set some environment variables for every test case (for example to test with different default locales). To achieve this pass one more capability:
 
 .Type: array, format: <key>=<value>
 ----
@@ -157,6 +166,8 @@ env: ["LANG=ru_RU.UTF-8", "LANGUAGE=ru:en", "LC_ALL=ru_RU.UTF-8"]
 ----
 
 Environment variables from this capability are appended to variables from configuration file.
+
+NOTE: Under `-caps-policy=strict` (default), the `env`, `dnsServers`, `hostsEntries`, `additionalNetworks`, and `applicationContainers` capabilities are restricted to admin users. See <<Authentication and Authorization>> for details.
 
 === Links to Application Containers: applicationContainers
 
@@ -211,40 +222,6 @@ labels: {"environment": "testing", "build-number": "14353"}
 
 Labels from this capability override labels from browsers configuration file. When `name` capability is specified - it is automatically added as a label to container.
 
-=== Android Skin: skin
-
-For <<Android>> containers you can select emulator skin with capabilities. List of available skins:
-
-.Available Android Skins
-|===
-| Skin | Screen Resolution | DPI
-
-| QVGA | 240x320 | 120
-| WQVGA400 | 240x400 | 120
-| WQVGA432 | 240x432 | 120
-| HVGA | 320x480 | 160
-| WVGA800 | 480x800 | 240
-| WVGA854 | 480x854 | 240
-| WSVGA | 1024x600 | 160
-| WXGA720 | 720x1280 | 320
-| WXGA800 | 1280x800 | 160
-| WXGA800-7in | 800x1280 | 213
-|===
-
-To select a skin - set `skin` capability:
-
-.Type: string, format: <desired-skin>
-----
-skin: "WXGA720"
-----
-
-You can also pass desired screen resolution as follows:
-
-.Type: string, format: <desired-screen-resolution>
-----
-skin: "720x1280"
-----
-
 === S3 Key Pattern: s3KeyPattern
 
 This capability allows to override S3 key pattern (specified by `-s3-key-pattern` flag) used when uploading files to S3.  
@@ -265,7 +242,7 @@ Some Selenium clients allow passing only a limited number of capabilities specif
 {"browserName": "firefox", "version": "57.0", "screenResolution": "1280x1024x24"}
 ----
 
-Selenwright is using `selenoid:options` key to read protocol extension capabilities:
+Selenwright reads the `selenoid:options` key for protocol extension capabilities (kept for backward compatibility with existing test suites):
 
 .Passing Capabilities using Protocol Extensions
 ----

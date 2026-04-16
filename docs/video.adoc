@@ -15,13 +15,13 @@ To use this feature you should:
 . Pull video recorder image once:
 +
 ```
-$ docker pull selenwright/video-recorder:latest-release
+$ docker pull selenoid/video-recorder:latest-release
 ```
 
 . When running Selenwright **in Docker container**:
-.. Mount a directory from the host machine (e.g. `~/.aqa-alex/selenwright/video`) to store video files to `/opt/selenwright/video`.
-.. Pass an additional `OVERRIDE_VIDEO_OUTPUT_DIR` environment variable with absolute path to video directory on host machine. This is required because video recorder container, automatically created by Selenwright should save video to host machine video storage directory.
-. When running Selenwright **as a binary** - videos will be stored in `video` directory inside current working directory.
+.. Mount a host directory to `/opt/selenwright/video/` to persist recordings.
+.. Pass `OVERRIDE_VIDEO_OUTPUT_DIR` with the **host-side** absolute path to the same directory. The video recorder runs in a separate container and needs the host path to write files correctly.
+. When running Selenwright **as a binary** — videos are stored in the `-video-output-dir` directory (default `video`) relative to the working directory.
 +
 .Example Docker Command
 ----
@@ -29,35 +29,10 @@ $ docker run -d                                 \
 --name selenwright                                 \
 -p 4444:4444                                    \
 -v /var/run/docker.sock:/var/run/docker.sock    \
--v /your/directory/config/:/etc/selenwright/:ro              \
--v /your/directory/video/:/opt/selenwright/video/            \
--e OVERRIDE_VIDEO_OUTPUT_DIR=/your/directory/video/       \
+-v /data/video/:/opt/selenwright/video/            \
+-e OVERRIDE_VIDEO_OUTPUT_DIR=/data/video/       \
 aqa-alex/selenwright:latest-release
 ----
-
-TIP: All these actions are automatically done when starting Selenwright via https://github.com/aerokube/cm/releases/latest[Configuration Manager] `selenwright start` command.
-
-=== On Windows
-
-With absolute path your command will look like:
-
-.Windows PowerShell
-[source,bash,subs="attributes+"]
-----
-> docker volume create selenwright-videos
-> $current = $PWD -replace "\\", "/" -replace "C", "c"    <1>
-> docker run -d                                         `
---name selenwright                                         `
--p 4444:4444                                            `
--v //var/run/docker.sock:/var/run/docker.sock           `
--v ${current}/config/:/etc/selenwright/:ro                 `
--v /c/selenwright/video/:/opt/selenwright/video/              ` <2>
--e OVERRIDE_VIDEO_OUTPUT_DIR=/c/selenwright/video/         ` <3>
-aqa-alex/selenwright:latest-release
-----
-<1> Simple macros to get $PWD with compatible form assumed your directory located on `C:` drive
-<2> Should be absolute path in compatible form
-<3> Should be same as in (2)
 
 
 === Downloading Video Files from Selenwright
@@ -80,7 +55,7 @@ http://selenwright-host.example.com:4444/video/
 
 === Deleting Video Files
 
-Selenwright intentionally has no built-in logic to automatically remove old video files. To limit storage space consumption you have two alternatives:
+When <<Artifact History>> is enabled, video files are automatically cleaned up by the retention janitor. Otherwise, to limit storage space consumption you have two alternatives:
 
 . Schedule scripts automatically removing files older than desired date and time. An example command under Unix operating systems can look like:
 +

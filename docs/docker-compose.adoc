@@ -1,17 +1,10 @@
 == Selenwright with Docker Compose
 
-In example https://docs.docker.com/compose/[Docker Compose] configurations below we assume that:
+In example https://docs.docker.com/compose/[Docker Compose] configurations below we assume that you created directories for video and log storage:
 
-. You created a directory `/path/to/config` with <<Browsers Configuration File>> inside named `browsers.json`.
-+
+    $ mkdir -p /data/selenwright/video /data/selenwright/logs
 
-    $ mkdir -p /path/to/config
-
-. You created empty configuration directories for logs and videos:
-+
-
-    $ mkdir -p /path/to/config/logs
-    $ mkdir -p /path/to/config/video
+TIP: A `browsers.json` file is not required — Selenwright discovers browser images via Docker labels. See <<Browser Discovery>>. If you prefer a manual catalog, add `-conf /etc/selenwright/browsers.json` to the command and mount the config directory.
 
 === Option 1. Running Selenwright in default Docker network
 
@@ -25,13 +18,12 @@ services:
     network_mode: bridge
     image: aqa-alex/selenwright:latest-release
     volumes:
-      - "/path/to/config:/etc/selenwright"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "/path/to/config/video:/opt/selenwright/video"
-      - "/path/to/config/logs:/opt/selenwright/logs"
+      - "/data/selenwright/video:/opt/selenwright/video"
+      - "/data/selenwright/logs:/opt/selenwright/logs"
     environment:
-      - OVERRIDE_VIDEO_OUTPUT_DIR=/path/to/config/video
-    command: ["-conf", "/etc/selenwright/browsers.json", "-video-output-dir", "/opt/selenwright/video", "-log-output-dir", "/opt/selenwright/logs"]
+      - OVERRIDE_VIDEO_OUTPUT_DIR=/data/selenwright/video
+    command: ["-video-output-dir", "/opt/selenwright/video", "-log-output-dir", "/opt/selenwright/logs"]
     ports:
       - "4444:4444"
 ----
@@ -59,13 +51,12 @@ services:
       selenwright: null
     image: aqa-alex/selenwright:latest-release
     volumes:
-      - "/path/to/config:/etc/selenwright"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "/path/to/config/video:/opt/selenwright/video"
-      - "/path/to/config/logs:/opt/selenwright/logs"
+      - "/data/selenwright/video:/opt/selenwright/video"
+      - "/data/selenwright/logs:/opt/selenwright/logs"
     environment:
-      - OVERRIDE_VIDEO_OUTPUT_DIR=/path/to/config/video
-    command: ["-conf", "/etc/selenwright/browsers.json", "-video-output-dir", "/opt/selenwright/video", "-log-output-dir", "/opt/selenwright/logs", "-container-network", "selenwright"]
+      - OVERRIDE_VIDEO_OUTPUT_DIR=/data/selenwright/video
+    command: ["-video-output-dir", "/opt/selenwright/video", "-log-output-dir", "/opt/selenwright/logs", "-container-network", "selenwright"]
     ports:
       - "4444:4444"
 ----

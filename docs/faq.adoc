@@ -1,17 +1,5 @@
 == Frequently Asked Questions
 
-=== Selenwright in Kubernetes
-
-We are very frequently asked whether it is possible to run Selenwright in https://kubernetes.io[Kubernetes] cluster. The answer is - **it is possible but we do not recommend doing this**:
-
-. Selenwright can **only** work directly with https://docs.docker.com/engine/api/latest/[Docker API] and was created to be run on a workstation or a virtual machine with Docker installed.
-. Kubernetes contrarily has a completely different https://kubernetes.io/docs/concepts/overview/kubernetes-api/[API] and **can be using Docker** as a container runtime backend. In some clusters https://github.com/rkt/rkt[rkt] is used instead of Docker and in that case Selenwright will not work.
-. Even if Selenwright works - **all browser containers will be started on the same Kubernetes node** where it is running.
-. So far as Selenwright is using Docker API directly - Kubernetes will not be aware of additional containers started by Selenwright. This is dangerous and **can potentially lead to overloaded Kubernetes nodes**.
-. You can only have **one Selenwright replica maximum**. This is because Selenwright internally stores a list of running sessions in memory.
-
-If you need Selenium in Kubernetes or https://www.openshift.com/[Openshift], we have a separate solution called https://aerokube.com/moon/[Moon].
-
 === Logs and Dirs
 
 **Where are Selenwright logs?**
@@ -26,7 +14,7 @@ To follow the logs add one more flag:
 
 **Where are recorded videos stored?**
 
-Default location when installed with `cm` is `~/.aqa-alex/selenwright/video` or `C:\Users\<user>\.aerokube\selenwright\video`.
+Videos are saved to the directory specified by `-video-output-dir` flag (default `video` relative to the working directory). When running in Docker, mount a host directory to this path — see <<Video Recording>> for details.
 
 === Limits and Timeouts
 
@@ -56,32 +44,7 @@ This depends on your tests. We recommend to start with 1 CPU and 1 Gb of memory 
 
 The only difference between these images - is a running VNC server (`x11vnc`) consuming approximately 20 Megabytes of RAM in idle state which is negligible compared to browser memory consumption.
 
-**VNC is consuming all my container CPU**
-
-On RedHat-based distributions you should set `LimitNOFILE=1048576` for `containerd.service`
-
 === Features not Working
-
-**Selenwright does not start: open config/browsers.json: no such file or directory**
-
-This usually happens when Selenwright is started in Docker container with custom command-line arguments, e.g.:
-
-    $ docker run <some-args> aqa-alex/selenwright:some-version -limit 10
-
-In that case you have to specify path to configuration file explicitly (`cm` tool does this automatically):
-
-    $ docker run <some-args> aqa-alex/selenwright:some-version -limit 10 -conf /etc/selenwright/browsers.json
-
-**Getting error: create container: Error response from daemon: client version 1.36 is too new**
-
-You have to run Selenwright binary \ container with `DOCKER_API_VERSION` variable specifying your Docker API version. `cm` tool does this automatically for you. To determine API version type:
-
-    $ docker version | grep API
-
-Then run Selenwright like the following:
-
-    $ DOCKER_API_VERSION=1.32 ./selenwright <rest-of-args> # As a binary
-    $ docker run -e DOCKER_API_VERSION=1.32 <rest-of-args> aqa-alex/selenwright:some-version # As Docker container
 
 **Video feature not working**
 
@@ -105,8 +68,5 @@ You are using `driver.close()` instead of `driver.quit()` and just closed the la
 
 **Can Selenwright pull browser images automatically?**
 
-No, we did not implement this feature intentionally. We consider that all such cluster maintenance tasks can influence performance and stability when done automatically.
+Selenwright does not auto-pull images during session creation to avoid unpredictable latency under load. However, you can use the <<Browser Discovery>> feature to scan images already present on the host and adopt them into the catalog. For stack-wide updates, see <<Docker Compose Stack Management>>.
 
-**Is it possible to run Selenwright in Docker macvlan network?**
-
-Yes, this is possible. See the following https://github.com/aqa-alex/selenwright/issues/795[Github issue] for possible solutions.

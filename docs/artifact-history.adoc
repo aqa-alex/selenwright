@@ -1,0 +1,59 @@
+== Artifact History
+
+Selenwright can track and persist session artifacts (logs, videos, browser downloads) with configurable retention. This enables operators to browse and retrieve artifacts from past sessions through the UI or API.
+
+=== How It Works
+
+. When a session ends, Selenwright creates a **manifest** containing session metadata (browser, version, protocol, user, timestamps).
+. If the session produced artifacts (log files, video recordings), they are linked in the manifest.
+. For **Selenium** sessions, browser downloads from `/home/selenium/Downloads` inside the container are captured via `docker cp` and stored alongside other artifacts. If the path does not exist (e.g. in Playwright images), the capture step is silently skipped.
+. For **Playwright** sessions, file downloads are handled natively by the Playwright protocol — the file content is streamed to the client via WebSocket (`page.download()`), so there is nothing to capture from the container.
+. A background **janitor** process runs every 3 hours and removes artifacts older than the configured retention period.
+
+=== Configuration
+
+[cols="1,3"]
+|===
+| Flag | Description
+
+| `-artifact-history-dir`
+| Directory to store artifact history manifests and persisted downloads (default `artifacts`). Should be on a volume mount so data survives container recreation.
+
+| `-artifact-history-settings`
+| JSON file storing artifact history settings (default `state/artifact-history.json`). Survives restarts when placed on a volume mount.
+|===
+
+=== Settings Endpoint
+
+----
+GET /history/settings
+----
+
+Returns the current artifact history configuration:
+
+* `enabled` -- whether artifact history is active
+* `retentionDays` -- how many days to keep artifacts (1--365, default 7)
+
+----
+PUT /history/settings
+Content-Type: application/json
+
+{"enabled": true, "retentionDays": 14}
+----
+
+Updates artifact history settings. Changes take effect immediately.
+
+This endpoint does not require authentication (open path).
+
+=== Browsing Artifacts
+
+Persisted downloads are served at:
+
+----
+GET /downloads/
+GET /downloads/?json
+----
+
+The `?json` parameter returns a JSON listing instead of the HTML directory view. Individual files can be downloaded directly by path.
+
+Log files and videos are available at their respective endpoints (`/logs/`, `/video/`) as documented in <<Saving Session Logs>> and <<Video Recording>>.

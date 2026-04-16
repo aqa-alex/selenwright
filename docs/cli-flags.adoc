@@ -1,72 +1,221 @@
 == Selenwright CLI Flags
 
-The following flags are supported by `selenwright` command:
+The following flags are supported by `selenwright` command.
+
+=== Server & Network
 
 ----
--capture-driver-logs
-    Whether to add driver process logs to Selenwright output
--conf string
-    Browsers configuration file (default "config/browsers.json")
--container-network string
-    Network to be used for containers (default "default")
--cpu value
-    Containers cpu limit as float e.g. 0.2 or 1.0
--disable-docker
-    Disable docker support
--disable-privileged
-    Whether to disable privileged container mode
--disable-queue
-    Disable wait queue
--enable-file-upload
-    File upload support
--graceful-period duration
-    graceful shutdown period in time.Duration format, e.g. 300s or 500ms (default 5m0s)
--limit int
-    Simultaneous container runs (default 5)
 -listen string
     Network address to accept connections (default ":4444")
--log-conf string
-    Container logging configuration file
--log-output-dir string
-    Directory to save session log to
+-allowed-origins string
+    Comma-separated list of allowed Origin values for WebSocket upgrades
+    (devtools, playwright, vnc, logs). Empty (default) keeps permissive
+    behavior; '*' is explicit allow-all. Recommended: configure to your
+    CI/QA hosts to defend against Cross-Site WebSocket Hijacking
+----
+
+=== Authentication
+
+----
+-auth-mode string
+    Authentication mode: 'embedded', 'trusted-proxy', or 'none'
+    (default "embedded"). See <<Authentication and Authorization>> for details
+-htpasswd string
+    Path to bcrypt-format htpasswd file used by -auth-mode=embedded.
+    Generate with: htpasswd -B users.htpasswd alice
+-admin-users string
+    Comma-separated list of usernames treated as admin in
+    -auth-mode=embedded
+-user-header string
+    Header to read for authenticated user identity in
+    -auth-mode=trusted-proxy (default "X-Forwarded-User")
+-admin-header string
+    Header in -auth-mode=trusted-proxy whose value 'true' marks the
+    request as administrative (default "X-Admin")
+-allow-insecure-none
+    Permit -auth-mode=none on a non-loopback listen address
+-caps-policy string
+    Capability policy: 'strict' rejects dangerous caps (env, dnsServers,
+    hostsEntries, additionalNetworks, applicationContainers) for
+    non-admin callers; 'permissive' preserves legacy behavior
+    (default "strict")
+----
+
+=== Source Trust (Upstream Proxy Validation)
+
+When set, these checks are AND'd together — all configured conditions must pass.
+
+----
+-trusted-proxy-secret string
+    Shared secret expected in X-Router-Secret header. Every request must
+    present this value or it is rejected with 401
+-trusted-proxy-cidr string
+    Comma-separated CIDR allow-list for the source IP (e.g.
+    "10.0.0.0/8,192.168.1.0/24")
+-trusted-proxy-mtls-ca string
+    Path to PEM bundle of CAs that issued the trusted client certificate.
+    Requires a verified mTLS client certificate on every request
+----
+
+=== Session Management
+
+----
+-limit int
+    Simultaneous container runs (default 5)
+-timeout duration
+    Session idle timeout in time.Duration format (default 1m0s)
 -max-timeout duration
-    Maximum valid session idle timeout in time.Duration format (default 1h0m0s)
--mem value
-    Containers memory limit e.g. 128m or 1g
--retry-count int
-    New session attempts retry count (default 1)
--save-all-logs
-    Whether to save all logs without considering capabilities
--service-startup-timeout duration
-    Service startup timeout in time.Duration format (default 30s)
+    Maximum valid session idle timeout in time.Duration format
+    (default 1h0m0s)
 -session-attempt-timeout duration
     New session attempt timeout in time.Duration format (default 30s)
 -session-delete-timeout duration
     Session delete timeout in time.Duration format (default 30s)
--timeout duration
-    Session idle timeout in time.Duration format (default 1m0s)
--version
-    Show version and exit
+-service-startup-timeout duration
+    Service startup timeout in time.Duration format (default 30s)
+-retry-count int
+    New session attempts retry count (default 1)
+-graceful-period duration
+    Graceful shutdown period in time.Duration format (default 5m0s)
+-disable-queue
+    Disable wait queue
+----
+
+=== Browser Configuration
+
+----
+-conf string
+    Browsers configuration file (default "config/browsers.json")
+-log-conf string
+    Container logging configuration file
+-default-enable-vnc
+    Default value for the enableVNC capability when a client does not
+    pass enableVNC. Clients can still opt out per session
+----
+
+=== Container Runtime
+
+----
+-disable-docker
+    Disable docker support (driver-only mode)
+-container-network string
+    Network to be used for containers (default "default")
+-browser-network string
+    Dedicated Docker network for browser containers. Created on startup
+    with Internal=true (no external gateway) to limit blast radius of
+    sandbox escapes. Set empty to disable isolation and revert to
+    -container-network (default "selenwright-browsers")
+-privileged
+    Run browser containers in privileged mode (default false)
+-cap-add-sys-admin
+    Add the SYS_ADMIN Linux capability to browser containers without
+    full -privileged. Chrome's user-namespace sandbox requires it
+-capture-driver-logs
+    Whether to add driver process logs to Selenwright output
+-mem value
+    Containers memory limit e.g. 128m or 1g
+-cpu value
+    Containers cpu limit as float e.g. 0.2 or 1.0
+----
+
+=== Video Recording
+
+----
 -video-output-dir string
     Directory to save recorded video to (default "video")
 -video-recorder-image string
-    Image to use as video recorder (default "selenwright/video-recorder:latest-release")
+    Image to use as video recorder
+    (default "selenoid/video-recorder:latest-release")
 ----
 
-For example:
+=== Logs
+
+----
+-log-output-dir string
+    Directory to save session log to
+-save-all-logs
+    Whether to save all logs without considering capabilities
+-log-json
+    Emit logs as one JSON object per line (event, request_id, fields,
+    level, time). Default is the legacy bracketed text format
+----
+
+=== Artifact History
+
+----
+-artifact-history-dir string
+    Directory to store artifact history manifests and persisted downloads
+    (default "artifacts")
+-artifact-history-settings string
+    JSON file storing artifact history settings (enabled, retentionDays)
+    (default "state/artifact-history.json")
+-state-dir string
+    Directory for persistent state such as adopted browser set. Created
+    on startup if missing (default "state")
+----
+
+=== File Upload
+
+----
+-enable-file-upload
+    File upload support
+----
+
+=== Request Limits
+
+----
+-max-create-body-bytes int
+    Maximum POST body size for /session create requests in bytes
+    (default 4194304 / 4 MiB)
+-max-upload-body-bytes int
+    Maximum POST body size for /file upload requests in bytes
+    (default 268435456 / 256 MiB)
+-max-upload-extracted-bytes int
+    Maximum total extracted size for /file uploaded zip archives in bytes
+    (default 1073741824 / 1 GiB)
+-max-ws-message-bytes int
+    Maximum single WebSocket message size in bytes for Playwright,
+    DevTools, VNC and log streams. 0 disables the limit
+    (default 67108864 / 64 MiB)
+----
+
+=== Metrics & Observability
+
+----
+-enable-metrics
+    Expose a Prometheus-compatible /metrics endpoint (queue depth,
+    session counts, duration histogram, auth/caps rejection counters)
+-metrics-path string
+    Path the Prometheus metrics endpoint is served on (default "/metrics")
+-event-workers int
+    Number of worker goroutines that dispatch session-lifecycle events
+    (FileCreated, SessionStopped) (default 16)
+----
+
+=== Misc
+
+----
+-version
+    Show version and exit
+----
+
+=== Usage Example
+
+As a binary:
+
 ```
-$ ./selenwright -conf ~/.aqa-alex/selenwright/browsers.json -limit 10
+$ ./selenwright -limit 10
 ```
-When using Selenwright inside Docker container these flags are passed like the following:
+
+As a Docker container:
 
 [source,bash,subs="attributes+"]
 ----
-# docker run -d --name selenwright                     \
+$ docker run -d --name selenwright                  \
     -p 4444:4444                                    \
-    -v ~/.aqa-alex/selenwright/:/etc/selenwright/:ro      \
     -v /var/run/docker.sock:/var/run/docker.sock    \
-    aqa-alex/selenwright:latest-release                \
-    -conf /etc/selenwright/browsers.json -limit 10 -video-output-dir /opt/selenwright/video/
+    aqa-alex/selenwright:latest-release             \
+    -limit 10
 ----
 
 === S3 CLI Flags
@@ -84,7 +233,7 @@ The following flags are supported by `selenwright` command when compiled with S3
 -s3-force-path-style
     Force path-style addressing for file upload
 -s3-include-files string
-    Pattern used to match and include files    
+    Pattern used to match and include files
 -s3-keep-files
     Do not remove uploaded files
 -s3-key-pattern string

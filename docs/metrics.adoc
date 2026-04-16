@@ -1,0 +1,45 @@
+== Metrics and Observability
+
+=== Prometheus Metrics
+
+Selenwright can expose a Prometheus-compatible metrics endpoint for monitoring session usage and server health.
+
+----
+./selenwright -enable-metrics
+----
+
+[cols="1,3"]
+|===
+| Flag | Description
+
+| `-enable-metrics`
+| Expose the metrics endpoint (disabled by default)
+
+| `-metrics-path`
+| Path for the metrics endpoint (default `/metrics`)
+|===
+
+.Exposed metrics:
+* Queue depth and pending requests
+* Active session count
+* Session duration histogram
+* Authentication failure counter (by auth mode)
+* Capability policy rejection counter
+
+The metrics endpoint is **not** gated by the configured authenticator. It is expected to live behind the same network boundary as the Prometheus scraper.
+
+=== Structured Logging
+
+----
+./selenwright -log-json
+----
+
+When `-log-json` is set, Selenwright emits logs as one JSON object per line with fields: `event`, `request_id`, `fields`, `level`, `time`. Default is the legacy bracketed text format.
+
+=== Event Workers
+
+----
+./selenwright -event-workers=16
+----
+
+The `-event-workers` flag (default 16) controls the number of goroutines that dispatch session-lifecycle events (`FileCreated`, `SessionStopped`) to registered listeners such as S3 upload handlers. Bounds fan-out so a single slow listener cannot leak goroutines.

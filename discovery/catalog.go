@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strings"
 
@@ -35,8 +36,10 @@ func AssembleCatalog(ctx context.Context, lister ImageLister, store *AdoptedStor
 
 	// Fallback to JSON when no adopted labels are present.
 	if confPath != "" {
-		log.Printf("[-] [DISCOVERY] [No adopted images found, falling back to %s]", confPath)
-		return cfg.Load(confPath, logConfPath)
+		if _, err := os.Stat(confPath); err == nil {
+			log.Printf("[-] [DISCOVERY] [No adopted images found, falling back to %s]", confPath)
+			return cfg.Load(confPath, logConfPath)
+		}
 	}
 
 	log.Printf("[-] [DISCOVERY] [No browsers discovered; no -conf fallback]")

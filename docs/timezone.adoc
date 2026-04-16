@@ -7,8 +7,9 @@ To set custom timezone pass `TZ` environment variable to Docker:
 ----
 $ docker run -d --name selenwright                     \
     -p 4444:4444                                    \
-    -e TZ=Europe/Moscow                             \
-    -v /etc/selenwright:/etc/selenwright:ro               \
+    -e TZ=Europe/Berlin                             \
     -v /var/run/docker.sock:/var/run/docker.sock    \
     aqa-alex/selenwright:latest-release
 ----
+
+NOTE: This sets the timezone for the Selenwright process itself (affects log timestamps, `/ping` response, etc.). To set timezone per browser session, use the `timeZone` capability — see <<Per-session Time Zone: timeZone>>.

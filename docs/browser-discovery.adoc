@@ -1,0 +1,72 @@
+== Browser Discovery
+
+Selenwright can automatically discover browser images available on the Docker host by scanning image labels. This allows operators to manage the browser catalog from the UI without manually editing `browsers.json`.
+
+=== How It Works
+
+. Selenwright scans all local Docker images for well-known labels that identify browser name and version.
+. Images that are not yet in the catalog appear as "discovered" (unadopted).
+. An admin user can **adopt** a discovered image to add it to the live browser catalog, or **dismiss** it to hide it from the list.
+. Adoption state is persisted to `adopted.json` inside the `-state-dir` directory (default `state/`).
+. After adoption or dismissal, Selenwright rebuilds the in-memory browser catalog automatically.
+
+=== API Endpoints
+
+All mutation endpoints require **admin** access (see <<Authentication and Authorization>>).
+
+==== List Discovered Images
+
+----
+GET /browsers/discovered
+----
+
+Returns a JSON array of Docker images with browser labels that have not yet been adopted. Each entry contains:
+
+* `name` -- browser name (e.g. "chrome", "firefox")
+* `version` -- browser version
+* `digest` -- image digest (used as identifier)
+* `repoTags` -- image repository tags
+
+==== Adopt an Image
+
+----
+POST /browsers/adopt
+Content-Type: application/json
+
+{"digest": "<image-digest>"}
+----
+
+Adds the image to the browser catalog and triggers a catalog rebuild.
+
+==== Dismiss an Image
+
+----
+POST /browsers/dismiss
+Content-Type: application/json
+
+{"digest": "<image-digest>"}
+----
+
+Removes the image from the adopted set and triggers a catalog rebuild.
+
+==== Rescan Images
+
+----
+POST /browsers/rescan
+----
+
+Triggers a manual rescan of Docker images and rebuilds the catalog from the current adopted set. Returns the list of unadopted images.
+
+=== Configuration
+
+[cols="1,3"]
+|===
+| Flag | Description
+
+| `-state-dir`
+| Directory for persistent state including `adopted.json` (default `state`). Created on startup if missing.
+|===
+
+=== Reloading
+
+Sending `SIGHUP` to the Selenwright process also triggers a catalog rebuild from the current adopted set.

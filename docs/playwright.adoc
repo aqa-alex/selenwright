@@ -18,7 +18,7 @@ ws://<host>:4444/playwright/<browser>/<playwright-version>
 
 Where:
 
-* `<browser>` matches a top-level browser name in `browsers.json`, for example `chromium`.
+* `<browser>` matches a top-level browser name in the browser catalog (e.g. `chromium`, `firefox`, `webkit`).
 * `<playwright-version>` matches the configured browser version entry.
 
 This route accepts WebSocket connections only.
@@ -39,7 +39,7 @@ Companion Playwright images are external to this repository. To work with Selenw
 
 * Pin the image tag to a Playwright version.
 * Run a Playwright server, not Selenium.
-* Expose one fixed port and declare that same port in `browsers.json`.
+* Expose one fixed port and declare that same port in the browser catalog.
 * Expose one fixed WebSocket path. The default path is `/`.
 * Run under `--init` or an equivalent init process so child processes are reaped correctly.
 * Define Docker `HEALTHCHECK`.
@@ -54,7 +54,7 @@ For example, a client from Playwright `1.44.x` should connect to an image built 
 
 === Configuration Example
 
-An example `browsers.json` entry for a native Playwright image:
+An example browser catalog entry for a native Playwright image (via `browsers.json` or <<Browser Discovery>>):
 
 [source,javascript]
 ----
@@ -95,9 +95,20 @@ PW_TEST_CONNECT_WS_ENDPOINT=ws://selenwright.example.com:4444/playwright/chromiu
 
 `PW_TEST_CONNECT_WS_ENDPOINT` is only a user-side convention for your own Playwright config or test launcher. It is not a built-in Selenwright environment variable.
 
-=== V1 Scope Limits
+=== File Operations
 
-The initial Playwright support intentionally stays narrow:
+File uploads (`page.setInputFiles()`) and downloads (`page.download()`) work natively through the Playwright WebSocket protocol. Selenwright proxies the connection transparently — no additional configuration is needed.
 
-* No Selenwright-specific query, header, or capability expansion is added for Playwright sessions.
-* No claim is made that Playwright sessions have feature parity with Selenwright WebDriver extensions such as file upload, clipboard access, or file download.
+NOTE: The Selenwright-specific `/file` and `/download/` HTTP endpoints are WebDriver-only and are not used by Playwright sessions. Use native Playwright APIs for file operations.
+
+=== Capabilities
+
+A subset of <<Special Capabilities>> can be passed as query parameters on the WebSocket URL:
+
+----
+ws://host:4444/playwright/chromium/1.44.1?enableVNC=true&name=myTest&screenResolution=1280x1024
+----
+
+Supported: `enableVNC`, `name`, `screenResolution`.
+
+Session logs (Playwright protocol messages) are captured automatically when artifact history is enabled.

@@ -1,6 +1,6 @@
 == Browsers Configuration File
 
-Selenwright requires a simple JSON configuration file of the following format:
+Selenwright can be configured with an optional JSON file that defines available browsers. When <<Browser Discovery>> is used, this file is not required — the browser catalog is built from adopted Docker image labels. The file serves as a fallback when no adopted images are found.
 
 .browsers.json
 [source,javascript]
@@ -16,7 +16,7 @@ Selenwright requires a simple JSON configuration file of the following format:
           "path" : "/wd/hub",                        <8>
           "protocol" : "webdriver",                  <9>
           "volumes" : ["/from:/to:ro"],              <10>
-          "env" : ["TZ=Europe/Moscow"],              <11>
+          "env" : ["TZ=Europe/Berlin"],              <11>
           "hosts" : ["example.com:192.168.0.1"],     <12>
           "shmSize" : 268435456,                     <13>
           "cpu" : "1.0",                             <14>
@@ -94,7 +94,7 @@ Will not match:
 === Image
 Image by default is a string with container specification in Docker format (`hub.example.com/project/image:tag`).
 
-Image must be already pulled. https://github.com/aerokube/cm[Configuration Manager] can help with this task.
+Image must be already pulled.
 
 .Valid images
 ====
@@ -129,7 +129,7 @@ Selenwright proxies connections to either Selenium server or standalone driver b
     "path" : "",
     "protocol" : "",
     "volumes": ["/from:/to", "/another:/one:ro"],
-    "env" : ["TZ=Europe/Moscow", "ONE_MORE_VARIABLE=itsValue"],
+    "env" : ["TZ=Europe/Berlin", "ONE_MORE_VARIABLE=itsValue"],
     "hosts" : ["one.example.com:192.168.0.1", "two.example.com:192.168.0.2"],
     "labels" : {"component": "frontend", "project": "my-project"},
     "sysctl" : {"net.ipv4.tcp_timestamps": "2", "kern.maxprocperuid": "1000"},
@@ -150,11 +150,10 @@ Which value to specify in this field depends on container contents.
 For example, most of Firefox containers have http://seleniumhq.org/[Selenium server] inside - thus you need to specify `/wd/hub`.
 Chrome and Opera containers use web driver binary as entrypoint application which is accepting requests at `/`.
 Playwright images also default to `/` when the field is omitted, and the selected WebSocket path should stay fixed for a given image.
-We recommend to use our https://github.com/aerokube/cm[configuration tool] to avoid errors with this field.
 
-* *protocol* (_optional_) - `protocol` selects the upstream contract used by Selenwright.
-  Leave it empty for WebDriver-compatible Selenium servers and drivers.
-  Set it to `playwright` when the image runs a Playwright server instead of Selenium.
+* *protocol* (_optional_) - `protocol` selects the upstream contract used by Selenwright. Two values are supported:
+** `webdriver` (default when omitted) -- standard Selenium WebDriver protocol. Used for Chrome, Firefox, Opera and other Selenium-compatible images.
+** `playwright` -- native Playwright WebSocket protocol. Set this when the image runs a Playwright server. Clients connect via `/playwright/<browser>/<version>` WebSocket endpoint instead of the Selenium HTTP API.
 
 * *volumes* (_optional_) - This field allows to mount volumes from host machine to browser container. Should be specified as an array of Docker volume expressions: `/host/dir:/container/dir[:mode]`.
 
@@ -168,29 +167,5 @@ We recommend to use our https://github.com/aerokube/cm[configuration tool] to av
 
 * *shmSize* (_optional_) - Use it to override shared memory size for browser container.
 
-=== Syncing Browser Images from Existing File
-In some usage scenarios you may want to store browsers configuration file under version control and initialize Selenwright from this file. For example this is true if you wish to have consistently reproducing infrastructure and using such tools as https://aws.amazon.com/cloudformation/[Amazon Cloud Formation].
+* *publishAllPorts* (_optional_) - When set to `true`, publishes all exposed container ports to the host. Useful for debugging or when browser containers need to be accessed directly.
 
-NOTE: Why this is not the part of Selenwright? Well, this is easy to implement, but under heavy load the result can be unpredictable.
-For example after updating the file and reloading Selenwright it should pull new images. How long will you wait for new sessions then?
-What to do if Docker Registry is inaccessible? So for maintenance reasons it is easier to delegate such simple logic to external script.
-
-In order to pull browser images use on of the following options:
-
-*Option 1: using CM*
-
-Recent https://github.com/aerokube/cm[CM] tool versions are able to configure Selenwright from existing `browsers.json` file as follows:
-
-    # ./cm selenwright start --browsers-json /path/to/your/browsers.json
-
-This way is mainly useful when installing Selenwright from scratch or updating it i.e. as a part of CI build job.
-
-*Option 2: using jq*
-
-. Install *https://stedolan.github.io/jq/download/[jq]* - a small tool to query data from JSON files.
-
-. Extract image names from JSON and automatically pull them:
-
-    # cat /path/to/browsers.json | jq -r '..|.image?|strings' | xargs -I{} docker pull {}
-
-This way can be applied to a running cluster with tests with no downtime.

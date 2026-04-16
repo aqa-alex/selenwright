@@ -1,0 +1,52 @@
+== Docker Compose Stack Management
+
+When Selenwright runs as part of a Docker Compose deployment, it can inspect, pull, and recreate the stack services through a set of API endpoints. This allows the operator UI to manage updates without SSH access to the host.
+
+=== How It Works
+
+Selenwright detects its own Compose deployment by reading Docker container labels (`com.docker.compose.project`, `com.docker.compose.service`, etc.) from its own container. When these labels are present, the stack management endpoints become available.
+
+=== API Endpoints
+
+==== Stack Status
+
+----
+GET /stack/status
+----
+
+Returns the current state of the Compose stack:
+
+* `available` -- whether Selenwright is running inside a detected Compose stack
+* `reason` -- explanation when stack management is not available
+* `projectName` -- Docker Compose project name
+* `services` -- array of service objects, each containing:
+** `service` -- service name
+** `image` -- image reference
+** `imageId` / `imageIdShort` -- full and short image digest
+** `containerId` -- running container ID
+** `status` -- container status
+** `created` -- container creation timestamp
+
+==== Pull Images
+
+----
+POST /stack/pull
+----
+
+Pulls the latest images for all stack services. Returns per-service results:
+
+* `service` -- service name
+* `image` -- image reference
+* `previousId` -- image digest before pull
+* `currentId` -- image digest after pull
+* `updated` -- `true` when a new image was pulled
+
+==== Recreate Stack
+
+----
+POST /stack/recreate
+----
+
+Recreates the Docker Compose stack using `docker compose up -d`. This applies any newly pulled images. Returns the output from the compose command.
+
+NOTE: The pull and recreate operations use a helper container (`docker:27-cli`) to run Docker Compose commands with access to the host Docker socket.

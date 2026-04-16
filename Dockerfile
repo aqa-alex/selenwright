@@ -6,4 +6,4 @@ ARG TARGETARCH
 COPY dist/selenwright_linux_$TARGETARCH /usr/bin/selenwright
 
 EXPOSE 4444
-ENTRYPOINT ["/usr/bin/selenwright", "-listen", ":4444", "-conf", "/etc/selenwright/browsers.json", "-video-output-dir", "/opt/selenwright/video/"]
+ENTRYPOINT ["/usr/bin/selenwright", "-listen", ":4444", "-video-output-dir", "/opt/selenwright/video/"]

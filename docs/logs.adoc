@@ -15,16 +15,14 @@ When running Selenwright **in Docker container** - don't forget to mount logs di
 
 .Example Docker Command
 ----
-$ docker run -d
+$ docker run -d                                 \
 --name selenwright                                 \
 -p 4444:4444                                    \
 -v /var/run/docker.sock:/var/run/docker.sock    \
--v /your/directory/config/:/etc/selenwright/:ro              \
--v /your/directory/logs/:/opt/selenwright/logs/              \
+-v /data/logs/:/opt/selenwright/logs/              \
 aqa-alex/selenwright:latest-release -log-output-dir /opt/selenwright/logs
 ----
 
-TIP: This feature is automatically enabled when starting Selenwright via https://github.com/aerokube/cm/releases/latest[Configuration Manager] `selenwright start` command.
 
 === Downloading Log Files from Selenwright
 
@@ -46,7 +44,7 @@ http://selenwright-host.example.com:4444/logs/
 
 === Deleting Log Files
 
-Similarly to video files it's up to you when to delete old log files. Either remove log files from the directory using a scheduled job or send log removal requests:
+When <<Artifact History>> is enabled, log files are automatically cleaned up by the retention janitor. Otherwise, either remove log files from the directory using a scheduled job or send log removal requests:
 
 .Deleting Log File via HTTP API
 ----

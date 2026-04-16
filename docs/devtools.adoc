@@ -50,7 +50,7 @@ const host = 'selenwright.example.com';
         { browserWSEndpoint: `ws://${host}:4444/devtools/${browser.sessionId}` }
     );
     const page = await devtools.newPage();
-    await page.goto('http://aerokube.com');
+    await page.goto('http://example.com');
     await page.screenshot({path: 'screenshot.png'});
     const title = await page.title();
 
