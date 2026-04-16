@@ -778,22 +778,25 @@ func TestStatus(t *testing.T) {
 }
 
 func TestServeAndDeleteVideoFile(t *testing.T) {
-	fileName := "testfile"
+	fileName := "testfile.mp4"
 	filePath := filepath.Join(app.videoOutputDir, fileName)
 	_ = os.WriteFile(filePath, []byte("test-data"), 0o644)
 
-	rsp, err := http.Get(With(srv.URL).Path("/video/testfile"))
+	rsp, err := http.Get(With(srv.URL).Path("/video/testfile.mp4"))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusOK)
 
 	rsp, err = http.Get(With(srv.URL).Path("/video/?json"))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusOK)
-	var files []string
-	assert.NoError(t, json.NewDecoder(rsp.Body).Decode(&files))
-	assert.Equal(t, files, []string{"testfile"})
+	var items []artifactHistoryFileListItem
+	assert.NoError(t, json.NewDecoder(rsp.Body).Decode(&items))
+	assert.Len(t, items, 1)
+	assert.Equal(t, "testfile.mp4", items[0].Filename)
+	assert.Equal(t, "testfile", items[0].SessionID)
+	assert.Equal(t, int64(len("test-data")), items[0].Size)
 
-	deleteReq, _ := http.NewRequest(http.MethodDelete, With(srv.URL).Path("/video/testfile"), nil)
+	deleteReq, _ := http.NewRequest(http.MethodDelete, With(srv.URL).Path("/video/testfile.mp4"), nil)
 	rsp, err = http.DefaultClient.Do(deleteReq)
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusOK)
@@ -816,9 +819,18 @@ func TestServeAndDeleteLogFile(t *testing.T) {
 	rsp, err = http.Get(With(srv.URL).Path("/logs/?json"))
 	assert.NoError(t, err)
 	assert.Equal(t, rsp.StatusCode, http.StatusOK)
-	var files []string
-	assert.NoError(t, json.NewDecoder(rsp.Body).Decode(&files))
-	assert.True(t, len(files) > 0)
+	var items []artifactHistoryFileListItem
+	assert.NoError(t, json.NewDecoder(rsp.Body).Decode(&items))
+	var found bool
+	for _, item := range items {
+		if item.Filename == "logfile.log" {
+			found = true
+			assert.Equal(t, "logfile", item.SessionID)
+			assert.Equal(t, int64(len("test-data")), item.Size)
+			break
+		}
+	}
+	assert.True(t, found, "logfile.log must be in the listing")
 
 	deleteReq, _ := http.NewRequest(http.MethodDelete, With(srv.URL).Path("/logs/logfile.log"), nil)
 	rsp, err = http.DefaultClient.Do(deleteReq)

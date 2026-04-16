@@ -192,9 +192,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 		}
 		historyEnabled = ensureArtifactHistoryManager().IsEnabledForNewSessions()
 		finalLogName = caps.LogName
-		if app.logOutputDir != "" && (app.saveAllLogs || caps.Log || historyEnabled) {
-			caps.LogName = getTemporaryFileName(app.logOutputDir, logFileExtension)
-		}
+		configureLogCapture(&caps, historyEnabled)
 		starter, ok = app.manager.Find(caps, requestId)
 		if ok {
 			break
@@ -559,6 +557,23 @@ func getTemporaryFileName(dir string, extension string) string {
 	_ = f.Close()
 	_ = os.Remove(f.Name())
 	return name
+}
+
+// configureLogCapture is the single gate both WebDriver and Playwright
+// handlers use to decide whether to capture container logs for a session.
+// caps.Log is deliberately set server-side so downstream Docker/Driver
+// services — which only know about SaveAllLogs || caps.Log — write the file
+// whether the trigger was the operator flag, client opt-in, or artifact
+// history retention.
+func configureLogCapture(caps *session.Caps, historyEnabled bool) {
+	if app.logOutputDir == "" {
+		return
+	}
+	if !(app.saveAllLogs || caps.Log || historyEnabled) {
+		return
+	}
+	caps.LogName = getTemporaryFileName(app.logOutputDir, logFileExtension)
+	caps.Log = true
 }
 
 const vendorPrefix = "aerokube"

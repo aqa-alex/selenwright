@@ -57,6 +57,7 @@ func init() {
 	flag.BoolVar(&app.disableDocker, "disable-docker", false, "Disable docker support")
 	flag.BoolVar(&app.disableQueue, "disable-queue", false, "Disable wait queue")
 	flag.BoolVar(&app.enableFileUpload, "enable-file-upload", false, "File upload support")
+	flag.BoolVar(&app.defaultEnableVNC, "default-enable-vnc", false, "Default value for the enableVNC capability when a client does not pass ?enableVNC=. Clients can still opt out per session with ?enableVNC=false")
 	flag.StringVar(&app.listen, "listen", ":4444", "Network address to accept connections")
 	flag.StringVar(&app.confPath, "conf", "config/browsers.json", "Browsers configuration file")
 	flag.StringVar(&app.logConfPath, "log-conf", "", "Container logging configuration file")
@@ -288,54 +289,29 @@ func init() {
 }
 
 func createCompatibleDockerClient(onVersionSpecified, onVersionDetermined, onUsingDefaultVersion func(string)) (*client.Client, error) {
-	const dockerApiVersion = "DOCKER_API_VERSION"
-	dockerApiVersionEnv := os.Getenv(dockerApiVersion)
-	if dockerApiVersionEnv != "" {
-		onVersionSpecified(dockerApiVersionEnv)
+	// If the operator pinned DOCKER_API_VERSION explicitly, honor it verbatim —
+	// don't negotiate, don't override.
+	if pinned := os.Getenv("DOCKER_API_VERSION"); pinned != "" {
+		onVersionSpecified(pinned)
+		return client.NewClientWithOpts(client.FromEnv)
+	}
+
+	// Otherwise use the SDK's built-in negotiation: the client asks the daemon
+	// for its API version on the first call and downgrades itself to match.
+	// This is what every modern Docker Go tool does and it handles the full
+	// range of daemons without a hand-rolled loop.
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if info, pingErr := cli.Ping(ctx); pingErr == nil && info.APIVersion != "" {
+		onVersionDetermined(info.APIVersion)
 	} else {
-		maxMajorVersion, maxMinorVersion := parseVersion(api.DefaultVersion)
-		minMajorVersion, minMinorVersion := parseVersion("1.24")
-		for majorVersion := maxMajorVersion; majorVersion >= minMajorVersion; majorVersion-- {
-			for minorVersion := maxMinorVersion; minorVersion >= minMinorVersion; minorVersion-- {
-				apiVersion := fmt.Sprintf("%d.%d", majorVersion, minorVersion)
-				_ = os.Setenv(dockerApiVersion, apiVersion)
-				docker, err := client.NewClientWithOpts(client.FromEnv)
-				if err != nil {
-					return nil, err
-				}
-				if isDockerAPIVersionCorrect(docker) {
-					onVersionDetermined(apiVersion)
-					return docker, nil
-				}
-				_ = docker.Close()
-			}
-		}
 		onUsingDefaultVersion(api.DefaultVersion)
 	}
-	return client.NewClientWithOpts(client.FromEnv)
-}
-
-func parseVersion(ver string) (int, int) {
-	const point = "."
-	pieces := strings.Split(ver, point)
-	major, err := strconv.Atoi(pieces[0])
-	if err != nil {
-		return 0, 0
-	}
-	minor, err := strconv.Atoi(pieces[1])
-	if err != nil {
-		return 0, 0
-	}
-	return major, minor
-}
-
-func isDockerAPIVersionCorrect(docker *client.Client) bool {
-	ctx := context.Background()
-	apiInfo, err := docker.ServerVersion(ctx)
-	if err != nil {
-		return false
-	}
-	return apiInfo.APIVersion == docker.ClientVersion()
+	return cli, nil
 }
 
 func parseGgrHost(s string) *ggr.Host {
@@ -544,6 +520,16 @@ func get(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func httpDelete(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		next(w, r)
+	}
+}
+
 func ping(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
@@ -562,7 +548,13 @@ func video(w http.ResponseWriter, r *http.Request) {
 	}
 	user, remote := info.RequestInfo(r)
 	if _, ok := r.URL.Query()[jsonParam]; ok {
-		listFilesAsJson(requestId, w, app.videoOutputDir, "VIDEO_ERROR")
+		items, err := ensureArtifactHistoryManager().ListVideos()
+		if err != nil {
+			log.Printf("[%d] [VIDEO_ERROR] [Failed to list directory %s: %v]", requestId, app.videoOutputDir, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, items)
 		return
 	}
 	log.Printf("[%d] [VIDEO_LISTING] [%s] [%s]", requestId, user, remote)
@@ -643,6 +635,7 @@ func handler() http.Handler {
 	root.Handle(paths.Download, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Fileserver }, "DOWNLOADING_FILE"))))
 	root.Handle(paths.Clipboard, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Clipboard }, "CLIPBOARD"))))
 	root.Handle(paths.Devtools, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Devtools }, "DEVTOOLS"))))
+	root.HandleFunc("/playwright/session/", httpDelete(deletePlaywrightSession))
 	root.HandleFunc(paths.Playwright, get(app.queue.Try(app.queue.Check(app.queue.Protect(playwright)))))
 	if app.enableFileUpload {
 		root.HandleFunc(paths.File, fileUpload)

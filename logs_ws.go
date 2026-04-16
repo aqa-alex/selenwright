@@ -1,11 +1,8 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/aqa-alex/selenwright/info"
@@ -34,7 +31,13 @@ func logs(w http.ResponseWriter, r *http.Request) {
 		}
 		user, remote := info.RequestInfo(r)
 		if _, ok := r.URL.Query()[jsonParam]; ok {
-			listFilesAsJson(requestId, w, app.logOutputDir, "LOG_ERROR")
+			items, err := ensureArtifactHistoryManager().ListLogs()
+			if err != nil {
+				log.Printf("[%d] [LOG_ERROR] [Failed to list directory %s: %v]", requestId, app.logOutputDir, err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			writeJSONResponse(w, http.StatusOK, items)
 			return
 		}
 		log.Printf("[%d] [LOG_LISTING] [%s] [%s]", requestId, user, remote)
@@ -43,21 +46,6 @@ func logs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	streamLogs(w, r)
-}
-
-func listFilesAsJson(requestId uint64, w http.ResponseWriter, dir string, errStatus string) {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		log.Printf("[%d] [%s] [%s]", requestId, errStatus, fmt.Sprintf("Failed to list directory %s: %v", app.logOutputDir, err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	var ret []string
-	for _, f := range files {
-		ret = append(ret, f.Name())
-	}
-	w.Header().Add("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(ret)
 }
 
 func streamLogs(w http.ResponseWriter, r *http.Request) {

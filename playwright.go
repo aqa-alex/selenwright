@@ -59,10 +59,16 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 	caps := session.Caps{
 		Name:    browserName,
 		Version: playwrightVersion,
+		// Start with the server-configured default. The client can still
+		// override in either direction via ?enableVNC=true|false below.
+		VNC: app.defaultEnableVNC,
 	}
 	if q := r.URL.Query(); q != nil {
-		if strings.EqualFold(q.Get("enableVNC"), "true") || q.Get("enableVNC") == "1" {
+		switch strings.ToLower(q.Get("enableVNC")) {
+		case "true", "1":
 			caps.VNC = true
+		case "false", "0":
+			caps.VNC = false
 		}
 		if name := q.Get("name"); name != "" {
 			caps.TestName = name
@@ -71,9 +77,8 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 			caps.ScreenResolution = screenResolution
 		}
 	}
-	if app.logOutputDir != "" && app.saveAllLogs {
-		caps.LogName = getTemporaryFileName(app.logOutputDir, logFileExtension)
-	}
+	historyEnabled := ensureArtifactHistoryManager().IsEnabledForNewSessions()
+	configureLogCapture(&caps, historyEnabled)
 
 	identity, _ := protect.IdentityFromContext(r.Context())
 	if err := session.Sanitize(&caps, session.CapsPolicy(app.capsPolicyFlag), identity.IsAdmin); err != nil {
@@ -161,15 +166,16 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		owner = user
 	}
 	sess := &session.Session{
-		Quota:     owner,
-		Caps:      caps,
-		URL:       clonePlaywrightURL(upstreamURL),
-		Container: startedService.Container,
-		HostPort:  startedService.HostPort,
-		Origin:    startedService.Origin,
-		Timeout:   app.timeout,
-		Protocol:  session.ProtocolPlaywright,
-		Started:   time.Now(),
+		Quota:                  owner,
+		Caps:                   caps,
+		URL:                    clonePlaywrightURL(upstreamURL),
+		Container:              startedService.Container,
+		HostPort:               startedService.HostPort,
+		Origin:                 startedService.Origin,
+		Timeout:                app.timeout,
+		Protocol:               session.ProtocolPlaywright,
+		Started:                time.Now(),
+		ArtifactHistoryEnabled: historyEnabled,
 	}
 
 	var cleanupOnce sync.Once
@@ -320,7 +326,7 @@ func tunnelPlaywrightWebSocket(resultCh chan<- playwrightTunnelResult, source st
 }
 
 func finalizePlaywrightLog(sess *session.Session, playwrightEvent event.Event, preprocessedID string) {
-	if sess == nil || app.logOutputDir == "" || !app.saveAllLogs || sess.Caps.LogName == "" {
+	if sess == nil || app.logOutputDir == "" || sess.Caps.LogName == "" {
 		return
 	}
 
@@ -340,6 +346,35 @@ func finalizePlaywrightLog(sess *session.Session, playwrightEvent event.Event, p
 		Name:  newLogName,
 		Type:  "log",
 	})
+}
+
+func deletePlaywrightSession(w http.ResponseWriter, r *http.Request) {
+	const prefix = "/playwright/session/"
+	sid := strings.TrimPrefix(r.URL.Path, prefix)
+	if sid == "" {
+		http.Error(w, "Session id is required", http.StatusBadRequest)
+		return
+	}
+
+	sess, ok := app.sessions.Get(sid)
+	if !ok {
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+	if sess.Protocol != session.ProtocolPlaywright {
+		http.Error(w, "Not a Playwright session", http.StatusBadRequest)
+		return
+	}
+
+	sess.Lock.Lock()
+	cancel := sess.Cancel
+	sess.Lock.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func clonePlaywrightURL(u *url.URL) *url.URL {

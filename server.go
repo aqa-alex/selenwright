@@ -16,6 +16,7 @@ type Server struct {
 	disableDocker            bool
 	disableQueue             bool
 	enableFileUpload         bool
+	defaultEnableVNC         bool
 	listen                   string
 	timeout                  time.Duration
 	maxTimeout               time.Duration

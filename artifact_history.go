@@ -85,6 +85,21 @@ type artifactHistoryDownloadListItem struct {
 	DownloadURL    string `json:"downloadUrl"`
 }
 
+// artifactHistoryFileListItem is the enriched shape the `?json` handlers for
+// /logs and /video emit. Fields beyond filename/size come from the matching
+// artifact-history manifest; when no manifest exists (e.g. files left over
+// from before retention was enabled) we fall back to a stat-derived timestamp
+// and a filename-stripped session id.
+type artifactHistoryFileListItem struct {
+	Filename       string `json:"filename"`
+	SessionID      string `json:"sessionId"`
+	Browser        string `json:"browser,omitempty"`
+	BrowserVersion string `json:"browserVersion,omitempty"`
+	Protocol       string `json:"protocol,omitempty"`
+	CreatedAt      string `json:"createdAt,omitempty"`
+	Size           int64  `json:"size"`
+}
+
 // pendingDownloadCapture caches the result of a pre-cancel docker cp so the
 // async SessionStopped listener can include it in the manifest without needing
 // the container to still exist.
@@ -491,11 +506,13 @@ func (m *artifactHistoryManager) loadAllManifests() ([]artifactHistoryManifest, 
 		}
 		payload, err := os.ReadFile(filepath.Join(m.manifestsDir(), entry.Name()))
 		if err != nil {
-			return nil, err
+			log.Printf("[-] [ARTIFACT_HISTORY_MANIFEST_SKIP] [%s] [read: %v]", entry.Name(), err)
+			continue
 		}
 		var manifest artifactHistoryManifest
 		if err := json.Unmarshal(payload, &manifest); err != nil {
-			return nil, err
+			log.Printf("[-] [ARTIFACT_HISTORY_MANIFEST_SKIP] [%s] [parse: %v]", entry.Name(), err)
+			continue
 		}
 		manifests = append(manifests, manifest)
 	}
@@ -523,6 +540,73 @@ func (m *artifactHistoryManager) ListDownloads() ([]artifactHistoryDownloadListI
 			})
 		}
 	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].CreatedAt > items[j].CreatedAt
+	})
+	return items, nil
+}
+
+func (m *artifactHistoryManager) ListLogs() ([]artifactHistoryFileListItem, error) {
+	if m == nil || m.logDir == "" {
+		return []artifactHistoryFileListItem{}, nil
+	}
+	return m.listArtifactFiles(m.logDir, logFileExtension, func(mf artifactHistoryManifest) *artifactHistoryFileRef {
+		return mf.Artifacts.Log
+	})
+}
+
+func (m *artifactHistoryManager) ListVideos() ([]artifactHistoryFileListItem, error) {
+	if m == nil || m.videoDir == "" {
+		return []artifactHistoryFileListItem{}, nil
+	}
+	return m.listArtifactFiles(m.videoDir, videoFileExtension, func(mf artifactHistoryManifest) *artifactHistoryFileRef {
+		return mf.Artifacts.Video
+	})
+}
+
+func (m *artifactHistoryManager) listArtifactFiles(dir, extension string, pick func(artifactHistoryManifest) *artifactHistoryFileRef) ([]artifactHistoryFileListItem, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []artifactHistoryFileListItem{}, nil
+		}
+		return nil, err
+	}
+
+	manifests, _ := m.loadAllManifests()
+	byName := make(map[string]artifactHistoryManifest, len(manifests))
+	for _, mf := range manifests {
+		if ref := pick(mf); ref != nil && ref.Filename != "" {
+			byName[ref.Filename] = mf
+		}
+	}
+
+	items := make([]artifactHistoryFileListItem, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), extension) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		item := artifactHistoryFileListItem{
+			Filename: entry.Name(),
+			Size:     info.Size(),
+		}
+		if mf, ok := byName[entry.Name()]; ok {
+			item.SessionID = mf.SessionID
+			item.Browser = mf.Browser
+			item.BrowserVersion = mf.BrowserVersion
+			item.Protocol = mf.Protocol
+			item.CreatedAt = mf.FinishedAt.UTC().Format(time.RFC3339)
+		} else {
+			item.SessionID = strings.TrimSuffix(entry.Name(), extension)
+			item.CreatedAt = info.ModTime().UTC().Format(time.RFC3339)
+		}
+		items = append(items, item)
+	}
+
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].CreatedAt > items[j].CreatedAt
 	})
