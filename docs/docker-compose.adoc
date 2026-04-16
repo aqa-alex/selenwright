@@ -16,7 +16,7 @@ version: '3'
 services:
   selenwright:
     network_mode: bridge
-    image: aqa-alex/selenwright:latest-release
+    image: selenwright/hub:latest-release
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/data/selenwright/video:/opt/selenwright/video"
@@ -49,7 +49,7 @@ services:
   selenwright:
     networks:
       selenwright: null
-    image: aqa-alex/selenwright:latest-release
+    image: selenwright/hub:latest-release
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/data/selenwright/video:/opt/selenwright/video"

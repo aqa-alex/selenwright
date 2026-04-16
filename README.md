@@ -40,7 +40,7 @@ http://localhost:4444/status
 docker run -d --name selenwright                  \
     -p 4444:4444                                  \
     -v /var/run/docker.sock:/var/run/docker.sock  \
-    aqa-alex/selenwright:latest-release
+    selenwright/hub:latest-release
 ```
 
 ## Playwright Support
@@ -286,7 +286,7 @@ docker run -d --name selenwright                  \
     -p 4444:4444                                  \
     -v /var/run/docker.sock:/var/run/docker.sock  \
     -v $(pwd)/users.htpasswd:/etc/selenwright/users.htpasswd:ro \
-    aqa-alex/selenwright:latest-release            \
+    selenwright/hub:latest-release            \
     -htpasswd /etc/selenwright/users.htpasswd -admin-users=alice
 ```
 
@@ -359,7 +359,7 @@ version: '3'
 services:
   selenwright:
     network_mode: bridge
-    image: aqa-alex/selenwright:latest-release
+    image: selenwright/hub:latest-release
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/data/selenwright/video:/opt/selenwright/video"

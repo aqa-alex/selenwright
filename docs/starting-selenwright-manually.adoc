@@ -110,7 +110,7 @@ docker run -d                                   \
 --name selenwright                                 \
 -p 4444:4444                                    \
 -v /var/run/docker.sock:/var/run/docker.sock    \
-aqa-alex/selenwright:latest-release
+selenwright/hub:latest-release
 ----
 
 TIP: If you use a manual `browsers.json` (Option B above), mount it as a volume: `-v /your/directory/config/:/etc/selenwright/:ro` and add `-conf /etc/selenwright/browsers.json` to the command.

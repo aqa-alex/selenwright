@@ -20,7 +20,7 @@ $ docker run -d                                 \
 -p 4444:4444                                    \
 -v /var/run/docker.sock:/var/run/docker.sock    \
 -v /data/logs/:/opt/selenwright/logs/              \
-aqa-alex/selenwright:latest-release -log-output-dir /opt/selenwright/logs
+selenwright/hub:latest-release -log-output-dir /opt/selenwright/logs
 ----
 
 

@@ -31,7 +31,7 @@ $ docker run -d                                 \
 -v /var/run/docker.sock:/var/run/docker.sock    \
 -v /data/video/:/opt/selenwright/video/            \
 -e OVERRIDE_VIDEO_OUTPUT_DIR=/data/video/       \
-aqa-alex/selenwright:latest-release
+selenwright/hub:latest-release
 ----
 
 
