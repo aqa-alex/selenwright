@@ -85,7 +85,7 @@ videoCodec: "mpeg4"
 To obtain the full list of https://stackoverflow.com/questions/3377300/what-are-all-codecs-and-formats-supported-by-ffmpeg[supported values]:
 +
 ```
-$ docker run -it --rm --entrypoint /usr/bin/ffmpeg selenoid/video-recorder -codecs
+$ docker run -it --rm --entrypoint /usr/bin/ffmpeg selenwright-video-recorder:latest -codecs
 ```
 
 === Saving Session Logs: enableLog, logName

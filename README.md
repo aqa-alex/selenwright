@@ -157,7 +157,7 @@ enableVideo: true
 videoName: "my-test.mp4"
 ```
 
-Requires the video recorder image (`selenoid/video-recorder`) and `-video-output-dir` flag. Access recordings via the API:
+Requires the video recorder image (`selenwright-video-recorder`) and `-video-output-dir` flag. Access recordings via the API:
 
 ```
 GET    http://host:4444/video/<filename>.mp4
@@ -425,7 +425,7 @@ See [docs/metrics.adoc](docs/metrics.adoc) and [docs/log-files.adoc](docs/log-fi
 | Flag | Default | Description |
 |---|---|---|
 | `-video-output-dir` | `video` | Directory to save recorded video |
-| `-video-recorder-image` | `selenoid/video-recorder:latest-release` | Video recorder Docker image |
+| `-video-recorder-image` | `selenwright-video-recorder:latest` | Video recorder Docker image |
 | `-log-output-dir` | (empty) | Directory to save session logs |
 | `-save-all-logs` | `false` | Save all logs regardless of capabilities |
 | `-log-json` | `false` | Emit structured JSON logs |

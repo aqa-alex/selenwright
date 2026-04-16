@@ -77,7 +77,7 @@ func init() {
 	flag.BoolVar(&app.privilegedContainers, "privileged", false, "Run browser containers in privileged mode. Default false — opposite of legacy upstream Selenoid which defaulted to true. Enable only when the browser needs host-level capabilities and the deployment isolates tenants some other way")
 	flag.BoolVar(&app.capAddSysAdmin, "cap-add-sys-admin", false, "Add the SYS_ADMIN Linux capability to browser containers (without full -privileged). Chrome's user-namespace sandbox requires it; most headless workloads do not")
 	flag.StringVar(&app.videoOutputDir, "video-output-dir", "video", "Directory to save recorded video to")
-	flag.StringVar(&app.videoRecorderImage, "video-recorder-image", "selenwright/video-recorder:latest-release", "Image to use as video recorder")
+	flag.StringVar(&app.videoRecorderImage, "video-recorder-image", "selenwright-video-recorder:latest", "Image to use as video recorder")
 	flag.StringVar(&app.logOutputDir, "log-output-dir", "", "Directory to save session log to")
 	flag.BoolVar(&app.saveAllLogs, "save-all-logs", false, "Whether to save all logs without considering capabilities")
 	flag.DurationVar(&app.gracefulPeriod, "graceful-period", 300*time.Second, "graceful shutdown period in time.Duration format, e.g. 300s or 500ms")
@@ -95,6 +95,7 @@ func init() {
 	flag.StringVar(&app.trustedProxySecretRaw, "trusted-proxy-secret", "", "Shared secret expected in X-Router-Secret header. When set, every request must present this value or it is rejected with 401 — defends -auth-mode=trusted-proxy from clients that bypass the router")
 	flag.StringVar(&app.trustedProxyCIDRsRaw, "trusted-proxy-cidr", "", "Comma-separated CIDR allow-list for the source IP. When set, request must originate from one of the listed networks regardless of headers")
 	flag.StringVar(&app.trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
+	flag.StringVar(&app.sessionTTLRaw, "session-ttl", "24h", "Lifetime of UI login sessions. Parsed as Go duration (e.g. 1h, 24h, 7d). Sessions are in-memory and lost on restart")
 	flag.StringVar(&app.capsPolicyFlag, "caps-policy", string(session.PolicyStrict), "Capability policy: 'strict' rejects dangerous caps (env, dnsServers, hostsEntries, additionalNetworks, applicationContainers) for non-admin callers; 'permissive' preserves the legacy upstream-Selenoid behavior")
 	flag.IntVar(&app.eventWorkers, "event-workers", 16, "Number of worker goroutines that dispatch session-lifecycle events (FileCreated, SessionStopped) to registered listeners. Bounds fan-out so a single slow listener (e.g. a hung S3 upload) cannot leak goroutines")
 	flag.BoolVar(&app.enableMetrics, "enable-metrics", false, "Expose a Prometheus-compatible /metrics endpoint (queue depth, session counts, session duration histogram, auth/caps rejection counters). Path is controlled by -metrics-path")
@@ -128,6 +129,19 @@ func init() {
 		} else {
 			log.Fatalf("[-] [INIT] [%v]", err)
 		}
+	}
+	if app.htpasswdAuth != nil {
+		sessionTTL, parseErr := time.ParseDuration(app.sessionTTLRaw)
+		if parseErr != nil {
+			log.Fatalf("[-] [INIT] [Invalid -session-ttl %q: %v]", app.sessionTTLRaw, parseErr)
+		}
+		app.sessionStore = protect.NewSessionStore(sessionTTL)
+		app.authenticator = &protect.SessionAwareAuthenticator{
+			Sessions:   app.sessionStore,
+			CookieName: protect.DefaultSessionCookieName,
+			Fallback:   app.authenticator,
+		}
+		log.Printf("[-] [INIT] [Session auth: cookie %q, TTL %s]", protect.DefaultSessionCookieName, sessionTTL)
 	}
 	stCfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag)
 	if err != nil {
@@ -605,8 +619,9 @@ func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request
 
 var paths = struct {
 	Video, VNC, Logs, Devtools, Playwright, Download, Downloads, Clipboard, File, Ping, Status, Error, WdHub, Welcome, Config, HistorySettings string
-	DiscoveredBrowsers, AdoptBrowser, DismissBrowser, RescanBrowsers string
-	StackStatus, StackPull, StackRecreate                           string
+	DiscoveredBrowsers, AdoptBrowser, DismissBrowser, RescanBrowsers                                                                         string
+	StackStatus, StackPull, StackRecreate                                                                                                    string
+	Whoami, Login, Logout                                                                                                                    string
 }{
 	Video:              "/video/",
 	VNC:                "/vnc/",
@@ -631,9 +646,12 @@ var paths = struct {
 	StackStatus:        "/stack/status",
 	StackPull:          "/stack/pull",
 	StackRecreate:      "/stack/recreate",
+	Whoami:             "/whoami",
+	Login:              "/login",
+	Logout:             "/logout",
 }
 
-var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings, paths.Downloads, paths.StackStatus}
+var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings, paths.Downloads, paths.StackStatus, paths.Whoami, paths.Login, paths.Logout}
 
 func handler() http.Handler {
 	ensureArtifactHistoryManager()
@@ -675,6 +693,9 @@ func handler() http.Handler {
 	root.HandleFunc(paths.StackStatus, get(stackStatusHandler))
 	root.HandleFunc(paths.StackPull, post(stackPullHandler))
 	root.HandleFunc(paths.StackRecreate, post(stackRecreateHandler))
+	root.HandleFunc(paths.Whoami, get(whoamiHandler))
+	root.HandleFunc(paths.Login, loginHandler)
+	root.HandleFunc(paths.Logout, logoutHandler)
 	root.HandleFunc(paths.Welcome, welcome)
 	metricsOpen := openPaths
 	if app.enableMetrics {

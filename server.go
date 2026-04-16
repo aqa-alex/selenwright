@@ -73,7 +73,9 @@ type Server struct {
 	originChecker *protect.OriginChecker
 	authenticator protect.Authenticator
 	htpasswdAuth  *protect.HtpasswdAuthenticator
+	sessionStore  *protect.SessionStore
 	sourceTrust   *protect.SourceTrust
+	sessionTTLRaw string
 	ggrHost       *ggr.Host
 
 	startTime time.Time

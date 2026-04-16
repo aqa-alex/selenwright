@@ -203,7 +203,10 @@ func stackStatusHandler(w http.ResponseWriter, _ *http.Request) {
 
 // --- POST /stack/pull ---
 
-func stackPullHandler(w http.ResponseWriter, _ *http.Request) {
+func stackPullHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
 	ok, reason := stackUpdateAvailable()
 	if !ok {
 		writeJSONResponse(w, http.StatusConflict, stackPullResponse{
@@ -297,7 +300,10 @@ func stackPullHandler(w http.ResponseWriter, _ *http.Request) {
 
 // --- POST /stack/recreate ---
 
-func stackRecreateHandler(w http.ResponseWriter, _ *http.Request) {
+func stackRecreateHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
 	ok, reason := stackUpdateAvailable()
 	if !ok {
 		writeJSONResponse(w, http.StatusConflict, stackRecreateResponse{

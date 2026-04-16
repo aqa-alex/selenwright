@@ -375,7 +375,7 @@ func testEnvironment() *service.Environment {
 		Network:             app.containerNetwork,
 		StartupTimeout:      app.serviceStartupTimeout,
 		CaptureDriverLogs:   app.captureDriverLogs,
-		VideoContainerImage: "aerokube/video-recorder",
+		VideoContainerImage: "selenwright-video-recorder:latest",
 		VideoOutputDir:      "/some/dir",
 		LogOutputDir:        app.logOutputDir,
 		Privileged:          false,

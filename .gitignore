@@ -9,3 +9,7 @@ dist/
 # Runtime artifact-history state (mounted as a volume in the container)
 artifacts/
 state/
+logs/
+
+# Local htpasswd credentials
+config/users.htpasswd

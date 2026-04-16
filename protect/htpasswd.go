@@ -73,6 +73,23 @@ func (a *HtpasswdAuthenticator) Authenticate(r *http.Request) (Identity, error) 
 
 func (a *HtpasswdAuthenticator) Realm() string { return HtpasswdRealm }
 
+// ValidateCredentials checks a username/password pair against the htpasswd
+// entries without requiring an HTTP request. Used by the login handler.
+func (a *HtpasswdAuthenticator) ValidateCredentials(user, pass string) (Identity, error) {
+	a.mu.RLock()
+	hash, known := a.entries[user]
+	_, isAdmin := a.admins[user]
+	a.mu.RUnlock()
+	if !known {
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(pass))
+		return Identity{}, ErrAuthFailed
+	}
+	if err := bcrypt.CompareHashAndPassword(hash, []byte(pass)); err != nil {
+		return Identity{}, ErrAuthFailed
+	}
+	return Identity{User: user, IsAdmin: isAdmin}, nil
+}
+
 var dummyHash = []byte(`$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy`)
 
 func parseHtpasswd(data []byte) (map[string][]byte, error) {
