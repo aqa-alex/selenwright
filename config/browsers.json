@@ -7,13 +7,6 @@
 				"port": "4444",
 				"path": "/wd/hub",
 				"tmpfs": {"/tmp":"size=512m"}
-			},
-			"1.56.1": {
-				"image": "playwright/firefox:playwright-1.56.1",
-				"port": "3000",
-				"path": "/",
-				"protocol": "playwright",
-				"tmpfs": {"/tmp":"size=512m"}
 			}
 		}
 	},
@@ -23,30 +16,6 @@
 			"latest": {
 				"image": "selenwright/chrome",
 				"port": "4444",
-				"tmpfs": {"/tmp":"size=512m"}
-			}
-		}
-	},
-	"chromium": {
-		"default": "1.56.1",
-		"versions": {
-			"1.56.1": {
-				"image": "playwright/chromium:playwright-1.56.1",
-				"port": "3000",
-				"path": "/",
-				"protocol": "playwright",
-				"tmpfs": {"/tmp":"size=512m"}
-			}
-		}
-	},
-	"webkit": {
-		"default": "1.56.1",
-		"versions": {
-			"1.56.1": {
-				"image": "playwright/webkit:playwright-1.56.1",
-				"port": "3000",
-				"path": "/",
-				"protocol": "playwright",
 				"tmpfs": {"/tmp":"size=512m"}
 			}
 		}
