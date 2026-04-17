@@ -675,7 +675,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_quick_start_adding_users">4.1.1. Quick Start: Adding Users</a></li>
 <li><a href="#_making_a_user_an_admin">4.1.2. Making a User an Admin</a></li>
 <li><a href="#_updating_users_without_restart">4.1.3. Updating Users Without Restart</a></li>
-<li><a href="#_disabling_authentication_development">4.1.4. Disabling Authentication (Development)</a></li>
+<li><a href="#_disabling_authentication">4.1.4. Disabling Authentication</a></li>
 <li><a href="#_authentication_modes">4.1.5. Authentication Modes</a></li>
 <li><a href="#_source_trust_protecting_the_proxy">4.1.6. Source Trust (Protecting the Proxy)</a></li>
 <li><a href="#_capability_policy">4.1.7. Capability Policy</a></li>
@@ -3046,9 +3046,9 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 </div>
 </div>
 <div class="sect3">
-<h4 id="_disabling_authentication_development"><a class="anchor" href="#_disabling_authentication_development"></a>4.1.4. Disabling Authentication (Development)</h4>
+<h4 id="_disabling_authentication"><a class="anchor" href="#_disabling_authentication"></a>4.1.4. Disabling Authentication</h4>
 <div class="paragraph">
-<p>For local development you can disable auth entirely:</p>
+<p>You can disable auth entirely:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -3056,7 +3056,7 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 </div>
 </div>
 <div class="paragraph">
-<p>This only works on loopback addresses. To force it on a real network address (not recommended), add <code>-allow-insecure-none</code>.</p>
+<p>This is accepted on any listen address, including <code>:4444</code>. When the listen address is not a loopback interface, selenwright logs a warning that the service is reachable without authentication — the operator is responsible for network-level protection (firewall, overlay network, bastion, reverse proxy).</p>
 </div>
 </div>
 <div class="sect3">
@@ -3143,7 +3143,7 @@ Without source trust validation (see below), any client can forge these headers.
 <div class="sect4">
 <h5 id="_none_no_authentication"><a class="anchor" href="#_none_no_authentication"></a><code>none</code> — No Authentication</h5>
 <div class="paragraph">
-<p>All requests are anonymous non-admin. Restricted to loopback unless <code>-allow-insecure-none</code> is set.</p>
+<p>All requests are anonymous non-admin. Allowed on any listen address; the operator is responsible for network-level protection (firewall, overlay, bastion). A warning is logged when the listen address is not loopback.</p>
 </div>
 </div>
 </div>
@@ -3980,7 +3980,9 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 <div class="content">
 <pre>-auth-mode string
     Authentication mode: 'embedded', 'trusted-proxy', or 'none'
-    (default "embedded"). See &lt;&lt;Authentication and Authorization&gt;&gt; for details
+    (default "embedded"). 'none' is allowed on any listen address;
+    operator owns network-level protection. See
+    &lt;&lt;Authentication and Authorization&gt;&gt; for details
 -htpasswd string
     Path to bcrypt-format htpasswd file used by -auth-mode=embedded.
     Generate with: htpasswd -B users.htpasswd alice
@@ -3993,8 +3995,6 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 -admin-header string
     Header in -auth-mode=trusted-proxy whose value 'true' marks the
     request as administrative (default "X-Admin")
--allow-insecure-none
-    Permit -auth-mode=none on a non-loopback listen address
 -caps-policy string
     Capability policy: 'strict' rejects dangerous caps (env, dnsServers,
     hostsEntries, additionalNetworks, applicationContainers) for
@@ -4246,7 +4246,7 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 <div id="footer">
 <div id="footer-text">
 Version latest<br>
-Last updated 2026-04-17 06:46:35 UTC
+Last updated 2026-04-17 06:54:02 UTC
 </div>
 </div>
 <!-- Global site tag (gtag.js) - Google Analytics -->
