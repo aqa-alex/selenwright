@@ -463,7 +463,7 @@ Full reference: [docs/cli-flags.adoc](docs/cli-flags.adoc).
 
 ## Documentation
 
-Full reference documentation is available in the [docs/](docs/) directory (AsciiDoc format).
+Published HTML reference: **https://aqa-alex.github.io/selenwright/** (generated per release from [docs/](docs/), AsciiDoc sources).
 
 ## License
 

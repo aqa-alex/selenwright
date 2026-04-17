@@ -35,6 +35,10 @@ rm -rf ${GITHUB_WORKSPACE}/docs/output/${TAGNAME}/*
 echo "Generating docs"
 docker run -v ${GITHUB_WORKSPACE}/docs/:/documents/ --name asciidoc-to-html asciidoctor/docker-asciidoctor asciidoctor -a revnumber=${TAGNAME} -D /documents/output/${TAGNAME} index.adoc
 
+echo "Refreshing latest/ alias"
+mkdir -p ${GITHUB_WORKSPACE}/docs/output/latest
+rm -rf ${GITHUB_WORKSPACE}/docs/output/latest/*
+cp -R ${GITHUB_WORKSPACE}/docs/output/${TAGNAME}/. ${GITHUB_WORKSPACE}/docs/output/latest/
 
 echo "Updating gh-pages branch"
 cd ${GITHUB_WORKSPACE}/docs/output && git add --all && git commit -m "Publishing to gh-pages"
