@@ -130,26 +130,41 @@ func init() {
 		}
 		app.authModeFlag = string(protect.ModeNone)
 	}
-	authBuilt, err := buildAuthenticator(authBuildOptions{
-		mode:         app.authModeFlag,
-		htpasswd:     app.htpasswdPath,
-		admins:       splitCSV(app.adminUsersRaw),
-		userHeader:   app.userHeaderFlag,
-		adminHeader:  app.adminHeaderFlag,
-		groupsFile:   app.groupsFilePath,
-		groupsHeader: app.groupsHeaderFlag,
-		listenAddr:   app.listen,
-	})
-	if err != nil {
-		if testHooksEnabled {
-			app.authenticator = protect.NoneAuthenticator{}
+	// Dev-fallback: -auth-mode=embedded (the default) without -htpasswd would
+	// normally fail the build step below. In that case we boot in token-only
+	// mode — the TokenAwareAuthenticator that wraps this downstream carves out
+	// the bearer path, so Playwright/Selenium clients can still authenticate
+	// while nothing else can. The initial admin token is printed to stdout in
+	// the token-store init block a few lines down.
+	devTokenOnly := !testHooksEnabled &&
+		app.authModeFlag == string(protect.ModeEmbedded) &&
+		app.htpasswdPath == ""
+	if devTokenOnly {
+		log.Printf("[-] [INIT] [Auth: embedded without htpasswd — token-only bearer auth]")
+		app.authenticator = protect.TokenOnlyAuthenticator{}
+	}
+	if !devTokenOnly {
+		authBuilt, err := buildAuthenticator(authBuildOptions{
+			mode:         app.authModeFlag,
+			htpasswd:     app.htpasswdPath,
+			admins:       splitCSV(app.adminUsersRaw),
+			userHeader:   app.userHeaderFlag,
+			adminHeader:  app.adminHeaderFlag,
+			groupsFile:   app.groupsFilePath,
+			groupsHeader: app.groupsHeaderFlag,
+			listenAddr:   app.listen,
+		})
+		if err != nil {
+			if testHooksEnabled {
+				app.authenticator = protect.NoneAuthenticator{}
+			} else {
+				log.Fatalf("[-] [INIT] [%v]", err)
+			}
 		} else {
-			log.Fatalf("[-] [INIT] [%v]", err)
+			app.authenticator = authBuilt.authenticator
+			app.htpasswdAuth = authBuilt.htpasswdAuth
+			app.groupsProvider = authBuilt.groups
 		}
-	} else {
-		app.authenticator = authBuilt.authenticator
-		app.htpasswdAuth = authBuilt.htpasswdAuth
-		app.groupsProvider = authBuilt.groups
 	}
 	if app.htpasswdAuth != nil {
 		sessionTTL, parseErr := time.ParseDuration(app.sessionTTLRaw)

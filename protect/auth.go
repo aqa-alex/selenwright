@@ -53,6 +53,17 @@ func (NoneAuthenticator) Authenticate(_ *http.Request) (Identity, error) {
 
 func (NoneAuthenticator) Realm() string { return "" }
 
+// TokenOnlyAuthenticator always returns ErrAuthRequired. It is wrapped by a
+// TokenAwareAuthenticator to carve out a mode where bearer tokens are the
+// only accepted credential (dev-fallback boot with no htpasswd supplied).
+type TokenOnlyAuthenticator struct{}
+
+func (TokenOnlyAuthenticator) Authenticate(_ *http.Request) (Identity, error) {
+	return Identity{}, ErrAuthRequired
+}
+
+func (TokenOnlyAuthenticator) Realm() string { return "" }
+
 type TrustedProxyAuthenticator struct {
 	UserHeader   string
 	AdminHeader  string
