@@ -1,5 +1,7 @@
 == Downloading Files From Browser
 
+NOTE: The `RemoteWebDriver` examples below assume anonymous access for readability. When selenwright has authentication enabled (the default), supply an API token via `ClientConfig.addHeader("Authorization", "Bearer " + token)` in Java or the equivalent in your WebDriver binding, instead of embedding `user:pass@` in the URL. See <<API Tokens (for Machine Clients)>>.
+
 === Downloading Files in Different Browsers
 
 ==== Chrome

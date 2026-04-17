@@ -51,6 +51,89 @@ Now `alice` and `bob` can create sessions using HTTP Basic Auth:
 curl -u alice:MyPassword123 http://localhost:4444/status
 ----
 
+=== API Tokens (for Machine Clients)
+
+htpasswd passwords are the right fit for humans logging into the UI. For Playwright/Selenium clients running in CI or on a developer's laptop, selenwright supports **bearer tokens** so credentials never need to be pasted into a URL (where they leak into shell history, logs, and screenshots).
+
+An admin mints a token on behalf of a user, the user drops it into `SELENWRIGHT_TOKEN` (or however the client reads secrets), and the client sends `Authorization: Bearer <token>` with every request. The token inherits the owner's groups at creation time, so group-based session ACL still applies.
+
+Tokens are stored hashed (bcrypt) in `<state-dir>/auth/tokens.json`. Plaintext is shown to the admin **once** — distribute it through a secret manager (1Password, Bitwarden, Keybase). Never paste tokens into Slack, tickets, or email.
+
+==== Minting Tokens
+
+Log into the UI as an admin, open **Settings → API Tokens**, click **Create**, pick the owner and a human-readable name (e.g. `laptop-alice`, `ci-runner`). Copy the plaintext from the modal — it will not be shown again.
+
+The same operation is exposed on the REST surface (admin-only, authenticated with a session cookie from the UI login or with an admin's own bearer token):
+
+----
+curl -X POST https://selen.corp.com/api/admin/tokens \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"owner":"alice","name":"laptop"}'
+# → {"id":"tok_...","token":"swr_live_..."}
+----
+
+==== Using Tokens
+
+Playwright:
+
+[source,javascript]
+----
+const browser = await chromium.connect({
+  wsEndpoint: 'wss://selen.corp.com/playwright/chromium/1.56.1',
+  headers: { Authorization: `Bearer ${process.env.SELENWRIGHT_TOKEN}` },
+});
+----
+
+Selenium (`ClientConfig` in Java; equivalents in every WebDriver binding):
+
+[source,java]
+----
+ClientConfig config = ClientConfig.defaultConfig()
+    .baseUri(URI.create("https://selen.corp.com/wd/hub"))
+    .addHeader("Authorization", "Bearer " + System.getenv("SELENWRIGHT_TOKEN"));
+----
+
+For WebSocket clients that cannot set custom headers (wscat, `<img src>`, some browser DevTools frontends), selenwright accepts a `?token=<plaintext>` query parameter on WebSocket-upgrade paths only: `/playwright/`, `/wd/hub/`, `/devtools/`, `/vnc/`, `/logs/`. The parameter is stripped from the URL before the request reaches upstream handlers, so it does not land in container logs. URL-embedded credentials still leak into shell history, reverse-proxy access logs, and terminal scrollback — prefer the header form whenever the client supports it.
+
+==== Revoking Tokens
+
+A single token:
+
+----
+curl -X DELETE https://selen.corp.com/api/admin/tokens/<id> \
+  -H "Authorization: Bearer <admin-token>"
+----
+
+Every token owned by a user (offboarding):
+
+----
+curl -X DELETE 'https://selen.corp.com/api/admin/tokens?owner=alice' \
+  -H "Authorization: Bearer <admin-token>"
+----
+
+The UI exposes both operations on the same page. Revocation is immediate — in-flight requests that already passed the auth check continue to their natural end, but no new request will clear.
+
+==== Env-var Seeding and the Dev Fallback
+
+For a local dev loop you usually want to skip htpasswd entirely:
+
+[source,shell]
+----
+./selenwright -listen :4444
+# [-] [INIT] [No htpasswd configured — generated initial admin token]
+# [-] [INIT] ┌──────────────────────────────────────────────────────────┐
+# [-] [INIT] │  swr_live_4f8a9c2e7b1d3f5e8a6c9b4d7e2f1a3c
+# [-] [INIT] │  id=tok_... owner=admin name=initial
+# [-] [INIT] │  Save it — won't be shown again.
+# [-] [INIT] │  Hash stored at state/auth/tokens.json
+# [-] [INIT] └──────────────────────────────────────────────────────────┘
+----
+
+Lost it? Delete `<state-dir>/auth/tokens.json` and restart — a fresh token is printed.
+
+In CI, pin the token instead via `SELENWRIGHT_AUTH_TOKEN`. On first boot (empty token store) selenwright hashes the env value and stores it as `owner=admin name=env-seed`. Subsequent boots that see the same env value are a no-op. If the env value does not match what is already stored, selenwright logs a warning and keeps the stored tokens intact — wipe `tokens.json` if you really want to re-seed.
+
 === Making a User an Admin
 
 By default all users are regular (non-admin). To promote users to admin, list them in `-admin-users`:
@@ -77,13 +160,14 @@ Selenwright reloads the file without dropping running sessions.
 
 === Disabling Authentication
 
-You can disable auth entirely:
+You can disable auth entirely with either spelling:
 
 ----
 ./selenwright -auth-mode=none -listen=127.0.0.1:4444
+./selenwright --no-auth       -listen=127.0.0.1:4444
 ----
 
-This is accepted on any listen address, including `:4444`. When the listen address is not a loopback interface, selenwright logs a warning that the service is reachable without authentication — the operator is responsible for network-level protection (firewall, overlay network, bastion, reverse proxy).
+`--no-auth` is a convenience alias for `-auth-mode=none`. Both are accepted on any listen address, including `:4444`. When the listen address is not a loopback interface, selenwright logs a warning that the service is reachable without authentication — the operator is responsible for network-level protection (firewall, overlay network, bastion, reverse proxy).
 
 === Authentication Modes
 

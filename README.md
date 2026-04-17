@@ -20,6 +20,8 @@ chmod +x selenwright
 ./selenwright
 ```
 
+Selenwright prints a single admin bearer token to stdout on first boot — copy it. Pass it as `Authorization: Bearer <token>` from your tests, or run with `--no-auth` for an open local instance. For multi-user setups create a bcrypt htpasswd file and pass `-htpasswd`; see [Authentication](https://aqa-alex.github.io/selenwright/latest/#_authentication_and_authorization) for minting tokens to team members.
+
 4. Point your tests at the Selenium endpoint:
 
 ```
@@ -54,10 +56,13 @@ ws://<host>:4444/playwright/<browser>/<playwright-version>
 Connect from a Playwright client:
 
 ```javascript
-const browser = await browserType.connect(
-  "ws://selenwright.example.com:4444/playwright/chromium/1.44.1"
-);
+const browser = await browserType.connect({
+  wsEndpoint: "wss://selenwright.example.com/playwright/chromium/1.44.1",
+  headers: { Authorization: `Bearer ${process.env.SELENWRIGHT_TOKEN}` },
+});
 ```
+
+Tokens are minted by an admin (UI → Settings → API Tokens, or `POST /api/admin/tokens`). See [Authentication](https://aqa-alex.github.io/selenwright/latest/#_authentication_and_authorization).
 
 Or via environment variable for your test launcher:
 

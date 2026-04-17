@@ -22,9 +22,15 @@ The following flags are supported by `selenwright` command.
     (default "embedded"). 'none' is allowed on any listen address;
     operator owns network-level protection. See
     <<Authentication and Authorization>> for details
+--no-auth
+    Alias for -auth-mode=none. Allowed on any listen address; operator
+    owns network-level protection
 -htpasswd string
     Path to bcrypt-format htpasswd file used by -auth-mode=embedded.
-    Generate with: htpasswd -B users.htpasswd alice
+    Generate with: htpasswd -B users.htpasswd alice. When omitted and
+    auth is enabled, selenwright boots in dev mode and prints a single
+    admin bearer token to stdout; pin it across restarts with the
+    SELENWRIGHT_AUTH_TOKEN env var
 -admin-users string
     Comma-separated list of usernames treated as admin in
     -auth-mode=embedded
@@ -208,6 +214,19 @@ When set, these checks are AND'd together — all configured conditions must pas
 -version
     Show version and exit
 ----
+
+=== Environment Variables
+
+[cols="1,3"]
+|===
+| Variable | Purpose
+
+| `SELENWRIGHT_AUTH_TOKEN`
+| Plaintext bearer token to seed on first boot. Applied only when `<state-dir>/auth/tokens.json` is absent or empty; subsequent boots ignore it. Stored as `owner=admin name=env-seed`. If the env value does not match what is already on disk, selenwright logs a warning and leaves the stored tokens untouched. See <<API Tokens (for Machine Clients)>>
+
+| `GGR_HOST`
+| When set, prefixes every session ID with a stable hash so sessions can be routed through https://github.com/aerokube/ggr[Ggr]. Format: `host:port`
+|===
 
 === Usage Example
 
