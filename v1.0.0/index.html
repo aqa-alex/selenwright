@@ -666,6 +666,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_event_workers">3.6.3. Event Workers</a></li>
 </ul>
 </li>
+<li><a href="#_saving_session_metadata">3.7. Saving Session Metadata</a></li>
 </ul>
 </li>
 <li><a href="#_security">4. Security</a>
@@ -673,13 +674,15 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_authentication_and_authorization">4.1. Authentication and Authorization</a>
 <ul class="sectlevel3">
 <li><a href="#_quick_start_adding_users">4.1.1. Quick Start: Adding Users</a></li>
-<li><a href="#_making_a_user_an_admin">4.1.2. Making a User an Admin</a></li>
-<li><a href="#_updating_users_without_restart">4.1.3. Updating Users Without Restart</a></li>
-<li><a href="#_disabling_authentication_development">4.1.4. Disabling Authentication (Development)</a></li>
-<li><a href="#_authentication_modes">4.1.5. Authentication Modes</a></li>
-<li><a href="#_source_trust_protecting_the_proxy">4.1.6. Source Trust (Protecting the Proxy)</a></li>
-<li><a href="#_capability_policy">4.1.7. Capability Policy</a></li>
-<li><a href="#_session_ownership">4.1.8. Session Ownership</a></li>
+<li><a href="#_api_tokens_for_machine_clients">4.1.2. API Tokens (for Machine Clients)</a></li>
+<li><a href="#_making_a_user_an_admin">4.1.3. Making a User an Admin</a></li>
+<li><a href="#_updating_users_without_restart">4.1.4. Updating Users Without Restart</a></li>
+<li><a href="#_disabling_authentication">4.1.5. Disabling Authentication</a></li>
+<li><a href="#_authentication_modes">4.1.6. Authentication Modes</a></li>
+<li><a href="#_source_trust_protecting_the_proxy">4.1.7. Source Trust (Protecting the Proxy)</a></li>
+<li><a href="#_capability_policy">4.1.8. Capability Policy</a></li>
+<li><a href="#_session_ownership">4.1.9. Session Ownership</a></li>
+<li><a href="#_teamgroup_sharing">4.1.10. Team/Group Sharing</a></li>
 </ul>
 </li>
 </ul>
@@ -736,8 +739,9 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_request_limits">5.9.11. Request Limits</a></li>
 <li><a href="#_metrics_observability">5.9.12. Metrics &amp; Observability</a></li>
 <li><a href="#_misc">5.9.13. Misc</a></li>
-<li><a href="#_usage_example">5.9.14. Usage Example</a></li>
-<li><a href="#_s3_cli_flags">5.9.15. S3 CLI Flags</a></li>
+<li><a href="#_environment_variables">5.9.14. Environment Variables</a></li>
+<li><a href="#_usage_example">5.9.15. Usage Example</a></li>
+<li><a href="#_s3_cli_flags">5.9.16. S3 CLI Flags</a></li>
 </ul>
 </li>
 </ul>
@@ -748,9 +752,6 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <div id="content">
 <div id="preamble">
 <div class="sectionbody">
-<div class="paragraph">
-<p>This reference covers version: <em>v1.0.0</em></p>
-</div>
 <div class="paragraph">
 <p>Selenwright is a fork of <a href="https://github.com/aerokube/selenoid">Selenoid</a> with native Playwright WebSocket support in addition to Selenium WebDriver.
 It is using Docker to launch browsers. Please refer to <a href="https://github.com/aqa-alex/selenwright">GitHub repository</a> if you need source code.</p>
@@ -782,6 +783,18 @@ It is using Docker to launch browsers. Please refer to <a href="https://github.c
 </li>
 <li>
 <p>Run Selenwright:</p>
+<div class="listingblock">
+<div class="title">*nix</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="bash">$ ./selenwright</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title">Windows</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="bash">selenwright.exe</code></pre>
+</div>
+</div>
 <div class="admonitionblock warning">
 <table>
 <tr>
@@ -838,7 +851,7 @@ It is using Docker to launch browsers. Please refer to <a href="https://github.c
 <div class="listingblock">
 <div class="title">UI Default URL</div>
 <div class="content">
-<pre>http://localhost:8080/</pre>
+<pre>http://localhost:4173/</pre>
 </div>
 </div>
 </li>
@@ -881,8 +894,9 @@ It is using Docker to launch browsers. Please refer to <a href="https://github.c
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>$ docker pull selenwright/chrome:130.0
-$ docker pull selenwright/firefox:131.0</pre>
+<pre>$ docker pull selenwright/playwright-chromium:latest
+$ docker pull selenwright/playwright-firefox:latest
+$ docker pull selenwright/playwright-webkit:latest</pre>
 </div>
 </div>
 <div class="paragraph">
@@ -898,23 +912,25 @@ $ docker pull selenwright/firefox:131.0</pre>
 <div class="title">config/browsers.json</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="json">{
-    <span class="key"><span class="delimiter">&quot;</span><span class="content">chrome</span><span class="delimiter">&quot;</span></span>: {
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">130.0</span><span class="delimiter">&quot;</span></span>,
+    <span class="key"><span class="delimiter">&quot;</span><span class="content">chromium</span><span class="delimiter">&quot;</span></span>: {
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>,
         <span class="key"><span class="delimiter">&quot;</span><span class="content">versions</span><span class="delimiter">&quot;</span></span>: {
-            <span class="key"><span class="delimiter">&quot;</span><span class="content">130.0</span><span class="delimiter">&quot;</span></span>: {
-                <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">selenwright/chrome:130.0</span><span class="delimiter">&quot;</span></span>,
-                <span class="key"><span class="delimiter">&quot;</span><span class="content">port</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">4444</span><span class="delimiter">&quot;</span></span>,
-                <span class="key"><span class="delimiter">&quot;</span><span class="content">path</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span>
+            <span class="key"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>: {
+                <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">selenwright/playwright-chromium:latest</span><span class="delimiter">&quot;</span></span>,
+                <span class="key"><span class="delimiter">&quot;</span><span class="content">port</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">3000</span><span class="delimiter">&quot;</span></span>,
+                <span class="key"><span class="delimiter">&quot;</span><span class="content">path</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span>,
+                <span class="key"><span class="delimiter">&quot;</span><span class="content">protocol</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">playwright</span><span class="delimiter">&quot;</span></span>
             }
         }
     },
     <span class="key"><span class="delimiter">&quot;</span><span class="content">firefox</span><span class="delimiter">&quot;</span></span>: {
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">131.0</span><span class="delimiter">&quot;</span></span>,
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>,
         <span class="key"><span class="delimiter">&quot;</span><span class="content">versions</span><span class="delimiter">&quot;</span></span>: {
-            <span class="key"><span class="delimiter">&quot;</span><span class="content">131.0</span><span class="delimiter">&quot;</span></span>: {
-                <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">selenwright/firefox:131.0</span><span class="delimiter">&quot;</span></span>,
-                <span class="key"><span class="delimiter">&quot;</span><span class="content">port</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">4444</span><span class="delimiter">&quot;</span></span>,
-                <span class="key"><span class="delimiter">&quot;</span><span class="content">path</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">/wd/hub</span><span class="delimiter">&quot;</span></span>
+            <span class="key"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>: {
+                <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">selenwright/playwright-firefox:latest</span><span class="delimiter">&quot;</span></span>,
+                <span class="key"><span class="delimiter">&quot;</span><span class="content">port</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">3000</span><span class="delimiter">&quot;</span></span>,
+                <span class="key"><span class="delimiter">&quot;</span><span class="content">path</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span>,
+                <span class="key"><span class="delimiter">&quot;</span><span class="content">protocol</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">playwright</span><span class="delimiter">&quot;</span></span>
             }
         }
     }
@@ -928,7 +944,7 @@ $ docker pull selenwright/firefox:131.0</pre>
 <i class="fa icon-note" title="Note"></i>
 </td>
 <td class="content">
-For Chrome and Opera images <code>path</code> is <code>"/"</code>. For Firefox images <code>path</code> is <code>"/wd/hub"</code>. For Playwright images set <code>"protocol": "playwright"</code> — see <a href="#_browsers_configuration_file">Browsers Configuration File</a> for all fields.
+Playwright images expose port <code>3000</code> at path <code>/</code> and require <code>"protocol": "playwright"</code>. For classic Selenium images use <code>"path": "/"</code> for Chrome/Opera and <code>"path": "/wd/hub"</code> for Firefox. See <a href="#_browsers_configuration_file">Browsers Configuration File</a> for all fields.
 </td>
 </tr>
 </table>
@@ -938,8 +954,8 @@ For Chrome and Opera images <code>path</code> is <code>"/"</code>. For Firefox i
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>$ docker pull selenwright/chrome:130.0
-$ docker pull selenwright/firefox:131.0</pre>
+<pre>$ docker pull selenwright/playwright-chromium:latest
+$ docker pull selenwright/playwright-firefox:latest</pre>
 </div>
 </div>
 <div class="paragraph">
@@ -949,7 +965,50 @@ $ docker pull selenwright/firefox:131.0</pre>
 <div class="sect4">
 <h5 id="_browser_images"><a class="anchor" href="#_browser_images"></a>Browser Images</h5>
 <div class="paragraph">
-<p>TBA</p>
+<p>Selenwright publishes Playwright-based browser images on Docker Hub:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://hub.docker.com/r/selenwright/playwright-chromium"><code>selenwright/playwright-chromium</code></a></p>
+</li>
+<li>
+<p><a href="https://hub.docker.com/r/selenwright/playwright-firefox"><code>selenwright/playwright-firefox</code></a></p>
+</li>
+<li>
+<p><a href="https://hub.docker.com/r/selenwright/playwright-webkit"><code>selenwright/playwright-webkit</code></a></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Each image carries <code>io.selenwright.*</code> Docker labels so <a href="#_browser_discovery">Browser Discovery</a> picks them up without a configuration file. Dockerfiles live in <a href="https://github.com/aqa-alex/selenwright-browsers">aqa-alex/selenwright-browsers</a>.</p>
+</div>
+<div class="paragraph">
+<p>Classic Selenium-protocol images are not published under <code>selenwright/</code> — bring your own (for example, upstream <code>selenoid/chrome</code>, <code>selenoid/firefox</code>).</p>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-important" title="Important"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>Browser Discovery and <code>browsers.json</code> are mutually exclusive: as soon as Selenwright finds any adopted image, it builds the catalog from Docker labels and ignores <code>browsers.json</code> entirely. To mix Playwright and classic Selenium browsers, pick one mechanism and put <strong>all</strong> entries there:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>JSON-only</strong> — don&#8217;t adopt anything in the UI; list every browser (Playwright and Selenium) in <code>browsers.json</code>.</p>
+</li>
+<li>
+<p><strong>Discovery-only</strong> — tag your Selenium images with the required <code>io.selenwright.*</code> labels (see <a href="https://github.com/aqa-alex/selenwright-browsers">selenwright-browsers</a> for the label contract) and adopt them alongside the Playwright images.</p>
+</li>
+</ul>
+</div>
+</td>
+</tr>
+</table>
 </div>
 </div>
 </div>
@@ -1147,12 +1206,6 @@ If you use a manual <code>browsers.json</code> (Option B above), mount it as a v
 </div>
 <div class="paragraph">
 <p>Please check that you have <code>enableVNC = true</code> capability in your tests</p>
-</div>
-<div class="paragraph">
-<p><strong>Seeing black screen with a cross in VNC window</strong></p>
-</div>
-<div class="paragraph">
-<p>You are using <code>driver.close()</code> instead of <code>driver.quit()</code> and just closed the last browser tab instead of removing the session.</p>
 </div>
 <div class="paragraph">
 <p><strong>Can Selenwright pull browser images automatically?</strong></p>
@@ -1452,6 +1505,18 @@ This feature is supported in WebDriver protocol by sending zipped file contents 
 </div>
 <div class="sect2">
 <h3 id="_downloading_files_from_browser"><a class="anchor" href="#_downloading_files_from_browser"></a>2.4. Downloading Files From Browser</h3>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+The <code>RemoteWebDriver</code> examples below assume anonymous access for readability. When selenwright has authentication enabled (the default), supply an API token via <code>ClientConfig.addHeader("Authorization", "Bearer " + token)</code> in Java or the equivalent in your WebDriver binding, instead of embedding <code>user:pass@</code> in the URL. See <a href="#_api_tokens_for_machine_clients">API Tokens (for Machine Clients)</a>.
+</td>
+</tr>
+</table>
+</div>
 <div class="sect3">
 <h4 id="_downloading_files_in_different_browsers"><a class="anchor" href="#_downloading_files_in_different_browsers"></a>2.4.1. Downloading Files in Different Browsers</h4>
 <div class="sect4">
@@ -1603,10 +1668,10 @@ some-clipboard-value</code></pre>
 <div class="olist arabic">
 <ol class="arabic">
 <li>
-<p>Currently only <a href="https://chromedevtools.github.io/devtools-protocol/">Chrome Developer Tools</a> are supported.</p>
+<p>Only available for classic Selenium Chrome images that expose a CDP relay on container port <code>7070</code> (for example upstream <code>selenoid/chrome</code>). The published <code>selenwright/playwright-*</code> images do not expose this port — Playwright clients access CDP through the native Playwright endpoint (see <a href="#_native_playwright_support">Native Playwright Support</a>) instead.</p>
 </li>
 <li>
-<p>This feature will work only for Chrome 63+.</p>
+<p>Only <a href="https://chromedevtools.github.io/devtools-protocol/">Chrome Developer Tools</a> are supported.</p>
 </li>
 <li>
 <p>We recommend to use the most recent Chrome version possible.</p>
@@ -1674,37 +1739,6 @@ some-clipboard-value</code></pre>
 <div class="listingblock">
 <div class="content">
 <pre class="CodeRay highlight"><code>ws://selenwright.example.com:4444/devtools/&lt;session-id&gt;/page</code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="title">Accessing Developer Tools API with Webdriver.io and Puppeteer</div>
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="javascript">const { remote } = require(<span class="string"><span class="delimiter">'</span><span class="content">webdriverio</span><span class="delimiter">'</span></span>);
-const puppeteer = require(<span class="string"><span class="delimiter">'</span><span class="content">puppeteer-core</span><span class="delimiter">'</span></span>);
-const host = <span class="string"><span class="delimiter">'</span><span class="content">selenwright.example.com</span><span class="delimiter">'</span></span>;
-(async () =&gt; {
-    const browser = await remote({
-        <span class="key">hostname</span>: host,
-        <span class="key">capabilities</span>: {
-            <span class="key">browserName</span>: <span class="string"><span class="delimiter">'</span><span class="content">chrome</span><span class="delimiter">'</span></span>,
-            <span class="key">browserVersion</span>: <span class="string"><span class="delimiter">'</span><span class="content">75.0</span><span class="delimiter">'</span></span>
-        }
-    });
-
-    const devtools = await puppeteer.connect(
-        { <span class="key">browserWSEndpoint</span>: <span class="error">`</span>ws:<span class="comment">//${host}:4444/devtools/${browser.sessionId}` }</span>
-    );
-    const page = await devtools.newPage();
-    await page.<span class="reserved">goto</span>(<span class="string"><span class="delimiter">'</span><span class="content">http://example.com</span><span class="delimiter">'</span></span>);
-    await page.screenshot({<span class="key">path</span>: <span class="string"><span class="delimiter">'</span><span class="content">screenshot.png</span><span class="delimiter">'</span></span>});
-    const title = await page.title();
-
-    console.log(title);
-
-    await devtools.close();
-    await browser.deleteSession();
-
-})().<span class="keyword">catch</span>((e) =&gt; console.error(e));</code></pre>
 </div>
 </div>
 </div>
@@ -1803,7 +1837,52 @@ const host = <span class="string"><span class="delimiter">'</span><span class="c
 <li>
 <p>Define Docker <code>HEALTHCHECK</code>.</p>
 </li>
+<li>
+<p>For <a href="#_browser_discovery">Browser Discovery</a> pickup, carry the <code>io.selenwright.*</code> labels described below. Without them the image is invisible to discovery and must be registered via <code>browsers.json</code>.</p>
+</li>
 </ul>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 2. Required Docker labels for Browser Discovery</caption>
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Label</th>
+<th class="tableblock halign-left valign-top">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.browser</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Browser name (<code>chromium</code>, <code>firefox</code>, <code>webkit</code>, &#8230;&#8203;). Required.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.version</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Version entry used in the catalog and connection URL. Required.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.port</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Port exposed by the image. Required unless <code>io.selenwright.config</code> is used.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.protocol</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Set to <code>playwright</code> for Playwright images.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.path</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">WebSocket path (default <code>/</code>).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.default</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>true</code> to mark this version as default for the browser.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Optional labels mirror the per-field names in <code>browsers.json</code>: <code>tmpfs</code>, <code>env</code>, <code>volumes</code>, <code>hosts</code>, <code>shmSize</code>, <code>mem</code>, <code>cpu</code>, <code>labels</code>, <code>sysctl</code>. As an escape hatch, <code>io.selenwright.config</code> accepts a full Browser JSON blob; when present, per-field labels are ignored. See <a href="https://github.com/aqa-alex/selenwright-browsers">selenwright-browsers</a> for a working example.</p>
 </div>
 <div class="paragraph">
 <p>At startup Selenwright prefers Docker <code>HEALTHCHECK</code> when the image provides one. If health status is unavailable, Selenwright falls back to protocol-specific probing. For Playwright images that fallback is a TCP probe against the configured Playwright endpoint.</p>
@@ -1815,7 +1894,7 @@ const host = <span class="string"><span class="delimiter">'</span><span class="c
 <p>Playwright client and server versions must match on major and minor version.</p>
 </div>
 <div class="paragraph">
-<p>For example, a client from Playwright <code>1.44.x</code> should connect to an image built for Playwright <code>1.44.x</code>. Keep the image tag, the configured Selenwright version entry, and the client connection URL aligned.</p>
+<p>For example, a client from Playwright <code>1.56.x</code> should connect to an image built for Playwright <code>1.56.x</code>. Keep the image tag, the configured Selenwright version entry, and the client connection URL aligned.</p>
 </div>
 </div>
 <div class="sect3">
@@ -1827,10 +1906,10 @@ const host = <span class="string"><span class="delimiter">'</span><span class="c
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="javascript">{
   <span class="key"><span class="delimiter">&quot;</span><span class="content">chromium</span><span class="delimiter">&quot;</span></span>: {
-    <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">1.44.1</span><span class="delimiter">&quot;</span></span>,
+    <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>,
     <span class="key"><span class="delimiter">&quot;</span><span class="content">versions</span><span class="delimiter">&quot;</span></span>: {
-      <span class="key"><span class="delimiter">&quot;</span><span class="content">1.44.1</span><span class="delimiter">&quot;</span></span>: {
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">example/playwright-chromium:1.44.1</span><span class="delimiter">&quot;</span></span>,
+      <span class="key"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>: {
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">selenwright/playwright-chromium:latest</span><span class="delimiter">&quot;</span></span>,
         <span class="key"><span class="delimiter">&quot;</span><span class="content">port</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">3000</span><span class="delimiter">&quot;</span></span>,
         <span class="key"><span class="delimiter">&quot;</span><span class="content">path</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span>,
         <span class="key"><span class="delimiter">&quot;</span><span class="content">protocol</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">playwright</span><span class="delimiter">&quot;</span></span>
@@ -1841,7 +1920,7 @@ const host = <span class="string"><span class="delimiter">'</span><span class="c
 </div>
 </div>
 <div class="paragraph">
-<p>This example image name is illustrative only. Selenwright does not publish companion Playwright images from this repository.</p>
+<p>Selenwright publishes matching companion images — see <a href="#_browser_images">Browser Images</a> for the full list.</p>
 </div>
 </div>
 <div class="sect3">
@@ -1852,20 +1931,59 @@ const host = <span class="string"><span class="delimiter">'</span><span class="c
 <div class="listingblock">
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect(
-  <span class="string"><span class="delimiter">&quot;</span><span class="content">ws://selenwright.example.com:4444/playwright/chromium/1.44.1</span><span class="delimiter">&quot;</span></span>
+  <span class="string"><span class="delimiter">&quot;</span><span class="content">ws://selenwright.example.com:4444/playwright/chromium/1.56.1</span><span class="delimiter">&quot;</span></span>
 );</code></pre>
 </div>
+</div>
+<div class="sect4">
+<h5 id="_passing_an_api_token"><a class="anchor" href="#_passing_an_api_token"></a>Passing an API Token</h5>
+<div class="paragraph">
+<p>When selenwright has authentication enabled (the default), pass the bearer token in the <code>Authorization</code> header:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect({
+  <span class="key">wsEndpoint</span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">wss://selenwright.example.com/playwright/chromium/1.56.1</span><span class="delimiter">&quot;</span></span>,
+  <span class="key">headers</span>: { <span class="key">Authorization</span>: <span class="error">`</span>Bearer <span class="predefined">$</span>{process.env.SELENWRIGHT_TOKEN}<span class="error">`</span> },
+});</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For clients that cannot set custom WebSocket headers, selenwright also accepts a <code>?token=&lt;plaintext&gt;</code> query fallback:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect(
+  <span class="error">`</span>wss:<span class="comment">//selenwright.example.com/playwright/chromium/1.56.1?token=${process.env.SELENWRIGHT_TOKEN}`</span>
+);</code></pre>
+</div>
+</div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+The query form puts the token in URL-shaped surfaces — shell history, CI logs, the browser&#8217;s reverse-proxy access log — even though selenwright strips the parameter before forwarding the request upstream. Prefer the header form whenever your client supports it.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>See <a href="#_api_tokens_for_machine_clients">API Tokens (for Machine Clients)</a> in the Authentication chapter for how tokens are minted and revoked.</p>
 </div>
 <div class="paragraph">
 <p>If your test bootstrap reads an environment variable to choose the remote endpoint, you can pass the same URL through it:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="bash">PW_TEST_CONNECT_WS_ENDPOINT=ws://selenwright.example.com:4444/playwright/chromium/1.44.1</code></pre>
+<pre class="CodeRay highlight"><code data-lang="bash">PW_TEST_CONNECT_WS_ENDPOINT=ws://selenwright.example.com:4444/playwright/chromium/1.56.1</code></pre>
 </div>
 </div>
 <div class="paragraph">
 <p><code>PW_TEST_CONNECT_WS_ENDPOINT</code> is only a user-side convention for your own Playwright config or test launcher. It is not a built-in Selenwright environment variable.</p>
+</div>
 </div>
 </div>
 <div class="sect3">
@@ -1893,7 +2011,7 @@ The Selenwright-specific <code>/file</code> and <code>/download/</code> HTTP end
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>ws://host:4444/playwright/chromium/1.44.1?enableVNC=true&amp;name=myTest&amp;screenResolution=1280x1024</pre>
+<pre>ws://host:4444/playwright/chromium/1.56.1?enableVNC=true&amp;name=myTest&amp;screenResolution=1280x1024</pre>
 </div>
 </div>
 <div class="paragraph">
@@ -2322,9 +2440,9 @@ Thus entries from capabilities override entries from configuration file if some 
     <span class="key"><span class="delimiter">&quot;</span><span class="content">queued</span><span class="delimiter">&quot;</span></span>: <span class="integer">0</span>,
     <span class="key"><span class="delimiter">&quot;</span><span class="content">pending</span><span class="delimiter">&quot;</span></span>: <span class="integer">1</span>,
     <span class="key"><span class="delimiter">&quot;</span><span class="content">browsers</span><span class="delimiter">&quot;</span></span>: {
-      <span class="key"><span class="delimiter">&quot;</span><span class="content">firefox</span><span class="delimiter">&quot;</span></span>: {
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">46.0</span><span class="delimiter">&quot;</span></span>: {
-          <span class="key"><span class="delimiter">&quot;</span><span class="content">user1</span><span class="delimiter">&quot;</span></span>: {
+      <span class="key"><span class="delimiter">&quot;</span><span class="content">chromium</span><span class="delimiter">&quot;</span></span>: {
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>: {
+          <span class="key"><span class="delimiter">&quot;</span><span class="content">alice</span><span class="delimiter">&quot;</span></span>: {
             <span class="key"><span class="delimiter">&quot;</span><span class="content">count</span><span class="delimiter">&quot;</span></span>:<span class="integer">1</span>,
             <span class="key"><span class="delimiter">&quot;</span><span class="content">sessions</span><span class="delimiter">&quot;</span></span>:[
                 {
@@ -2334,15 +2452,17 @@ Thus entries from capabilities override entries from configuration file if some 
                  }
             ]
           },
-          <span class="key"><span class="delimiter">&quot;</span><span class="content">user2</span><span class="delimiter">&quot;</span></span>: {
+          <span class="key"><span class="delimiter">&quot;</span><span class="content">jenkins-bot</span><span class="delimiter">&quot;</span></span>: {
             <span class="key"><span class="delimiter">&quot;</span><span class="content">count</span><span class="delimiter">&quot;</span></span>:<span class="integer">6</span>,
             <span class="key"><span class="delimiter">&quot;</span><span class="content">sessions</span><span class="delimiter">&quot;</span></span>:[
                 <span class="comment">//...</span>
             ]
-          },
-        },
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">48.0</span><span class="delimiter">&quot;</span></span>: {
-          <span class="key"><span class="delimiter">&quot;</span><span class="content">user2</span><span class="delimiter">&quot;</span></span>: {
+          }
+        }
+      },
+      <span class="key"><span class="delimiter">&quot;</span><span class="content">firefox</span><span class="delimiter">&quot;</span></span>: {
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>: {
+          <span class="key"><span class="delimiter">&quot;</span><span class="content">jenkins-bot</span><span class="delimiter">&quot;</span></span>: {
             <span class="key"><span class="delimiter">&quot;</span><span class="content">count</span><span class="delimiter">&quot;</span></span>:<span class="integer">3</span>,
             <span class="key"><span class="delimiter">&quot;</span><span class="content">sessions</span><span class="delimiter">&quot;</span></span>:[
                 <span class="comment">//...</span>
@@ -2355,7 +2475,7 @@ Thus entries from capabilities override entries from configuration file if some 
 </div>
 </div>
 <div class="paragraph">
-<p>Users are extracted from basic HTTP authentication headers.</p>
+<p>Users come from the authenticated identity — <code>htpasswd</code> or bearer token (<code>embedded</code> mode) or the <code>X-Forwarded-User</code> header (<code>trusted-proxy</code> mode). See <a href="#_authentication_and_authorization">Authentication and Authorization</a>.</p>
 </div>
 <div class="sect3">
 <h4 id="_what_statistics_mean"><a class="anchor" href="#_what_statistics_mean"></a>3.1.1. What Statistics Mean</h4>
@@ -2446,7 +2566,7 @@ If you omit <code>-s3-access-key</code> and <code>-s3-secret-key</code> flags th
 <p>By default uploaded file name is preserved, i.e. S3 path is <code>/&lt;session-id&gt;.log</code> or <code>/myCustomVideo.mp4</code>. You can optionally provide your custom key pattern using <code>-s3-key-pattern</code> flag and a set of placeholders:</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 2. S3 Key Placeholders</caption>
+<caption class="title">Table 3. S3 Key Placeholders</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2488,7 +2608,7 @@ If you omit <code>-s3-access-key</code> and <code>-s3-secret-key</code> flags th
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">$quota</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Replaced by quota name (usually coming from Ggr)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Replaced by the authenticated user/quota name</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">$sessionId</p></td>
@@ -2934,6 +3054,40 @@ The pull and recreate operations use a helper container (<code>docker:27-cli</co
 </div>
 </div>
 </div>
+<div class="sect2">
+<h3 id="_saving_session_metadata"><a class="anchor" href="#_saving_session_metadata"></a>3.7. Saving Session Metadata</h3>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-important" title="Important"></i>
+</td>
+<td class="content">
+This feature only becomes available when Selenwright is compiled with <code>metadata</code> build tag (missing by default).
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Selenwright can save session metadata to a separate JSON file. Main use case is to somehow post-process session logs, e.g. send them to map-reduce cluster. No additional configuration is needed to enable this feature. When enabled and <code>-log-output-dir</code> flag is set - Selenwright will automatically save JSON files <code>&lt;log-output-dir&gt;/&lt;session-id&gt;.json</code> with the following content:</p>
+</div>
+<div class="listingblock">
+<div class="title">Example metadata JSON file</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="javascript">{
+    <span class="key"><span class="delimiter">&quot;</span><span class="content">id</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">62a4d82d-edf6-43d5-886f-895b77ff23b7</span><span class="delimiter">&quot;</span></span>,
+    <span class="key"><span class="delimiter">&quot;</span><span class="content">capabilities</span><span class="delimiter">&quot;</span></span>: {
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">browserName</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">chrome</span><span class="delimiter">&quot;</span></span>,
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">version</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">70.0</span><span class="delimiter">&quot;</span></span>,
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">name</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">MyCoolTest</span><span class="delimiter">&quot;</span></span>,
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">screenResolution</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">1920x1080x24</span><span class="delimiter">&quot;</span></span>
+    },
+    <span class="key"><span class="delimiter">&quot;</span><span class="content">started</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">2018-11-15T16:23:12.440916+03:00</span><span class="delimiter">&quot;</span></span>,
+    <span class="key"><span class="delimiter">&quot;</span><span class="content">finished</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">2018-11-15T16:23:12.480928+03:00</span><span class="delimiter">&quot;</span></span>
+}</code></pre>
+</div>
+</div>
+</div>
 </div>
 </div>
 <div class="sect1">
@@ -3005,7 +3159,135 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 </div>
 </div>
 <div class="sect3">
-<h4 id="_making_a_user_an_admin"><a class="anchor" href="#_making_a_user_an_admin"></a>4.1.2. Making a User an Admin</h4>
+<h4 id="_api_tokens_for_machine_clients"><a class="anchor" href="#_api_tokens_for_machine_clients"></a>4.1.2. API Tokens (for Machine Clients)</h4>
+<div class="paragraph">
+<p>htpasswd passwords are the right fit for humans logging into the UI. For Playwright/Selenium clients running in CI or on a developer&#8217;s laptop, selenwright supports <strong>bearer tokens</strong> so credentials never need to be pasted into a URL (where they leak into shell history, logs, and screenshots).</p>
+</div>
+<div class="paragraph">
+<p>An admin mints a token on behalf of a user, the user drops it into <code>SELENWRIGHT_TOKEN</code> (or however the client reads secrets), and the client sends <code>Authorization: Bearer &lt;token&gt;</code> with every request. The token inherits the owner&#8217;s groups at creation time, so group-based session ACL still applies.</p>
+</div>
+<div class="paragraph">
+<p>Tokens are stored hashed (bcrypt) in <code>&lt;state-dir&gt;/auth/tokens.json</code>. Plaintext is shown to the admin <strong>once</strong> — distribute it through a secret manager (1Password, Bitwarden, Keybase). Never paste tokens into Slack, tickets, or email.</p>
+</div>
+<div class="sect4">
+<h5 id="_getting_your_first_admin_token"><a class="anchor" href="#_getting_your_first_admin_token"></a>Getting Your First Admin Token</h5>
+<div class="paragraph">
+<p>The curl in the next section authenticates with <code>Authorization: Bearer &lt;admin-token&gt;</code>. The very first admin token is produced by selenwright itself — where exactly depends on how you started the process:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Started with&#8230;&#8203;</th>
+<th class="tableblock halign-left valign-top">First admin token comes from&#8230;&#8203;</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>-htpasswd users.htpasswd</code> (production)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>No token is auto-generated.</strong> Log into the UI with an htpasswd account listed in <code>-admin-users</code>. Basic-auth login establishes a session cookie; while logged in, open <strong>Settings → API Tokens</strong> and create a token for yourself (or call <code>POST /api/admin/tokens</code> with the cookie). From then on this bearer is what automation uses — the htpasswd password stays in your password manager.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>SELENWRIGHT_AUTH_TOKEN=&lt;value&gt;</code> (declarative / CI)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>The env value itself is your admin token.</strong> On first boot (empty token store) selenwright hashes it and persists it as <code>owner=admin name=env-seed</code>. Later boots with the same value are a no-op; a different value logs a warning and keeps existing tokens — wipe <code>&lt;state-dir&gt;/auth/tokens.json</code> to re-seed.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Neither <code>-htpasswd</code> nor the env var (dev fallback)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Selenwright generates one on first boot and prints it to stdout</strong> (example below). Save it — it will not be shown again. Lost it? Delete <code>&lt;state-dir&gt;/auth/tokens.json</code> and restart to get a fresh one.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Dev-fallback stdout:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="shell">./selenwright -listen :4444
+# [-] [INIT] [No htpasswd configured — generated initial admin token]
+# [-] [INIT] ┌──────────────────────────────────────────────────────────┐
+# [-] [INIT] │  swr_live_4f8a9c2e7b1d3f5e8a6c9b4d7e2f1a3c
+# [-] [INIT] │  id=tok_... owner=admin name=initial
+# [-] [INIT] │  Save it — won't be shown again.
+# [-] [INIT] │  Hash stored at state/auth/tokens.json
+# [-] [INIT] └──────────────────────────────────────────────────────────┘</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_minting_tokens"><a class="anchor" href="#_minting_tokens"></a>Minting Tokens</h5>
+<div class="paragraph">
+<p>Once the admin has a bearer token (see above), mint tokens for users via REST:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>curl -X POST https://selen.corp.com/api/admin/tokens \
+  -H "Authorization: Bearer &lt;admin-token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"owner":"alice","name":"laptop"}'
+# → {"id":"tok_...","token":"swr_live_..."}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The same operation is available in the UI: log in as an admin, open <strong>Settings → API Tokens</strong>, click <strong>Create</strong>, pick the owner and a human-readable name (e.g. <code>laptop-alice</code>, <code>ci-runner</code>). Copy the plaintext from the modal — it will not be shown again.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_using_tokens"><a class="anchor" href="#_using_tokens"></a>Using Tokens</h5>
+<div class="paragraph">
+<p>Playwright:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await chromium.connect({
+  <span class="key">wsEndpoint</span>: <span class="string"><span class="delimiter">'</span><span class="content">wss://selen.corp.com/playwright/chromium/1.56.1</span><span class="delimiter">'</span></span>,
+  <span class="key">headers</span>: { <span class="key">Authorization</span>: <span class="error">`</span>Bearer <span class="predefined">$</span>{process.env.SELENWRIGHT_TOKEN}<span class="error">`</span> },
+});</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Selenium (<code>ClientConfig</code> in Java; equivalents in every WebDriver binding):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">ClientConfig config = ClientConfig.defaultConfig()
+    .baseUri(<span class="predefined-type">URI</span>.create(<span class="string"><span class="delimiter">&quot;</span><span class="content">https://selen.corp.com/wd/hub</span><span class="delimiter">&quot;</span></span>))
+    .addHeader(<span class="string"><span class="delimiter">&quot;</span><span class="content">Authorization</span><span class="delimiter">&quot;</span></span>, <span class="string"><span class="delimiter">&quot;</span><span class="content">Bearer </span><span class="delimiter">&quot;</span></span> + <span class="predefined-type">System</span>.getenv(<span class="string"><span class="delimiter">&quot;</span><span class="content">SELENWRIGHT_TOKEN</span><span class="delimiter">&quot;</span></span>));</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For WebSocket clients that cannot set custom headers (wscat, <code>&lt;img src&gt;</code>, some browser DevTools frontends), selenwright accepts a <code>?token=&lt;plaintext&gt;</code> query parameter on WebSocket-upgrade paths only: <code>/playwright/</code>, <code>/wd/hub/</code>, <code>/devtools/</code>, <code>/vnc/</code>, <code>/logs/</code>. The parameter is stripped from the URL before the request reaches upstream handlers, so it does not land in container logs. URL-embedded credentials still leak into shell history, reverse-proxy access logs, and terminal scrollback — prefer the header form whenever the client supports it.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_revoking_tokens"><a class="anchor" href="#_revoking_tokens"></a>Revoking Tokens</h5>
+<div class="paragraph">
+<p>A single token:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>curl -X DELETE https://selen.corp.com/api/admin/tokens/&lt;id&gt; \
+  -H "Authorization: Bearer &lt;admin-token&gt;"</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Every token owned by a user (offboarding):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>curl -X DELETE 'https://selen.corp.com/api/admin/tokens?owner=alice' \
+  -H "Authorization: Bearer &lt;admin-token&gt;"</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The UI exposes both operations on the same page. Revocation is immediate — in-flight requests that already passed the auth check continue to their natural end, but no new request will clear.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_making_a_user_an_admin"><a class="anchor" href="#_making_a_user_an_admin"></a>4.1.3. Making a User an Admin</h4>
 <div class="paragraph">
 <p>By default all users are regular (non-admin). To promote users to admin, list them in <code>-admin-users</code>:</p>
 </div>
@@ -3032,7 +3314,7 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 </div>
 </div>
 <div class="sect3">
-<h4 id="_updating_users_without_restart"><a class="anchor" href="#_updating_users_without_restart"></a>4.1.3. Updating Users Without Restart</h4>
+<h4 id="_updating_users_without_restart"><a class="anchor" href="#_updating_users_without_restart"></a>4.1.4. Updating Users Without Restart</h4>
 <div class="paragraph">
 <p>Edit the htpasswd file (add/remove/change passwords), then send <code>SIGHUP</code>:</p>
 </div>
@@ -3046,21 +3328,22 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 </div>
 </div>
 <div class="sect3">
-<h4 id="_disabling_authentication_development"><a class="anchor" href="#_disabling_authentication_development"></a>4.1.4. Disabling Authentication (Development)</h4>
+<h4 id="_disabling_authentication"><a class="anchor" href="#_disabling_authentication"></a>4.1.5. Disabling Authentication</h4>
 <div class="paragraph">
-<p>For local development you can disable auth entirely:</p>
+<p>You can disable auth entirely with either spelling:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>./selenwright -auth-mode=none -listen=127.0.0.1:4444</pre>
+<pre>./selenwright -auth-mode=none -listen=127.0.0.1:4444
+./selenwright --no-auth       -listen=127.0.0.1:4444</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>This only works on loopback addresses. To force it on a real network address (not recommended), add <code>-allow-insecure-none</code>.</p>
+<p><code>--no-auth</code> is a convenience alias for <code>-auth-mode=none</code>. Both are accepted on any listen address, including <code>:4444</code>. When the listen address is not a loopback interface, selenwright logs a warning that the service is reachable without authentication — the operator is responsible for network-level protection (firewall, overlay network, bastion, reverse proxy).</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_authentication_modes"><a class="anchor" href="#_authentication_modes"></a>4.1.5. Authentication Modes</h4>
+<h4 id="_authentication_modes"><a class="anchor" href="#_authentication_modes"></a>4.1.6. Authentication Modes</h4>
 <div class="paragraph">
 <p>Controlled by <code>-auth-mode</code> (default: <code>embedded</code>).</p>
 </div>
@@ -3088,6 +3371,10 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>-admin-users</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Comma-separated list of admin usernames</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>-groups-file</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Path to JSON group file (see <a href="#_teamgroup_sharing">Team/Group Sharing</a>). Hot-reloaded on <code>SIGHUP</code></p></td>
 </tr>
 </tbody>
 </table>
@@ -3125,6 +3412,10 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>-admin-header</code> (default <code>X-Admin</code>)</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Header whose value <code>"true"</code> marks the caller as admin</p></td>
 </tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>-groups-header</code> (default <code>X-Groups</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Header containing a comma-separated list of group names (see <a href="#_teamgroup_sharing">Team/Group Sharing</a>). Set to empty to disable group reading</p></td>
+</tr>
 </tbody>
 </table>
 <div class="admonitionblock warning">
@@ -3134,7 +3425,7 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 <i class="fa icon-warning" title="Warning"></i>
 </td>
 <td class="content">
-Without source trust validation (see below), any client can forge these headers. Always combine with at least one source trust check.
+Without source trust validation (see below), any client can forge these headers — including <code>-groups-header</code>, which would let a caller escalate into any team&#8217;s sessions. Always combine with at least one source trust check.
 </td>
 </tr>
 </table>
@@ -3143,12 +3434,12 @@ Without source trust validation (see below), any client can forge these headers.
 <div class="sect4">
 <h5 id="_none_no_authentication"><a class="anchor" href="#_none_no_authentication"></a><code>none</code> — No Authentication</h5>
 <div class="paragraph">
-<p>All requests are anonymous non-admin. Restricted to loopback unless <code>-allow-insecure-none</code> is set.</p>
+<p>All requests are anonymous non-admin. Allowed on any listen address; the operator is responsible for network-level protection (firewall, overlay, bastion). A warning is logged when the listen address is not loopback.</p>
 </div>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_source_trust_protecting_the_proxy"><a class="anchor" href="#_source_trust_protecting_the_proxy"></a>4.1.6. Source Trust (Protecting the Proxy)</h4>
+<h4 id="_source_trust_protecting_the_proxy"><a class="anchor" href="#_source_trust_protecting_the_proxy"></a>4.1.7. Source Trust (Protecting the Proxy)</h4>
 <div class="paragraph">
 <p>When using <code>trusted-proxy</code> mode, you need to ensure that only your proxy can reach Selenwright — otherwise anyone can set the <code>X-Forwarded-User</code> header. Source trust adds that protection. When multiple checks are configured, <strong>all</strong> must pass.</p>
 </div>
@@ -3194,7 +3485,7 @@ Without source trust validation (see below), any client can forge these headers.
 </div>
 </div>
 <div class="sect3">
-<h4 id="_capability_policy"><a class="anchor" href="#_capability_policy"></a>4.1.7. Capability Policy</h4>
+<h4 id="_capability_policy"><a class="anchor" href="#_capability_policy"></a>4.1.8. Capability Policy</h4>
 <div class="paragraph">
 <p>Controlled by <code>-caps-policy</code> (default: <code>strict</code>).</p>
 </div>
@@ -3225,14 +3516,17 @@ Without source trust validation (see below), any client can forge these headers.
 </div>
 </div>
 <div class="sect3">
-<h4 id="_session_ownership"><a class="anchor" href="#_session_ownership"></a>4.1.8. Session Ownership</h4>
+<h4 id="_session_ownership"><a class="anchor" href="#_session_ownership"></a>4.1.9. Session Ownership</h4>
 <div class="paragraph">
 <p>Every session is bound to the user who created it:</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Owner</strong> — full access to their own sessions (VNC, logs, devtools, downloads)</p>
+<p><strong>Owner</strong> — full access to their own sessions (VNC, logs, devtools, downloads, terminate)</p>
+</li>
+<li>
+<p><strong>Group-mate</strong> — when the owner and the caller belong to at least one common group, the caller gets the same full access as the owner (see <a href="#_teamgroup_sharing">Team/Group Sharing</a>)</p>
 </li>
 <li>
 <p><strong>Admin</strong> — full access to all sessions</p>
@@ -3241,6 +3535,83 @@ Without source trust validation (see below), any client can forge these headers.
 <p><strong>Other users</strong> — 403 Forbidden</p>
 </li>
 </ul>
+</div>
+<div class="paragraph">
+<p>Ownership is enforced uniformly for both Selenium (<code>DELETE /wd/hub/session/{id}</code>) and Playwright (<code>DELETE /playwright/session/{id}</code>) termination, as well as for VNC, devtools, downloads, clipboard and live log endpoints.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_teamgroup_sharing"><a class="anchor" href="#_teamgroup_sharing"></a>4.1.10. Team/Group Sharing</h4>
+<div class="paragraph">
+<p>The default <code>user == owner</code> rule is too narrow when sessions are created by a shared service account — for example, <code>jenkins-bot</code> launching tests from CI. Without groups, no human user can terminate those sessions through the UI except the admin.</p>
+</div>
+<div class="paragraph">
+<p>Groups solve this. Members of the same group can manage each other&#8217;s sessions (including sessions owned by service accounts in the group). Admin behavior is unchanged.</p>
+</div>
+<div class="sect4">
+<h5 id="_configuring_groups_embedded_mode"><a class="anchor" href="#_configuring_groups_embedded_mode"></a>Configuring Groups (embedded mode)</h5>
+<div class="paragraph">
+<p>Supply a JSON file mapping group name to list of member usernames:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="json">{
+  <span class="key"><span class="delimiter">&quot;</span><span class="content">qa-payments</span><span class="delimiter">&quot;</span></span>: [<span class="string"><span class="delimiter">&quot;</span><span class="content">alice</span><span class="delimiter">&quot;</span></span>, <span class="string"><span class="delimiter">&quot;</span><span class="content">bob</span><span class="delimiter">&quot;</span></span>, <span class="string"><span class="delimiter">&quot;</span><span class="content">jenkins-bot</span><span class="delimiter">&quot;</span></span>],
+  <span class="key"><span class="delimiter">&quot;</span><span class="content">qa-growth</span><span class="delimiter">&quot;</span></span>:   [<span class="string"><span class="delimiter">&quot;</span><span class="content">carol</span><span class="delimiter">&quot;</span></span>]
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Point to it with <code>-groups-file</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>./selenwright \
+  -htpasswd users.htpasswd \
+  -admin-users=root \
+  -groups-file=groups.json</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The file is hot-reloaded on <code>SIGHUP</code> alongside the htpasswd file. Parse or validation errors are logged and the previous membership is kept.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_configuring_groups_trusted_proxy_mode"><a class="anchor" href="#_configuring_groups_trusted_proxy_mode"></a>Configuring Groups (trusted-proxy mode)</h5>
+<div class="paragraph">
+<p>The upstream proxy passes the user&#8217;s groups as a comma-separated list in the <code>-groups-header</code> header (default <code>X-Groups</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>./selenwright \
+  -auth-mode=trusted-proxy \
+  -user-header=X-Forwarded-User \
+  -admin-header=X-Admin \
+  -groups-header=X-Groups \
+  -trusted-proxy-secret=s3cret</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Example request from a trusted proxy:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>X-Forwarded-User: alice
+X-Groups: qa-payments,qa-growth</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Set <code>-groups-header=""</code> to disable group reading entirely. <code>X-Groups</code> is always stripped from incoming requests before the application handlers run (same treatment as <code>X-Forwarded-User</code> and <code>X-Admin</code>), so downstream clients cannot forge it — provided at least one source trust check is configured.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_snapshot_semantics"><a class="anchor" href="#_snapshot_semantics"></a>Snapshot Semantics</h5>
+<div class="paragraph">
+<p>The groups of a session&#8217;s owner are <strong>captured at session creation time</strong> and stored on the session itself. Revoking group membership (editing the JSON file or changing the upstream&#8217;s <code>X-Groups</code> output) does <strong>not</strong> retroactively change ACL for sessions that are already running. New sessions created after the change see the new membership immediately.</p>
+</div>
+<div class="paragraph">
+<p>This avoids race conditions mid-operation: a group-mate who is in the middle of terminating a session cannot lose access half-way through.</p>
+</div>
 </div>
 </div>
 </div>
@@ -3282,7 +3653,7 @@ Without source trust validation (see below), any client can forge these headers.
       <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">46.0</span><span class="delimiter">&quot;</span></span>,                             <i class="conum" data-value="2"></i><b>(2)</b>
       <span class="key"><span class="delimiter">&quot;</span><span class="content">versions</span><span class="delimiter">&quot;</span></span>: {                                  <i class="conum" data-value="3"></i><b>(3)</b>
         <span class="key"><span class="delimiter">&quot;</span><span class="content">46.0</span><span class="delimiter">&quot;</span></span>: {                                    <i class="conum" data-value="4"></i><b>(4)</b>
-          <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">selenwright/firefox:46.0</span><span class="delimiter">&quot;</span></span>,          <i class="conum" data-value="5"></i><b>(5)</b>
+          <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">example.com/firefox:46.0</span><span class="delimiter">&quot;</span></span>,       <i class="conum" data-value="5"></i><b>(5)</b>
           <span class="key"><span class="delimiter">&quot;</span><span class="content">port</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">4444</span><span class="delimiter">&quot;</span></span>,                            <i class="conum" data-value="6"></i><b>(6)</b>
           <span class="key"><span class="delimiter">&quot;</span><span class="content">tmpfs</span><span class="delimiter">&quot;</span></span>: {<span class="key"><span class="delimiter">&quot;</span><span class="content">/tmp</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">size=512m</span><span class="delimiter">&quot;</span></span>},            <i class="conum" data-value="7"></i><b>(7)</b>
           <span class="key"><span class="delimiter">&quot;</span><span class="content">path</span><span class="delimiter">&quot;</span></span> : <span class="string"><span class="delimiter">&quot;</span><span class="content">/wd/hub</span><span class="delimiter">&quot;</span></span>,                        <i class="conum" data-value="8"></i><b>(8)</b>
@@ -3463,13 +3834,13 @@ That means version string in JSON should start with version string from capabili
 <p>Pulled from internal docker registry:</p>
 </div>
 <div class="paragraph">
-<p><code>my-internal-docker-hub.example.com/selenwright/firefox:46.0</code></p>
+<p><code>my-internal-docker-hub.example.com/playwright-chromium:latest</code></p>
 </div>
 <div class="paragraph">
 <p>Pulled from hub.docker.com</p>
 </div>
 <div class="paragraph">
-<p><code>selenwright/firefox:46.0</code></p>
+<p><code>selenwright/playwright-chromium:latest</code></p>
 </div>
 </div>
 </div>
@@ -3701,7 +4072,7 @@ Use only one of these commands.
 <p>Pull new browser images on the host:</p>
 <div class="listingblock">
 <div class="content">
-<pre>$ docker pull selenwright/chrome:130.0</pre>
+<pre>$ docker pull selenwright/playwright-chromium:latest</pre>
 </div>
 </div>
 </li>
@@ -3980,10 +4351,18 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 <div class="content">
 <pre>-auth-mode string
     Authentication mode: 'embedded', 'trusted-proxy', or 'none'
-    (default "embedded"). See &lt;&lt;Authentication and Authorization&gt;&gt; for details
+    (default "embedded"). 'none' is allowed on any listen address;
+    operator owns network-level protection. See
+    &lt;&lt;Authentication and Authorization&gt;&gt; for details
+--no-auth
+    Alias for -auth-mode=none. Allowed on any listen address; operator
+    owns network-level protection
 -htpasswd string
     Path to bcrypt-format htpasswd file used by -auth-mode=embedded.
-    Generate with: htpasswd -B users.htpasswd alice
+    Generate with: htpasswd -B users.htpasswd alice. When omitted and
+    auth is enabled, selenwright boots in dev mode and prints a single
+    admin bearer token to stdout; pin it across restarts with the
+    SELENWRIGHT_AUTH_TOKEN env var
 -admin-users string
     Comma-separated list of usernames treated as admin in
     -auth-mode=embedded
@@ -3993,8 +4372,16 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 -admin-header string
     Header in -auth-mode=trusted-proxy whose value 'true' marks the
     request as administrative (default "X-Admin")
--allow-insecure-none
-    Permit -auth-mode=none on a non-loopback listen address
+-groups-file string
+    Path to JSON file mapping team/group name to list of member
+    usernames, e.g. {"qa-payments":["alice","jenkins-bot"]}. Members of
+    the same group can manage each other's sessions (useful for CI
+    service accounts). Hot-reloaded on SIGHUP. Used with
+    -auth-mode=embedded
+-groups-header string
+    Header to read CSV group names from in -auth-mode=trusted-proxy
+    (e.g. "qa-payments,qa-growth"). Empty disables reading groups from
+    headers (default "X-Groups")
 -caps-policy string
     Capability policy: 'strict' rejects dangerous caps (env, dnsServers,
     hostsEntries, additionalNetworks, applicationContainers) for
@@ -4185,7 +4572,28 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 </div>
 </div>
 <div class="sect3">
-<h4 id="_usage_example"><a class="anchor" href="#_usage_example"></a>5.9.14. Usage Example</h4>
+<h4 id="_environment_variables"><a class="anchor" href="#_environment_variables"></a>5.9.14. Environment Variables</h4>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Variable</th>
+<th class="tableblock halign-left valign-top">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>SELENWRIGHT_AUTH_TOKEN</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Plaintext bearer token to seed on first boot. Applied only when <code>&lt;state-dir&gt;/auth/tokens.json</code> is absent or empty; subsequent boots ignore it. Stored as <code>owner=admin name=env-seed</code>. If the env value does not match what is already on disk, selenwright logs a warning and leaves the stored tokens untouched. See <a href="#_api_tokens_for_machine_clients">API Tokens (for Machine Clients)</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect3">
+<h4 id="_usage_example"><a class="anchor" href="#_usage_example"></a>5.9.15. Usage Example</h4>
 <div class="paragraph">
 <p>As a binary:</p>
 </div>
@@ -4208,7 +4616,7 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 </div>
 </div>
 <div class="sect3">
-<h4 id="_s3_cli_flags"><a class="anchor" href="#_s3_cli_flags"></a>5.9.15. S3 CLI Flags</h4>
+<h4 id="_s3_cli_flags"><a class="anchor" href="#_s3_cli_flags"></a>5.9.16. S3 CLI Flags</h4>
 <div class="paragraph">
 <p>The following flags are supported by <code>selenwright</code> command when compiled with S3 support:</p>
 </div>
@@ -4246,34 +4654,8 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 <div id="footer">
 <div id="footer-text">
 Version v1.0.0<br>
-Last updated 2026-04-17 06:51:45 UTC
+Last updated 2026-04-17 14:07:11 UTC
 </div>
 </div>
-<!-- Global site tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-23854888-2"></script>
-<script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'UA-23854888-2');
-</script>
-
-<!-- Yandex.Metrika counter -->
-<script type="text/javascript" >
-    (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
-        m[i].l=1*new Date();k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
-    (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
-
-    ym(43539754, "init", {
-        clickmap:true,
-        trackLinks:true,
-        accurateTrackBounce:true,
-        webvisor:true,
-        trackHash:true
-    });
-</script>
-<noscript><div><img src="https://mc.yandex.ru/watch/43539754" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
-<!-- /Yandex.Metrika counter -->
 </body>
 </html>
