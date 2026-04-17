@@ -75,15 +75,15 @@ docker kill -s HUP selenwright
 
 Selenwright reloads the file without dropping running sessions.
 
-=== Disabling Authentication (Development)
+=== Disabling Authentication
 
-For local development you can disable auth entirely:
+You can disable auth entirely:
 
 ----
 ./selenwright -auth-mode=none -listen=127.0.0.1:4444
 ----
 
-This only works on loopback addresses. To force it on a real network address (not recommended), add `-allow-insecure-none`.
+This is accepted on any listen address, including `:4444`. When the listen address is not a loopback interface, selenwright logs a warning that the service is reachable without authentication — the operator is responsible for network-level protection (firewall, overlay network, bastion, reverse proxy).
 
 === Authentication Modes
 
@@ -130,7 +130,7 @@ WARNING: Without source trust validation (see below), any client can forge these
 
 ==== `none` — No Authentication
 
-All requests are anonymous non-admin. Restricted to loopback unless `-allow-insecure-none` is set.
+All requests are anonymous non-admin. Allowed on any listen address; the operator is responsible for network-level protection (firewall, overlay, bastion). A warning is logged when the listen address is not loopback.
 
 === Source Trust (Protecting the Proxy)
 

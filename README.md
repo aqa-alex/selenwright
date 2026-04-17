@@ -332,13 +332,19 @@ When nginx, Envoy, or OAuth2 Proxy handles authentication and passes identity vi
 
 When multiple checks are configured, **all** must pass.
 
-### `none` — No Authentication (development)
+### `none` — No Authentication
 
 ```bash
 ./selenwright -auth-mode=none -listen=127.0.0.1:4444
 ```
 
-Restricted to loopback addresses. Add `-allow-insecure-none` to force on a network address (not recommended).
+Also accepted on any network interface:
+
+```bash
+./selenwright -auth-mode=none -listen=:4444
+```
+
+**Warning:** without authentication, any client that can reach the listen address can create sessions and read any session's data. You own network-level protection (firewall, overlay network, bastion, reverse proxy).
 
 ### Capability Policy
 
