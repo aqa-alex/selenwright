@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	ggr "github.com/aerokube/ggr/config"
@@ -73,7 +74,10 @@ type Server struct {
 	adoptedStore  *discovery.AdoptedStore
 	rescanMu      sync.Mutex
 	originChecker *protect.OriginChecker
-	authenticator  protect.Authenticator
+	// authenticatorPtr is swapped at startup and in tests; request handlers
+	// read it concurrently, so access is synchronised via atomic.Pointer.
+	// Use currentAuthenticator() / setAuthenticator() — do not touch directly.
+	authenticatorPtr atomic.Pointer[protect.Authenticator]
 	htpasswdAuth   *protect.HtpasswdAuthenticator
 	groupsProvider *protect.FileGroupsProvider
 	sessionStore   *protect.SessionStore
@@ -88,6 +92,17 @@ type Server struct {
 var app = &Server{
 	sessions:  session.NewMap(),
 	startTime: time.Now(),
+}
+
+func (s *Server) currentAuthenticator() protect.Authenticator {
+	if p := s.authenticatorPtr.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
+
+func (s *Server) setAuthenticator(a protect.Authenticator) {
+	s.authenticatorPtr.Store(&a)
 }
 
 var testHooksEnabled bool

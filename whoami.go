@@ -41,8 +41,10 @@ func tryAuthenticate(r *http.Request) (protect.Identity, bool) {
 	if id, ok := protect.IdentityFromContext(r.Context()); ok {
 		return id, true
 	}
-	if id, err := app.authenticator.Authenticate(r); err == nil {
-		return id, true
+	if a := app.currentAuthenticator(); a != nil {
+		if id, err := a.Authenticate(r); err == nil {
+			return id, true
+		}
 	}
 	return protect.AnonymousIdentity, false
 }

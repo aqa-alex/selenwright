@@ -141,7 +141,7 @@ func init() {
 		app.htpasswdPath == ""
 	if devTokenOnly {
 		log.Printf("[-] [INIT] [Auth: embedded without htpasswd — token-only bearer auth]")
-		app.authenticator = protect.TokenOnlyAuthenticator{}
+		app.setAuthenticator(protect.TokenOnlyAuthenticator{})
 	}
 	if !devTokenOnly {
 		authBuilt, err := buildAuthenticator(authBuildOptions{
@@ -156,12 +156,12 @@ func init() {
 		})
 		if err != nil {
 			if testHooksEnabled {
-				app.authenticator = protect.NoneAuthenticator{}
+				app.setAuthenticator(protect.NoneAuthenticator{})
 			} else {
 				log.Fatalf("[-] [INIT] [%v]", err)
 			}
 		} else {
-			app.authenticator = authBuilt.authenticator
+			app.setAuthenticator(authBuilt.authenticator)
 			app.htpasswdAuth = authBuilt.htpasswdAuth
 			app.groupsProvider = authBuilt.groups
 		}
@@ -172,11 +172,11 @@ func init() {
 			log.Fatalf("[-] [INIT] [Invalid -session-ttl %q: %v]", app.sessionTTLRaw, parseErr)
 		}
 		app.sessionStore = protect.NewSessionStore(sessionTTL)
-		app.authenticator = &protect.SessionAwareAuthenticator{
+		app.setAuthenticator(&protect.SessionAwareAuthenticator{
 			Sessions:   app.sessionStore,
 			CookieName: protect.DefaultSessionCookieName,
-			Fallback:   app.authenticator,
-		}
+			Fallback:   app.currentAuthenticator(),
+		})
 		log.Printf("[-] [INIT] [Session auth: cookie %q, TTL %s]", protect.DefaultSessionCookieName, sessionTTL)
 	}
 	if app.authModeFlag != string(protect.ModeNone) && !testHooksEnabled {
@@ -218,12 +218,12 @@ func init() {
 			if app.htpasswdPath == "" {
 				admins["admin"] = struct{}{}
 			}
-			app.authenticator = &protect.TokenAwareAuthenticator{
+			app.setAuthenticator(&protect.TokenAwareAuthenticator{
 				Store:            app.tokenStore,
 				Admins:           admins,
 				QueryAllowedPath: isTokenQueryAllowedPath,
-				Fallback:         app.authenticator,
-			}
+				Fallback:         app.currentAuthenticator(),
+			})
 			log.Printf("[-] [INIT] [Token auth: store %s, %d token(s)]", tokenPath, ts.Len())
 		}
 	}
@@ -865,7 +865,7 @@ func handler() http.Handler {
 		metricsOpen = append([]string{app.metricsPath}, openPaths...)
 	}
 	authMw := protect.AuthMiddleware(
-		func() protect.Authenticator { return app.authenticator },
+		app.currentAuthenticator,
 		protect.AuthMiddlewareOptions{
 			OpenPaths: metricsOpen,
 			OnFailure: func() { metrics.AuthFailure(app.authModeFlag) },

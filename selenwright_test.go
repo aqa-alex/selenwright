@@ -45,7 +45,7 @@ func init() {
 	app.maxUploadBodyBytes = 256 << 20
 	app.maxUploadExtractedBytes = 1 << 30
 	app.originChecker, _ = protect.NewOriginChecker(nil)
-	app.authenticator = protect.NoneAuthenticator{}
+	app.setAuthenticator(protect.NoneAuthenticator{})
 	app.ggrHost = &ggr.Host{
 		Name: "some-host.example.com",
 		Port: 4444,
