@@ -83,6 +83,18 @@ func (a *HtpasswdAuthenticator) Authenticate(r *http.Request) (Identity, error) 
 
 func (a *HtpasswdAuthenticator) Realm() string { return HtpasswdRealm }
 
+// Users returns the set of usernames currently loaded from the htpasswd file.
+// Reflects the most recent Reload (SIGHUP) result.
+func (a *HtpasswdAuthenticator) Users() []string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	out := make([]string, 0, len(a.entries))
+	for u := range a.entries {
+		out = append(out, u)
+	}
+	return out
+}
+
 // ValidateCredentials checks a username/password pair against the htpasswd
 // entries without requiring an HTTP request. Used by the login handler.
 func (a *HtpasswdAuthenticator) ValidateCredentials(user, pass string) (Identity, error) {

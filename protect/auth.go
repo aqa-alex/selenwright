@@ -115,6 +115,11 @@ type AuthMiddlewareOptions struct {
 	OnFailure func()
 }
 
+// tokenQueryParam is always stripped from the URL before the request reaches
+// downstream handlers, so an access token passed via query never lands in
+// upstream logs.
+const tokenQueryParam = "token"
+
 func AuthMiddleware(authFn func() Authenticator, opts AuthMiddlewareOptions) func(http.Handler) http.Handler {
 	openExact := make(map[string]struct{}, len(opts.OpenPaths))
 	for _, p := range opts.OpenPaths {
@@ -123,7 +128,7 @@ func AuthMiddleware(authFn func() Authenticator, opts AuthMiddlewareOptions) fun
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if _, ok := openExact[r.URL.Path]; ok {
-				next.ServeHTTP(w, r)
+				next.ServeHTTP(w, stripTokenQuery(r))
 				return
 			}
 			auth := authFn()
@@ -138,7 +143,90 @@ func AuthMiddleware(authFn func() Authenticator, opts AuthMiddlewareOptions) fun
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
+			r = stripTokenQuery(r)
 			next.ServeHTTP(w, r.WithContext(WithIdentity(r.Context(), id)))
 		})
 	}
+}
+
+func stripTokenQuery(r *http.Request) *http.Request {
+	if r.URL == nil || !r.URL.Query().Has(tokenQueryParam) {
+		return r
+	}
+	u := *r.URL
+	q := u.Query()
+	q.Del(tokenQueryParam)
+	u.RawQuery = q.Encode()
+	clone := r.Clone(r.Context())
+	clone.URL = &u
+	clone.RequestURI = u.RequestURI()
+	return clone
+}
+
+// BearerToken extracts a token from the Authorization: Bearer header. Returns
+// the token and true if present and well-formed.
+func BearerToken(r *http.Request) (string, bool) {
+	h := r.Header.Get("Authorization")
+	if h == "" {
+		return "", false
+	}
+	const prefix = "Bearer "
+	if len(h) <= len(prefix) || !strings.EqualFold(h[:len(prefix)], prefix) {
+		return "", false
+	}
+	tok := strings.TrimSpace(h[len(prefix):])
+	if tok == "" {
+		return "", false
+	}
+	return tok, true
+}
+
+// TokenLookup is the subset of TokenStore used by TokenAwareAuthenticator.
+// Extracted so authenticator tests can swap in fakes.
+type TokenLookup interface {
+	Lookup(plaintext string) (owner string, groups []string, id string, ok bool)
+	TouchLastUsed(id string)
+}
+
+// TokenAwareAuthenticator wraps another Authenticator, checking Bearer and
+// query-param tokens before falling back. When a token is presented but
+// invalid, it fails hard (does NOT fall through to the wrapped authenticator)
+// so the error semantics remain unambiguous for machine clients.
+type TokenAwareAuthenticator struct {
+	Store            TokenLookup
+	Admins           map[string]struct{}
+	QueryAllowedPath func(path string) bool
+	Fallback         Authenticator
+}
+
+func (a *TokenAwareAuthenticator) Authenticate(r *http.Request) (Identity, error) {
+	if tok, ok := BearerToken(r); ok {
+		return a.validateToken(tok)
+	}
+	if a.QueryAllowedPath != nil && a.QueryAllowedPath(r.URL.Path) {
+		if tok := r.URL.Query().Get(tokenQueryParam); tok != "" {
+			return a.validateToken(tok)
+		}
+	}
+	if a.Fallback != nil {
+		return a.Fallback.Authenticate(r)
+	}
+	return Identity{}, ErrAuthRequired
+}
+
+func (a *TokenAwareAuthenticator) validateToken(tok string) (Identity, error) {
+	owner, groups, id, ok := a.Store.Lookup(tok)
+	if !ok {
+		return Identity{}, ErrAuthFailed
+	}
+	a.Store.TouchLastUsed(id)
+	_, isAdmin := a.Admins[owner]
+	return Identity{User: owner, IsAdmin: isAdmin, Groups: groups}, nil
+}
+
+func (a *TokenAwareAuthenticator) Realm() string {
+	if a.Fallback != nil {
+		return a.Fallback.Realm()
+	}
+	return ""
 }
