@@ -162,6 +162,7 @@ func TestArtifactHistorySessionStopWritesManifestAndListsDownloads(t *testing.T)
 		ArtifactHistoryEnabled: true,
 		Protocol:               session.ProtocolWebDriver,
 		Started:                time.Date(2026, time.April, 8, 9, 0, 0, 0, time.UTC),
+		DownloadsDir:           "/home/pwuser/Downloads",
 		Caps: session.Caps{
 			Name:      "chrome",
 			Version:   "123.0",

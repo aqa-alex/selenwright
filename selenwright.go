@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; snapshot owner groups onto created sessions for group-based ACL
+// Modified by [Aleksander R], 2026: added Playwright protocol support; snapshot owner groups onto created sessions for group-based ACL; propagate DownloadsDir from started service into session for per-image download capture
 
 package main
 
@@ -331,14 +331,15 @@ func create(w http.ResponseWriter, r *http.Request) {
 		owner = user
 	}
 	sess := &session.Session{
-		Quota:       owner,
-		OwnerGroups: append([]string(nil), identity.Groups...),
-		Caps:        caps,
-		URL:         u,
-		Container:   startedService.Container,
-		HostPort:    startedService.HostPort,
-		Origin:      startedService.Origin,
-		Timeout:     sessionTimeout,
+		Quota:        owner,
+		OwnerGroups:  append([]string(nil), identity.Groups...),
+		Caps:         caps,
+		URL:          u,
+		Container:    startedService.Container,
+		HostPort:     startedService.HostPort,
+		Origin:       startedService.Origin,
+		DownloadsDir: startedService.DownloadsDir,
+		Timeout:      sessionTimeout,
 		Watchdog: session.NewWatchdog(sessionTimeout, func() {
 			request{r}.session(s.ID).Delete(requestId)
 		}),

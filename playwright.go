@@ -298,6 +298,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 		LogSink:                logSink,
 		HostPort:               startedService.HostPort,
 		Origin:                 startedService.Origin,
+		DownloadsDir:           startedService.DownloadsDir,
 		Timeout:                app.timeout,
 		Protocol:               session.ProtocolPlaywright,
 		Started:                time.Now(),

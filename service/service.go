@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added DownloadsDir on StartedService for per-image download capture path
 
 package service
 
@@ -83,6 +83,7 @@ type StartedService struct {
 	Container     *session.Container
 	HostPort      session.HostPort
 	Origin        string
+	DownloadsDir  string
 	Cancel        func()
 }
 

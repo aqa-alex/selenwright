@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added per-image downloads path via SELENWRIGHT_DOWNLOADS_DIR env
 
 package service
 
@@ -255,8 +255,9 @@ func (d *Docker) StartWithCancel() (*StartedService, error) {
 			IPAddress: getContainerIP(d.Environment.Network, stat),
 			Ports:     publishedPortsInfo,
 		},
-		HostPort: hostPort,
-		Origin:   origin,
+		HostPort:     hostPort,
+		Origin:       origin,
+		DownloadsDir: getDownloadsDir(d.Service),
 		Cancel: func() {
 			if videoContainerId != "" {
 				stopVideoContainer(ctx, cl, requestId, videoContainerId, d.Environment)
@@ -443,6 +444,22 @@ func getTimeZone(service ServiceBase, caps session.Caps) *time.Location {
 		}
 	}
 	return timeZone
+}
+
+// getDownloadsDir returns the in-container path to scan when capturing
+// downloaded files for artifact history, read from the browser image's
+// SELENWRIGHT_DOWNLOADS_DIR env entry. Empty means "caller uses legacy default".
+func getDownloadsDir(service *config.Browser) string {
+	const prefix = "SELENWRIGHT_DOWNLOADS_DIR="
+	if service == nil {
+		return ""
+	}
+	for _, e := range service.Env {
+		if strings.HasPrefix(e, prefix) {
+			return strings.TrimPrefix(e, prefix)
+		}
+	}
+	return ""
 }
 
 func getEnv(service ServiceBase, caps session.Caps) []string {

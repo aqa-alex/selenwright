@@ -28,7 +28,7 @@ const (
 	maxArtifactHistoryRetentionDays     = 365
 	minArtifactHistoryRetentionDays     = 1
 	artifactHistoryJanitorInterval      = 3 * time.Hour
-	managedDownloadsPath                = "/home/selenium/Downloads"
+	defaultDownloadsPath                = "/home/selenium/Downloads"
 )
 
 type artifactHistorySettings struct {
@@ -623,7 +623,11 @@ func (m *artifactHistoryManager) copyDownloadsFromContainer(sess *session.Sessio
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return nil, "", err
 	}
-	reader, _, err := m.dockerClient.CopyFromContainer(context.Background(), sess.Container.ID, managedDownloadsPath)
+	downloadsPath := sess.DownloadsDir
+	if downloadsPath == "" {
+		downloadsPath = defaultDownloadsPath
+	}
+	reader, _, err := m.dockerClient.CopyFromContainer(context.Background(), sess.Container.ID, downloadsPath)
 	if err != nil {
 		if isUnsupportedDownloadsError(err) {
 			_ = os.RemoveAll(targetDir)

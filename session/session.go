@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added ArtifactHistoryEnabled for per-session retention; added OwnerGroups for group-based session ACL
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added ArtifactHistoryEnabled for per-session retention; added OwnerGroups for group-based session ACL; added DownloadsDir for per-image download capture path
 
 package session
 
@@ -93,6 +93,7 @@ type Session struct {
 	Protocol               Protocol
 	Started                time.Time
 	ArtifactHistoryEnabled bool
+	DownloadsDir           string
 	Lock                   sync.Mutex
 }
 
