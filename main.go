@@ -164,7 +164,7 @@ func init() {
 		}
 		log.Printf("[-] [INIT] [Session auth: cookie %q, TTL %s]", protect.DefaultSessionCookieName, sessionTTL)
 	}
-	if app.authModeFlag != string(protect.ModeNone) {
+	if app.authModeFlag != string(protect.ModeNone) && !testHooksEnabled {
 		tokenPath := filepath.Join(app.stateDir, "auth", "tokens.json")
 		ts, terr := protect.NewTokenStore(tokenPath)
 		if terr != nil {
