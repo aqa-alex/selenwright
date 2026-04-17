@@ -223,9 +223,6 @@ When set, these checks are AND'd together — all configured conditions must pas
 
 | `SELENWRIGHT_AUTH_TOKEN`
 | Plaintext bearer token to seed on first boot. Applied only when `<state-dir>/auth/tokens.json` is absent or empty; subsequent boots ignore it. Stored as `owner=admin name=env-seed`. If the env value does not match what is already on disk, selenwright logs a warning and leaves the stored tokens untouched. See <<API Tokens (for Machine Clients)>>
-
-| `GGR_HOST`
-| When set, prefixes every session ID with a stable hash so sessions can be routed through https://github.com/aerokube/ggr[Ggr]. Format: `host:port`
 |===
 
 === Usage Example

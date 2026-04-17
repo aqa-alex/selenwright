@@ -2,8 +2,8 @@
 
 [NOTE]
 ====
-. Currently only https://chromedevtools.github.io/devtools-protocol/[Chrome Developer Tools] are supported.
-. This feature will work only for Chrome 63+.
+. Only available for classic Selenium Chrome images that expose a CDP relay on container port `7070` (for example upstream `selenoid/chrome`). The published `selenwright/playwright-*` images do not expose this port — Playwright clients access CDP through the native Playwright endpoint (see <<Native Playwright Support>>) instead.
+. Only https://chromedevtools.github.io/devtools-protocol/[Chrome Developer Tools] are supported.
 . We recommend to use the most recent Chrome version possible.
 ====
 
@@ -30,34 +30,3 @@ For example an URL to connect to current page websocket would be:
 ```
 ws://selenwright.example.com:4444/devtools/<session-id>/page
 ```
-
-.Accessing Developer Tools API with Webdriver.io and Puppeteer
-[source,javascript]
-----
-const { remote } = require('webdriverio');
-const puppeteer = require('puppeteer-core');
-const host = 'selenwright.example.com';
-(async () => {
-    const browser = await remote({
-        hostname: host,
-        capabilities: {
-            browserName: 'chrome',
-            browserVersion: '75.0'
-        }
-    });
-
-    const devtools = await puppeteer.connect(
-        { browserWSEndpoint: `ws://${host}:4444/devtools/${browser.sessionId}` }
-    );
-    const page = await devtools.newPage();
-    await page.goto('http://example.com');
-    await page.screenshot({path: 'screenshot.png'});
-    const title = await page.title();
-
-    console.log(title);
-
-    await devtools.close();
-    await browser.deleteSession();
-
-})().catch((e) => console.error(e));
-----

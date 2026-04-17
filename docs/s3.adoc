@@ -29,7 +29,7 @@ By default uploaded file name is preserved, i.e. S3 path is `/<session-id>.log` 
 | $fileExtension | Replaced by source file extension 
 | $fileType | Replaced by `log` for log files and `video` for video files
 | $platformName | Replaced by Selenium platform capability value
-| $quota | Replaced by quota name (usually coming from Ggr)
+| $quota | Replaced by the authenticated user/quota name
 | $sessionId | Replaced by Selenium session ID
 |===
 

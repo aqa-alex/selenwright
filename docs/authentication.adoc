@@ -59,11 +59,41 @@ An admin mints a token on behalf of a user, the user drops it into `SELENWRIGHT_
 
 Tokens are stored hashed (bcrypt) in `<state-dir>/auth/tokens.json`. Plaintext is shown to the admin **once** — distribute it through a secret manager (1Password, Bitwarden, Keybase). Never paste tokens into Slack, tickets, or email.
 
+==== Getting Your First Admin Token
+
+The curl in the next section authenticates with `Authorization: Bearer <admin-token>`. The very first admin token is produced by selenwright itself — where exactly depends on how you started the process:
+
+[cols="1,3"]
+|===
+| Started with... | First admin token comes from...
+
+| `-htpasswd users.htpasswd` (production)
+| *No token is auto-generated.* Log into the UI with an htpasswd account listed in `-admin-users`. Basic-auth login establishes a session cookie; while logged in, open **Settings → API Tokens** and create a token for yourself (or call `POST /api/admin/tokens` with the cookie). From then on this bearer is what automation uses — the htpasswd password stays in your password manager.
+
+| `SELENWRIGHT_AUTH_TOKEN=<value>` (declarative / CI)
+| *The env value itself is your admin token.* On first boot (empty token store) selenwright hashes it and persists it as `owner=admin name=env-seed`. Later boots with the same value are a no-op; a different value logs a warning and keeps existing tokens — wipe `<state-dir>/auth/tokens.json` to re-seed.
+
+| Neither `-htpasswd` nor the env var (dev fallback)
+| *Selenwright generates one on first boot and prints it to stdout* (example below). Save it — it will not be shown again. Lost it? Delete `<state-dir>/auth/tokens.json` and restart to get a fresh one.
+|===
+
+Dev-fallback stdout:
+
+[source,shell]
+----
+./selenwright -listen :4444
+# [-] [INIT] [No htpasswd configured — generated initial admin token]
+# [-] [INIT] ┌──────────────────────────────────────────────────────────┐
+# [-] [INIT] │  swr_live_4f8a9c2e7b1d3f5e8a6c9b4d7e2f1a3c
+# [-] [INIT] │  id=tok_... owner=admin name=initial
+# [-] [INIT] │  Save it — won't be shown again.
+# [-] [INIT] │  Hash stored at state/auth/tokens.json
+# [-] [INIT] └──────────────────────────────────────────────────────────┘
+----
+
 ==== Minting Tokens
 
-Log into the UI as an admin, open **Settings → API Tokens**, click **Create**, pick the owner and a human-readable name (e.g. `laptop-alice`, `ci-runner`). Copy the plaintext from the modal — it will not be shown again.
-
-The same operation is exposed on the REST surface (admin-only, authenticated with a session cookie from the UI login or with an admin's own bearer token):
+Once the admin has a bearer token (see above), mint tokens for users via REST:
 
 ----
 curl -X POST https://selen.corp.com/api/admin/tokens \
@@ -72,6 +102,8 @@ curl -X POST https://selen.corp.com/api/admin/tokens \
   -d '{"owner":"alice","name":"laptop"}'
 # → {"id":"tok_...","token":"swr_live_..."}
 ----
+
+The same operation is available in the UI: log in as an admin, open **Settings → API Tokens**, click **Create**, pick the owner and a human-readable name (e.g. `laptop-alice`, `ci-runner`). Copy the plaintext from the modal — it will not be shown again.
 
 ==== Using Tokens
 
@@ -113,26 +145,6 @@ curl -X DELETE 'https://selen.corp.com/api/admin/tokens?owner=alice' \
 ----
 
 The UI exposes both operations on the same page. Revocation is immediate — in-flight requests that already passed the auth check continue to their natural end, but no new request will clear.
-
-==== Env-var Seeding and the Dev Fallback
-
-For a local dev loop you usually want to skip htpasswd entirely:
-
-[source,shell]
-----
-./selenwright -listen :4444
-# [-] [INIT] [No htpasswd configured — generated initial admin token]
-# [-] [INIT] ┌──────────────────────────────────────────────────────────┐
-# [-] [INIT] │  swr_live_4f8a9c2e7b1d3f5e8a6c9b4d7e2f1a3c
-# [-] [INIT] │  id=tok_... owner=admin name=initial
-# [-] [INIT] │  Save it — won't be shown again.
-# [-] [INIT] │  Hash stored at state/auth/tokens.json
-# [-] [INIT] └──────────────────────────────────────────────────────────┘
-----
-
-Lost it? Delete `<state-dir>/auth/tokens.json` and restart — a fresh token is printed.
-
-In CI, pin the token instead via `SELENWRIGHT_AUTH_TOKEN`. On first boot (empty token store) selenwright hashes the env value and stores it as `owner=admin name=env-seed`. Subsequent boots that see the same env value are a no-op. If the env value does not match what is already stored, selenwright logs a warning and keeps the stored tokens intact — wipe `tokens.json` if you really want to re-seed.
 
 === Making a User an Admin
 

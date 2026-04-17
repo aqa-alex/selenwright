@@ -17,9 +17,9 @@ $ curl http://localhost:4444/status
     "queued": 0,
     "pending": 1,
     "browsers": {
-      "firefox": {
-        "46.0": {
-          "user1": {
+      "chromium": {
+        "1.56.1": {
+          "alice": {
             "count":1,
             "sessions":[
                 {
@@ -29,15 +29,17 @@ $ curl http://localhost:4444/status
                  }
             ]
           },
-          "user2": {
+          "jenkins-bot": {
             "count":6,
             "sessions":[
                 //...
             ]
-          },
-        },
-        "48.0": {
-          "user2": {
+          }
+        }
+      },
+      "firefox": {
+        "1.56.1": {
+          "jenkins-bot": {
             "count":3,
             "sessions":[
                 //...
@@ -49,7 +51,7 @@ $ curl http://localhost:4444/status
 }
 ----
 
-Users are extracted from basic HTTP authentication headers.
+Users come from the authenticated identity — `htpasswd` or bearer token (`embedded` mode) or the `X-Forwarded-User` header (`trusted-proxy` mode). See <<Authentication and Authorization>>.
 
 === What Statistics Mean
 

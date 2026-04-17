@@ -10,7 +10,7 @@ Selenwright can be configured with an optional JSON file that defines available 
       "default": "46.0",                             <2>
       "versions": {                                  <3>
         "46.0": {                                    <4>
-          "image": "selenwright/firefox:46.0",          <5>
+          "image": "example.com/firefox:46.0",       <5>
           "port": "4444",                            <6>
           "tmpfs": {"/tmp": "size=512m"},            <7>
           "path" : "/wd/hub",                        <8>
@@ -100,11 +100,11 @@ Image must be already pulled.
 ====
 Pulled from internal docker registry:
 
-`my-internal-docker-hub.example.com/selenwright/firefox:46.0`
+`my-internal-docker-hub.example.com/playwright-chromium:latest`
 
 Pulled from hub.docker.com
 
-`selenwright/firefox:46.0`
+`selenwright/playwright-chromium:latest`
 ====
 
 ==== Standalone Binary

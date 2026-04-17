@@ -15,8 +15,9 @@ There are two ways to populate the browser catalog:
 Pull the browser images you need and let Selenwright discover them automatically:
 
 ----
-$ docker pull selenwright/chrome:130.0
-$ docker pull selenwright/firefox:131.0
+$ docker pull selenwright/playwright-chromium:latest
+$ docker pull selenwright/playwright-firefox:latest
+$ docker pull selenwright/playwright-webkit:latest
 ----
 
 Start Selenwright — it will detect the pulled images via Docker labels. Then open <<Browser Discovery, Selenwright UI>> and **adopt** the discovered images into the catalog. No configuration file needed.
@@ -29,43 +30,61 @@ Create `config/browsers.json` configuration file:
 [source,json]
 ----
 {
-    "chrome": {
-        "default": "130.0",
+    "chromium": {
+        "default": "1.56.1",
         "versions": {
-            "130.0": {
-                "image": "selenwright/chrome:130.0",
-                "port": "4444",
-                "path": "/"
+            "1.56.1": {
+                "image": "selenwright/playwright-chromium:latest",
+                "port": "3000",
+                "path": "/",
+                "protocol": "playwright"
             }
         }
     },
     "firefox": {
-        "default": "131.0",
+        "default": "1.56.1",
         "versions": {
-            "131.0": {
-                "image": "selenwright/firefox:131.0",
-                "port": "4444",
-                "path": "/wd/hub"
+            "1.56.1": {
+                "image": "selenwright/playwright-firefox:latest",
+                "port": "3000",
+                "path": "/",
+                "protocol": "playwright"
             }
         }
     }
 }
 ----
 
-NOTE: For Chrome and Opera images `path` is `"/"`. For Firefox images `path` is `"/wd/hub"`. For Playwright images set `"protocol": "playwright"` — see <<Browsers Configuration File>> for all fields.
+NOTE: Playwright images expose port `3000` at path `/` and require `"protocol": "playwright"`. For classic Selenium images use `"path": "/"` for Chrome/Opera and `"path": "/wd/hub"` for Firefox. See <<Browsers Configuration File>> for all fields.
 
 Pull the images:
 
 ----
-$ docker pull selenwright/chrome:130.0
-$ docker pull selenwright/firefox:131.0
+$ docker pull selenwright/playwright-chromium:latest
+$ docker pull selenwright/playwright-firefox:latest
 ----
 
 Selenwright falls back to this file when no adopted images are found.
 
 ==== Browser Images
 
-TBA
+Selenwright publishes Playwright-based browser images on Docker Hub:
+
+* https://hub.docker.com/r/selenwright/playwright-chromium[`selenwright/playwright-chromium`]
+* https://hub.docker.com/r/selenwright/playwright-firefox[`selenwright/playwright-firefox`]
+* https://hub.docker.com/r/selenwright/playwright-webkit[`selenwright/playwright-webkit`]
+
+Each image carries `io.selenwright.*` Docker labels so <<Browser Discovery>> picks them up without a configuration file. Dockerfiles live in https://github.com/aqa-alex/selenwright-browsers[aqa-alex/selenwright-browsers].
+
+Classic Selenium-protocol images are not published under `selenwright/` — bring your own (for example, upstream `selenoid/chrome`, `selenoid/firefox`).
+
+[IMPORTANT]
+====
+Browser Discovery and `browsers.json` are mutually exclusive: as soon as Selenwright finds any adopted image, it builds the catalog from Docker labels and ignores `browsers.json` entirely. To mix Playwright and classic Selenium browsers, pick one mechanism and put *all* entries there:
+
+* **JSON-only** — don't adopt anything in the UI; list every browser (Playwright and Selenium) in `browsers.json`.
+* **Discovery-only** — tag your Selenium images with the required `io.selenwright.*` labels (see https://github.com/aqa-alex/selenwright-browsers[selenwright-browsers] for the label contract) and adopt them alongside the Playwright images.
+====
 
 === Start Selenwright
 ==== Option 1: start Selenwright binary

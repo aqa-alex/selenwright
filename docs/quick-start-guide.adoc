@@ -10,6 +10,18 @@
 
 . Run Selenwright:
 +
+.*nix
+[source,bash]
+----
+$ ./selenwright
+----
++
+.Windows
+[source,bash]
+----
+selenwright.exe
+----
++
 [WARNING]
 ====
 Running this command with `sudo` can lead to broken installation. Recommended way is running Selenwright as regular user. On Linux to have permissions to access Docker you may need to add your user to `docker` group:
@@ -44,6 +56,6 @@ A successful request should return a JSON with browser usage statistics.
 +
 .UI Default URL
 ----
-http://localhost:8080/
+http://localhost:4173/
 ----
 

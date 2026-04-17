@@ -12,8 +12,6 @@
 :description: A Selenium testing platform running browsers and mobile platforms in Docker containers. Fully compatible with Selenium Webdriver protocol. Live and automated testing are supported. Runs on your own hardware and on virtual machines in any popular cloud platform.
 :favicon: img/favicon.png
 
-This reference covers version: _{revnumber}_
-
 Selenwright is a fork of https://github.com/aerokube/selenoid[Selenoid] with native Playwright WebSocket support in addition to Selenium WebDriver.
 It is using Docker to launch browsers. Please refer to https://github.com/aqa-alex/selenwright[GitHub repository] if you need source code.
 

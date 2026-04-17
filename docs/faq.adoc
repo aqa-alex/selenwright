@@ -62,10 +62,6 @@ When running Selenwright as Docker container video feature can be not working (b
 Please check that you have `enableVNC = true` capability in your tests
 
 
-**Seeing black screen with a cross in VNC window**
-
-You are using `driver.close()` instead of `driver.quit()` and just closed the last browser tab instead of removing the session.
-
 **Can Selenwright pull browser images automatically?**
 
 Selenwright does not auto-pull images during session creation to avoid unpredictable latency under load. However, you can use the <<Browser Discovery>> feature to scan images already present on the host and adopt them into the catalog. For stack-wide updates, see <<Docker Compose Stack Management>>.

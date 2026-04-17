@@ -43,6 +43,22 @@ Companion Playwright images are external to this repository. To work with Selenw
 * Expose one fixed WebSocket path. The default path is `/`.
 * Run under `--init` or an equivalent init process so child processes are reaped correctly.
 * Define Docker `HEALTHCHECK`.
+* For <<Browser Discovery>> pickup, carry the `io.selenwright.*` labels described below. Without them the image is invisible to discovery and must be registered via `browsers.json`.
+
+.Required Docker labels for Browser Discovery
+[cols="1,3"]
+|===
+| Label | Purpose
+
+| `io.selenwright.browser` | Browser name (`chromium`, `firefox`, `webkit`, ...). Required.
+| `io.selenwright.version` | Version entry used in the catalog and connection URL. Required.
+| `io.selenwright.port`    | Port exposed by the image. Required unless `io.selenwright.config` is used.
+| `io.selenwright.protocol`| Set to `playwright` for Playwright images.
+| `io.selenwright.path`    | WebSocket path (default `/`).
+| `io.selenwright.default` | `true` to mark this version as default for the browser.
+|===
+
+Optional labels mirror the per-field names in `browsers.json`: `tmpfs`, `env`, `volumes`, `hosts`, `shmSize`, `mem`, `cpu`, `labels`, `sysctl`. As an escape hatch, `io.selenwright.config` accepts a full Browser JSON blob; when present, per-field labels are ignored. See https://github.com/aqa-alex/selenwright-browsers[selenwright-browsers] for a working example.
 
 At startup Selenwright prefers Docker `HEALTHCHECK` when the image provides one. If health status is unavailable, Selenwright falls back to protocol-specific probing. For Playwright images that fallback is a TCP probe against the configured Playwright endpoint.
 
@@ -50,7 +66,7 @@ At startup Selenwright prefers Docker `HEALTHCHECK` when the image provides one.
 
 Playwright client and server versions must match on major and minor version.
 
-For example, a client from Playwright `1.44.x` should connect to an image built for Playwright `1.44.x`. Keep the image tag, the configured Selenwright version entry, and the client connection URL aligned.
+For example, a client from Playwright `1.56.x` should connect to an image built for Playwright `1.56.x`. Keep the image tag, the configured Selenwright version entry, and the client connection URL aligned.
 
 === Configuration Example
 
@@ -60,10 +76,10 @@ An example browser catalog entry for a native Playwright image (via `browsers.js
 ----
 {
   "chromium": {
-    "default": "1.44.1",
+    "default": "1.56.1",
     "versions": {
-      "1.44.1": {
-        "image": "example/playwright-chromium:1.44.1",
+      "1.56.1": {
+        "image": "selenwright/playwright-chromium:latest",
         "port": "3000",
         "path": "/",
         "protocol": "playwright"
@@ -73,7 +89,7 @@ An example browser catalog entry for a native Playwright image (via `browsers.js
 }
 ----
 
-This example image name is illustrative only. Selenwright does not publish companion Playwright images from this repository.
+Selenwright publishes matching companion images — see <<Browser Images>> for the full list.
 
 === Usage Examples
 
@@ -82,7 +98,7 @@ Connect from Playwright with the dedicated Selenwright WebSocket endpoint:
 [source,javascript]
 ----
 const browser = await browserType.connect(
-  "ws://selenwright.example.com:4444/playwright/chromium/1.44.1"
+  "ws://selenwright.example.com:4444/playwright/chromium/1.56.1"
 );
 ----
 
@@ -93,7 +109,7 @@ When selenwright has authentication enabled (the default), pass the bearer token
 [source,javascript]
 ----
 const browser = await browserType.connect({
-  wsEndpoint: "wss://selenwright.example.com/playwright/chromium/1.44.1",
+  wsEndpoint: "wss://selenwright.example.com/playwright/chromium/1.56.1",
   headers: { Authorization: `Bearer ${process.env.SELENWRIGHT_TOKEN}` },
 });
 ----
@@ -103,7 +119,7 @@ For clients that cannot set custom WebSocket headers, selenwright also accepts a
 [source,javascript]
 ----
 const browser = await browserType.connect(
-  `wss://selenwright.example.com/playwright/chromium/1.44.1?token=${process.env.SELENWRIGHT_TOKEN}`
+  `wss://selenwright.example.com/playwright/chromium/1.56.1?token=${process.env.SELENWRIGHT_TOKEN}`
 );
 ----
 
@@ -115,7 +131,7 @@ If your test bootstrap reads an environment variable to choose the remote endpoi
 
 [source,bash]
 ----
-PW_TEST_CONNECT_WS_ENDPOINT=ws://selenwright.example.com:4444/playwright/chromium/1.44.1
+PW_TEST_CONNECT_WS_ENDPOINT=ws://selenwright.example.com:4444/playwright/chromium/1.56.1
 ----
 
 `PW_TEST_CONNECT_WS_ENDPOINT` is only a user-side convention for your own Playwright config or test launcher. It is not a built-in Selenwright environment variable.
@@ -131,7 +147,7 @@ NOTE: The Selenwright-specific `/file` and `/download/` HTTP endpoints are WebDr
 A subset of <<Special Capabilities>> can be passed as query parameters on the WebSocket URL:
 
 ----
-ws://host:4444/playwright/chromium/1.44.1?enableVNC=true&name=myTest&screenResolution=1280x1024
+ws://host:4444/playwright/chromium/1.56.1?enableVNC=true&name=myTest&screenResolution=1280x1024
 ----
 
 Supported: `enableVNC`, `name`, `screenResolution`.

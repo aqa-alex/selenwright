@@ -5,7 +5,7 @@
 . Pull new browser images on the host:
 +
 ----
-$ docker pull selenwright/chrome:130.0
+$ docker pull selenwright/playwright-chromium:latest
 ----
 
 . Open the <<Browser Discovery>> UI and **adopt** the new images.
