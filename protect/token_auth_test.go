@@ -60,7 +60,7 @@ func TestTokenAwareAuthenticator_RejectsInvalidBearerHardly(t *testing.T) {
 	auth := &TokenAwareAuthenticator{Store: store, Fallback: fallback}
 
 	r, _ := http.NewRequest(http.MethodGet, "/wd/hub/session", nil)
-	r.Header.Set("Authorization", "Bearer swr_live_doesnotexist")
+	r.Header.Set("Authorization", "Bearer "+TokenPlaintextPrefix+"doesnotexist")
 
 	_, err := auth.Authenticate(r)
 	require.ErrorIs(t, err, ErrAuthFailed)
