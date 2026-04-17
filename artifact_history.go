@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -53,6 +54,7 @@ type artifactHistoryDownload struct {
 	Path         string `json:"path"`
 	RelativePath string `json:"relativePath"`
 	SizeBytes    int64  `json:"sizeBytes"`
+	MimeType     string `json:"mimeType,omitempty"`
 }
 
 type artifactHistoryManifest struct {
@@ -83,6 +85,7 @@ type artifactHistoryDownloadListItem struct {
 	RelativePath   string `json:"relativePath"`
 	SizeBytes      int64  `json:"sizeBytes"`
 	DownloadURL    string `json:"downloadUrl"`
+	MimeType       string `json:"mimeType,omitempty"`
 }
 
 // artifactHistoryFileListItem is the enriched shape the `?json` handlers for
@@ -537,6 +540,7 @@ func (m *artifactHistoryManager) ListDownloads() ([]artifactHistoryDownloadListI
 				RelativePath:   download.RelativePath,
 				SizeBytes:      download.SizeBytes,
 				DownloadURL:    path.Join(paths.Downloads, manifest.SessionID, download.RelativePath),
+				MimeType:       download.MimeType,
 			})
 		}
 	}
@@ -700,11 +704,23 @@ func extractCopiedDownloads(reader io.Reader, targetDir string) ([]artifactHisto
 		if err := file.Close(); err != nil {
 			return nil, err
 		}
+
+		mimeType := detectMimeType(targetPath)
+		// Playwright saves downloads under UUIDs with no extension, so users see a
+		// bare hex string. Append a MIME-derived extension when the filename has
+		// none, then reflect the rename in path + relativePath.
+		if newPath, newRel, newName, renamed := renameWithMimeExtension(targetPath, relativePath, mimeType); renamed {
+			targetPath = newPath
+			relativePath = newRel
+			_ = newName
+		}
+
 		downloads = append(downloads, artifactHistoryDownload{
 			Filename:     filepath.Base(targetPath),
 			Path:         targetPath,
 			RelativePath: filepath.ToSlash(relativePath),
 			SizeBytes:    header.Size,
+			MimeType:     mimeType,
 		})
 	}
 	sort.Slice(downloads, func(i, j int) bool {
@@ -749,6 +765,52 @@ type artifactHistoryUnavailableError struct {
 
 func (e artifactHistoryUnavailableError) Error() string {
 	return e.reason
+}
+
+// detectMimeType inspects the first 512 bytes of the file with
+// net/http.DetectContentType. Returns "" on any I/O error (treated as unknown).
+func detectMimeType(filePath string) string {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	buf := make([]byte, 512)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return ""
+	}
+	ct := http.DetectContentType(buf[:n])
+	// Strip parameters like "; charset=utf-8" for a stable UI value.
+	if semi := strings.Index(ct, ";"); semi >= 0 {
+		ct = strings.TrimSpace(ct[:semi])
+	}
+	return ct
+}
+
+// renameWithMimeExtension appends a MIME-derived extension to targetPath when
+// the current filename has no extension. Playwright stores downloads as UUIDs
+// without suffixes, which is unhelpful in the UI — a sniffed ".jpg"/".pdf"/etc.
+// is strictly better. Returns (newPath, newRelative, newFilename, true) on
+// rename; otherwise (orig values, "", false).
+func renameWithMimeExtension(targetPath, relativePath, mimeType string) (string, string, string, bool) {
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		return targetPath, relativePath, "", false
+	}
+	if filepath.Ext(targetPath) != "" {
+		return targetPath, relativePath, "", false
+	}
+	exts, err := mime.ExtensionsByType(mimeType)
+	if err != nil || len(exts) == 0 {
+		return targetPath, relativePath, "", false
+	}
+	ext := exts[0]
+	newPath := targetPath + ext
+	if err := os.Rename(targetPath, newPath); err != nil {
+		return targetPath, relativePath, "", false
+	}
+	newRel := filepath.ToSlash(relativePath) + ext
+	return newPath, newRel, filepath.Base(newPath), true
 }
 
 func writeJSONResponse(w http.ResponseWriter, status int, payload interface{}) {

@@ -314,6 +314,12 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 			logSink.Close()
 			_ = clientConn.Close()
 			_ = upstreamConn.Close()
+			// Capture downloads from the browser container while it's still alive —
+			// serviceCancel() below removes it and a post-cancel docker cp from the
+			// async SessionStopped listener would hit "no such container".
+			if sess.ArtifactHistoryEnabled {
+				ensureArtifactHistoryManager().CaptureDownloadsForSession(sess, preprocessSessionId(sessionID))
+			}
 			serviceCancel()
 
 			preprocessedID := preprocessSessionId(sessionID)
