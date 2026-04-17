@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI; added label-based browser discovery; -auth-mode=none is permitted on any listen address (warning only; operator owns network-level protection)
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI; added label-based browser discovery; -auth-mode=none is permitted on any listen address (warning only; operator owns network-level protection); added -groups-file / -groups-header for team-based session ACL; wrapped /playwright/session/ DELETE in gateSessionOwner to close ownership-check gap
 
 package main
 
@@ -91,6 +91,8 @@ func init() {
 	flag.StringVar(&app.userHeaderFlag, "user-header", "X-Forwarded-User", "Header to read for authenticated user identity in -auth-mode=trusted-proxy")
 	flag.StringVar(&app.adminHeaderFlag, "admin-header", "X-Admin", "Header in -auth-mode=trusted-proxy whose value 'true' marks the request as administrative")
 	flag.StringVar(&app.adminUsersRaw, "admin-users", "", "Comma-separated list of usernames treated as admin in -auth-mode=embedded")
+	flag.StringVar(&app.groupsFilePath, "groups-file", "", "Path to JSON file mapping team/group name to list of member usernames, e.g. {\"qa-payments\":[\"alice\",\"jenkins-bot\"]}. Members of the same group can manage each other's sessions (useful for CI service accounts). Hot-reloaded on SIGHUP. Used with -auth-mode=embedded")
+	flag.StringVar(&app.groupsHeaderFlag, "groups-header", "X-Groups", "Header to read CSV group names from in -auth-mode=trusted-proxy (e.g. \"qa-payments,qa-growth\"). Empty disables reading groups from headers")
 	flag.StringVar(&app.trustedProxySecretRaw, "trusted-proxy-secret", "", "Shared secret expected in X-Router-Secret header. When set, every request must present this value or it is rejected with 401 — defends -auth-mode=trusted-proxy from clients that bypass the router")
 	flag.StringVar(&app.trustedProxyCIDRsRaw, "trusted-proxy-cidr", "", "Comma-separated CIDR allow-list for the source IP. When set, request must originate from one of the listed networks regardless of headers")
 	flag.StringVar(&app.trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
@@ -121,13 +123,26 @@ func init() {
 	if app.originChecker.AllowsAll() {
 		log.Printf("[-] [INIT] [WARN] [WebSocket Origin check is permissive — set -allowed-origins to defend against Cross-Site WebSocket Hijacking]")
 	}
-	app.authenticator, app.htpasswdAuth, err = buildAuthenticator(app.authModeFlag, app.htpasswdPath, splitCSV(app.adminUsersRaw), app.userHeaderFlag, app.adminHeaderFlag, app.listen)
+	authBuilt, err := buildAuthenticator(authBuildOptions{
+		mode:         app.authModeFlag,
+		htpasswd:     app.htpasswdPath,
+		admins:       splitCSV(app.adminUsersRaw),
+		userHeader:   app.userHeaderFlag,
+		adminHeader:  app.adminHeaderFlag,
+		groupsFile:   app.groupsFilePath,
+		groupsHeader: app.groupsHeaderFlag,
+		listenAddr:   app.listen,
+	})
 	if err != nil {
 		if testHooksEnabled {
 			app.authenticator = protect.NoneAuthenticator{}
 		} else {
 			log.Fatalf("[-] [INIT] [%v]", err)
 		}
+	} else {
+		app.authenticator = authBuilt.authenticator
+		app.htpasswdAuth = authBuilt.htpasswdAuth
+		app.groupsProvider = authBuilt.groups
 	}
 	if app.htpasswdAuth != nil {
 		sessionTTL, parseErr := time.ParseDuration(app.sessionTTLRaw)
@@ -142,7 +157,7 @@ func init() {
 		}
 		log.Printf("[-] [INIT] [Session auth: cookie %q, TTL %s]", protect.DefaultSessionCookieName, sessionTTL)
 	}
-	stCfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag)
+	stCfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag, app.groupsHeaderFlag)
 	if err != nil {
 		if testHooksEnabled {
 			stCfg = protect.SourceTrustConfig{}
@@ -183,8 +198,15 @@ func init() {
 				log.Printf("[-] [INIT] [htpasswd reloaded]")
 			}
 		}
+		if app.groupsProvider != nil {
+			if err := app.groupsProvider.Reload(); err != nil {
+				log.Printf("[-] [INIT] [groups reload failed: %v]", err)
+			} else {
+				log.Printf("[-] [INIT] [groups reloaded]")
+			}
+		}
 		if app.sourceTrust != nil {
-			cfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag)
+			cfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag, app.groupsHeaderFlag)
 			if err != nil {
 				log.Printf("[-] [INIT] [source-trust reload failed: %v]", err)
 			} else {
@@ -396,7 +418,7 @@ func gateSessionOwner(idIndex int, next http.Handler) http.Handler {
 			return
 		}
 		identity, _ := protect.IdentityFromContext(r.Context())
-		if !protect.SessionOwnership(identity, sess.Quota) {
+		if !protect.SessionAccess(identity, sess.Quota, sess.OwnerGroups) {
 			protect.WriteForbidden(w)
 			return
 		}
@@ -404,37 +426,74 @@ func gateSessionOwner(idIndex int, next http.Handler) http.Handler {
 	})
 }
 
-func buildAuthenticator(mode, htpasswd string, admins []string, userHeader, adminHeader, listenAddr string) (protect.Authenticator, *protect.HtpasswdAuthenticator, error) {
-	switch protect.AuthMode(mode) {
+type authBuildOptions struct {
+	mode         string
+	htpasswd     string
+	admins       []string
+	userHeader   string
+	adminHeader  string
+	groupsFile   string
+	groupsHeader string
+	listenAddr   string
+}
+
+type authBuildResult struct {
+	authenticator protect.Authenticator
+	htpasswdAuth  *protect.HtpasswdAuthenticator
+	groups        *protect.FileGroupsProvider
+}
+
+func buildAuthenticator(opts authBuildOptions) (authBuildResult, error) {
+	switch protect.AuthMode(opts.mode) {
 	case protect.ModeEmbedded:
-		if htpasswd == "" {
-			return nil, nil, fmt.Errorf("-auth-mode=embedded requires -htpasswd <path>")
+		if opts.htpasswd == "" {
+			return authBuildResult{}, fmt.Errorf("-auth-mode=embedded requires -htpasswd <path>")
 		}
-		auth, err := protect.NewHtpasswdAuthenticator(htpasswd, admins)
+		auth, err := protect.NewHtpasswdAuthenticator(opts.htpasswd, opts.admins)
 		if err != nil {
-			return nil, nil, fmt.Errorf("loading htpasswd: %w", err)
+			return authBuildResult{}, fmt.Errorf("loading htpasswd: %w", err)
 		}
-		log.Printf("[-] [INIT] [Auth: embedded BasicAuth from %s, %d admin(s)]", htpasswd, len(admins))
-		return auth, auth, nil
-	case protect.ModeTrustedProxy:
-		if userHeader == "" {
-			return nil, nil, fmt.Errorf("-auth-mode=trusted-proxy requires non-empty -user-header")
-		}
-		log.Printf("[-] [INIT] [Auth: trusted-proxy reading user from %q, admin from %q]", userHeader, adminHeader)
-		return &protect.TrustedProxyAuthenticator{UserHeader: userHeader, AdminHeader: adminHeader}, nil, nil
-	case protect.ModeNone:
-		if isLoopbackListen(listenAddr) {
-			log.Printf("[-] [INIT] [Auth: none on %s]", listenAddr)
+		var groups *protect.FileGroupsProvider
+		if opts.groupsFile != "" {
+			groups, err = protect.NewFileGroupsProvider(opts.groupsFile)
+			if err != nil {
+				return authBuildResult{}, fmt.Errorf("loading groups file: %w", err)
+			}
+			auth.SetGroups(groups)
+			log.Printf("[-] [INIT] [Auth: embedded BasicAuth from %s, %d admin(s), groups from %s]", opts.htpasswd, len(opts.admins), opts.groupsFile)
 		} else {
-			log.Printf("[-] [INIT] [WARN] [Auth: NONE on %s — service is reachable without authentication]", listenAddr)
+			log.Printf("[-] [INIT] [Auth: embedded BasicAuth from %s, %d admin(s)]", opts.htpasswd, len(opts.admins))
 		}
-		return protect.NoneAuthenticator{}, nil, nil
+		return authBuildResult{authenticator: auth, htpasswdAuth: auth, groups: groups}, nil
+	case protect.ModeTrustedProxy:
+		if opts.userHeader == "" {
+			return authBuildResult{}, fmt.Errorf("-auth-mode=trusted-proxy requires non-empty -user-header")
+		}
+		if opts.groupsHeader != "" {
+			log.Printf("[-] [INIT] [Auth: trusted-proxy reading user from %q, admin from %q, groups from %q]", opts.userHeader, opts.adminHeader, opts.groupsHeader)
+		} else {
+			log.Printf("[-] [INIT] [Auth: trusted-proxy reading user from %q, admin from %q]", opts.userHeader, opts.adminHeader)
+		}
+		return authBuildResult{
+			authenticator: &protect.TrustedProxyAuthenticator{
+				UserHeader:   opts.userHeader,
+				AdminHeader:  opts.adminHeader,
+				GroupsHeader: opts.groupsHeader,
+			},
+		}, nil
+	case protect.ModeNone:
+		if isLoopbackListen(opts.listenAddr) {
+			log.Printf("[-] [INIT] [Auth: none on %s]", opts.listenAddr)
+		} else {
+			log.Printf("[-] [INIT] [WARN] [Auth: NONE on %s — service is reachable without authentication]", opts.listenAddr)
+		}
+		return authBuildResult{authenticator: protect.NoneAuthenticator{}}, nil
 	default:
-		return nil, nil, fmt.Errorf("unknown -auth-mode %q (expected embedded|trusted-proxy|none)", mode)
+		return authBuildResult{}, fmt.Errorf("unknown -auth-mode %q (expected embedded|trusted-proxy|none)", opts.mode)
 	}
 }
 
-func buildSourceTrustConfig(mode, secret, cidrCSV, caPath, userHeader, adminHeader string) (protect.SourceTrustConfig, error) {
+func buildSourceTrustConfig(mode, secret, cidrCSV, caPath, userHeader, adminHeader, groupsHeader string) (protect.SourceTrustConfig, error) {
 	cfg := protect.SourceTrustConfig{
 		Secret: strings.TrimSpace(secret),
 	}
@@ -458,6 +517,9 @@ func buildSourceTrustConfig(mode, secret, cidrCSV, caPath, userHeader, adminHead
 	}
 	if adminHeader != "" {
 		stripped = append(stripped, adminHeader)
+	}
+	if groupsHeader != "" {
+		stripped = append(stripped, groupsHeader)
 	}
 	cfg.StripHeaders = stripped
 
@@ -677,7 +739,7 @@ func handler() http.Handler {
 	root.Handle(paths.Download, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Fileserver }, "DOWNLOADING_FILE"))))
 	root.Handle(paths.Clipboard, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Clipboard }, "CLIPBOARD"))))
 	root.Handle(paths.Devtools, gateSessionOwner(2, http.HandlerFunc(reverseProxy(func(sess *session.Session) string { return sess.HostPort.Devtools }, "DEVTOOLS"))))
-	root.HandleFunc("/playwright/session/", httpDelete(deletePlaywrightSession))
+	root.Handle("/playwright/session/", gateSessionOwner(3, httpDelete(deletePlaywrightSession)))
 	root.HandleFunc(paths.Playwright, get(app.queue.Try(app.queue.Check(app.queue.Protect(playwright)))))
 	if app.enableFileUpload {
 		root.HandleFunc(paths.File, fileUpload)

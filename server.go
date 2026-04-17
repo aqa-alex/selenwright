@@ -48,6 +48,8 @@ type Server struct {
 	userHeaderFlag           string
 	adminHeaderFlag          string
 	adminUsersRaw            string
+	groupsFilePath           string
+	groupsHeaderFlag         string
 	trustedProxySecretRaw    string
 	trustedProxyCIDRsRaw     string
 	trustedProxyMTLSCAPath   string
@@ -70,10 +72,11 @@ type Server struct {
 	adoptedStore  *discovery.AdoptedStore
 	rescanMu      sync.Mutex
 	originChecker *protect.OriginChecker
-	authenticator protect.Authenticator
-	htpasswdAuth  *protect.HtpasswdAuthenticator
-	sessionStore  *protect.SessionStore
-	sourceTrust   *protect.SourceTrust
+	authenticator  protect.Authenticator
+	htpasswdAuth   *protect.HtpasswdAuthenticator
+	groupsProvider *protect.FileGroupsProvider
+	sessionStore   *protect.SessionStore
+	sourceTrust    *protect.SourceTrust
 	sessionTTLRaw string
 	ggrHost       *ggr.Host
 

@@ -21,6 +21,7 @@ type HtpasswdAuthenticator struct {
 	path    string
 	entries map[string][]byte
 	admins  map[string]struct{}
+	groups  GroupsProvider
 }
 
 func NewHtpasswdAuthenticator(path string, admins []string) (*HtpasswdAuthenticator, error) {
@@ -29,6 +30,14 @@ func NewHtpasswdAuthenticator(path string, admins []string) (*HtpasswdAuthentica
 		return nil, err
 	}
 	return a, nil
+}
+
+// SetGroups installs a GroupsProvider used to populate Identity.Groups on
+// successful authentication. Nil (the default) means no groups are attached.
+func (a *HtpasswdAuthenticator) SetGroups(g GroupsProvider) {
+	a.mu.Lock()
+	a.groups = g
+	a.mu.Unlock()
 }
 
 func (a *HtpasswdAuthenticator) Reload() error {
@@ -60,6 +69,7 @@ func (a *HtpasswdAuthenticator) Authenticate(r *http.Request) (Identity, error) 
 	a.mu.RLock()
 	hash, known := a.entries[user]
 	_, isAdmin := a.admins[user]
+	groups := a.groups
 	a.mu.RUnlock()
 	if !known {
 		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(pass))
@@ -68,7 +78,7 @@ func (a *HtpasswdAuthenticator) Authenticate(r *http.Request) (Identity, error) 
 	if err := bcrypt.CompareHashAndPassword(hash, []byte(pass)); err != nil {
 		return Identity{}, ErrAuthFailed
 	}
-	return Identity{User: user, IsAdmin: isAdmin}, nil
+	return Identity{User: user, IsAdmin: isAdmin, Groups: lookupGroups(groups, user)}, nil
 }
 
 func (a *HtpasswdAuthenticator) Realm() string { return HtpasswdRealm }
@@ -79,6 +89,7 @@ func (a *HtpasswdAuthenticator) ValidateCredentials(user, pass string) (Identity
 	a.mu.RLock()
 	hash, known := a.entries[user]
 	_, isAdmin := a.admins[user]
+	groups := a.groups
 	a.mu.RUnlock()
 	if !known {
 		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(pass))
@@ -87,7 +98,14 @@ func (a *HtpasswdAuthenticator) ValidateCredentials(user, pass string) (Identity
 	if err := bcrypt.CompareHashAndPassword(hash, []byte(pass)); err != nil {
 		return Identity{}, ErrAuthFailed
 	}
-	return Identity{User: user, IsAdmin: isAdmin}, nil
+	return Identity{User: user, IsAdmin: isAdmin, Groups: lookupGroups(groups, user)}, nil
+}
+
+func lookupGroups(p GroupsProvider, user string) []string {
+	if p == nil {
+		return nil
+	}
+	return p.GroupsFor(user)
 }
 
 var dummyHash = []byte(`$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy`)

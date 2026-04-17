@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added ArtifactHistoryEnabled for per-session retention
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added ArtifactHistoryEnabled for per-session retention; added OwnerGroups for group-based session ACL
 
 package session
 
@@ -80,6 +80,7 @@ type Container struct {
 // Session - holds session info
 type Session struct {
 	Quota                  string
+	OwnerGroups            []string
 	Caps                   Caps
 	URL                    *url.URL
 	Container              *Container

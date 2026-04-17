@@ -145,25 +145,30 @@ func TestIsLoopbackListen(t *testing.T) {
 }
 
 func TestBuildAuthenticator_EmbeddedRequiresHtpasswd(t *testing.T) {
-	_, _, err := buildAuthenticator("embedded", "", nil, "X-Forwarded-User", "X-Admin", ":4444")
+	_, err := buildAuthenticator(authBuildOptions{
+		mode:        "embedded",
+		userHeader:  "X-Forwarded-User",
+		adminHeader: "X-Admin",
+		listenAddr:  ":4444",
+	})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "-htpasswd")
 }
 
 func TestBuildAuthenticator_NoneOnLoopback(t *testing.T) {
-	a, _, err := buildAuthenticator("none", "", nil, "", "", "127.0.0.1:4444")
+	r, err := buildAuthenticator(authBuildOptions{mode: "none", listenAddr: "127.0.0.1:4444"})
 	assert.NoError(t, err)
-	assert.NotNil(t, a)
+	assert.NotNil(t, r.authenticator)
 }
 
 func TestBuildAuthenticator_NoneOnPublicListen(t *testing.T) {
-	a, _, err := buildAuthenticator("none", "", nil, "", "", "0.0.0.0:4444")
+	r, err := buildAuthenticator(authBuildOptions{mode: "none", listenAddr: "0.0.0.0:4444"})
 	assert.NoError(t, err)
-	assert.NotNil(t, a)
+	assert.NotNil(t, r.authenticator)
 }
 
 func TestBuildAuthenticator_UnknownMode(t *testing.T) {
-	_, _, err := buildAuthenticator("nonsense", "", nil, "", "", ":4444")
+	_, err := buildAuthenticator(authBuildOptions{mode: "nonsense", listenAddr: ":4444"})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "expected embedded|trusted-proxy|none")
 }
@@ -227,15 +232,16 @@ func TestSourceTrust_OpenPathsAreNotGated(t *testing.T) {
 }
 
 func TestBuildSourceTrustConfig_StripsRouterHeaders(t *testing.T) {
-	cfg, err := buildSourceTrustConfig("trusted-proxy", "secret", "10.0.0.0/8", "", "X-Forwarded-User", "X-Admin")
+	cfg, err := buildSourceTrustConfig("trusted-proxy", "secret", "10.0.0.0/8", "", "X-Forwarded-User", "X-Admin", "X-Groups")
 	assert.NoError(t, err)
 	assert.Contains(t, cfg.StripHeaders, protect.HeaderRouterSecret)
 	assert.Contains(t, cfg.StripHeaders, "X-Forwarded-User")
 	assert.Contains(t, cfg.StripHeaders, "X-Admin")
+	assert.Contains(t, cfg.StripHeaders, "X-Groups")
 }
 
 func TestBuildSourceTrustConfig_RejectsInvalidCIDR(t *testing.T) {
-	_, err := buildSourceTrustConfig("trusted-proxy", "", "not-a-cidr", "", "", "")
+	_, err := buildSourceTrustConfig("trusted-proxy", "", "not-a-cidr", "", "", "", "")
 	assert.Error(t, err)
 }
 
@@ -244,7 +250,7 @@ func TestBuildSourceTrustConfig_LoadsCAPool(t *testing.T) {
 	caPath := dir + "/ca.pem"
 	assert.NoError(t, os.WriteFile(caPath, generateTestCAPEM(t), 0o600))
 
-	cfg, err := buildSourceTrustConfig("trusted-proxy", "", "", caPath, "", "")
+	cfg, err := buildSourceTrustConfig("trusted-proxy", "", "", caPath, "", "", "")
 	assert.NoError(t, err)
 	assert.True(t, cfg.RequireMTLS)
 	assert.NotNil(t, cfg.AllowedRootCAs)
@@ -270,7 +276,7 @@ func generateTestCAPEM(t *testing.T) []byte {
 }
 
 func TestBuildSourceTrustConfig_MissingCAFile(t *testing.T) {
-	_, err := buildSourceTrustConfig("trusted-proxy", "", "", "/no/such/file", "", "")
+	_, err := buildSourceTrustConfig("trusted-proxy", "", "", "/no/such/file", "", "", "")
 	assert.Error(t, err)
 }
 
@@ -390,6 +396,166 @@ func TestSessionACL_UnknownSessionPassesThrough(t *testing.T) {
 	defer resp.Body.Close()
 	assert.NotEqual(t, http.StatusForbidden, resp.StatusCode,
 		"unknown session must not surface as 403; downstream renders 404 or its own error")
+}
+
+func TestSessionACL_GroupMateCanAccess(t *testing.T) {
+	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User", GroupsHeader: "X-Groups"})
+
+	app.sessions.Put("bot-download", &session.Session{
+		Quota:       "jenkins-bot",
+		OwnerGroups: []string{"qa"},
+		HostPort:    session.HostPort{Fileserver: "127.0.0.1:0"},
+	})
+	t.Cleanup(func() { app.sessions.Remove("bot-download") })
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+paths.Download+"bot-download/file.txt", nil)
+	req.Header.Set("X-Forwarded-User", "alice")
+	req.Header.Set("X-Groups", "qa,growth")
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.NotEqual(t, http.StatusForbidden, resp.StatusCode,
+		"group-mate of the owner must bypass the ACL gate")
+}
+
+func TestSessionACL_DisjointGroupsRejected(t *testing.T) {
+	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User", GroupsHeader: "X-Groups"})
+
+	app.sessions.Put("bot-download2", &session.Session{
+		Quota:       "jenkins-bot",
+		OwnerGroups: []string{"qa"},
+		HostPort:    session.HostPort{Fileserver: "127.0.0.1:0"},
+	})
+	t.Cleanup(func() { app.sessions.Remove("bot-download2") })
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+paths.Download+"bot-download2/file.txt", nil)
+	req.Header.Set("X-Forwarded-User", "bob")
+	req.Header.Set("X-Groups", "ops")
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
+		"caller with no overlapping groups must be rejected")
+}
+
+func TestPlaywrightDelete_Owner(t *testing.T) {
+	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
+
+	cancelled := false
+	app.sessions.Put("pw-owner", &session.Session{
+		Quota:    "alice",
+		Protocol: session.ProtocolPlaywright,
+		Cancel:   func() { cancelled = true },
+	})
+	t.Cleanup(func() { app.sessions.Remove("pw-owner") })
+
+	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/playwright/session/pw-owner", nil)
+	req.Header.Set("X-Forwarded-User", "alice")
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.True(t, cancelled)
+}
+
+func TestPlaywrightDelete_GroupMate(t *testing.T) {
+	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User", GroupsHeader: "X-Groups"})
+
+	cancelled := false
+	app.sessions.Put("pw-group", &session.Session{
+		Quota:       "jenkins-bot",
+		OwnerGroups: []string{"qa"},
+		Protocol:    session.ProtocolPlaywright,
+		Cancel:      func() { cancelled = true },
+	})
+	t.Cleanup(func() { app.sessions.Remove("pw-group") })
+
+	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/playwright/session/pw-group", nil)
+	req.Header.Set("X-Forwarded-User", "alice")
+	req.Header.Set("X-Groups", "qa")
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.True(t, cancelled, "group-mate must be allowed to terminate the Playwright session")
+}
+
+func TestPlaywrightDelete_Foreign(t *testing.T) {
+	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User"})
+
+	cancelled := false
+	app.sessions.Put("pw-foreign", &session.Session{
+		Quota:    "alice",
+		Protocol: session.ProtocolPlaywright,
+		Cancel:   func() { cancelled = true },
+	})
+	t.Cleanup(func() { app.sessions.Remove("pw-foreign") })
+
+	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/playwright/session/pw-foreign", nil)
+	req.Header.Set("X-Forwarded-User", "mallory")
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
+		"non-owner must not terminate a Playwright session — regression guard for the earlier auth gap")
+	assert.False(t, cancelled, "cancel must not fire when the ACL gate denies the request")
+}
+
+func TestPlaywrightDelete_AdminBypass(t *testing.T) {
+	withAuthenticator(t, &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User", AdminHeader: "X-Admin"})
+
+	cancelled := false
+	app.sessions.Put("pw-admin", &session.Session{
+		Quota:    "alice",
+		Protocol: session.ProtocolPlaywright,
+		Cancel:   func() { cancelled = true },
+	})
+	t.Cleanup(func() { app.sessions.Remove("pw-admin") })
+
+	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/playwright/session/pw-admin", nil)
+	req.Header.Set("X-Forwarded-User", "root")
+	req.Header.Set("X-Admin", "true")
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.True(t, cancelled)
+}
+
+func TestTrustedProxyAuth_ReadsGroupsHeader(t *testing.T) {
+	a := &protect.TrustedProxyAuthenticator{UserHeader: "X-Forwarded-User", GroupsHeader: "X-Groups"}
+	r, _ := http.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("X-Forwarded-User", "alice")
+	r.Header.Set("X-Groups", "qa , ops, , qa")
+
+	id, err := a.Authenticate(r)
+	assert.NoError(t, err)
+	assert.Equal(t, "alice", id.User)
+	assert.Equal(t, []string{"qa", "ops"}, id.Groups)
+}
+
+func TestHtpasswdAuth_PopulatesGroupsFromProvider(t *testing.T) {
+	a, err := protect.NewHtpasswdAuthenticator(writeTestHtpasswd(t, "alice", "pw"), nil)
+	assert.NoError(t, err)
+
+	dir := t.TempDir()
+	groupsPath := dir + "/groups.json"
+	assert.NoError(t, os.WriteFile(groupsPath, []byte(`{"qa":["alice"]}`), 0o600))
+	gp, err := protect.NewFileGroupsProvider(groupsPath)
+	assert.NoError(t, err)
+	a.SetGroups(gp)
+
+	id, err := a.ValidateCredentials("alice", "pw")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"qa"}, id.Groups)
+
+	// Unknown-to-groups user still authenticates, with no groups attached.
+	a2, err := protect.NewHtpasswdAuthenticator(writeTestHtpasswd(t, "bob", "pw"), nil)
+	assert.NoError(t, err)
+	a2.SetGroups(gp)
+	id2, err := a2.ValidateCredentials("bob", "pw")
+	assert.NoError(t, err)
+	assert.Nil(t, id2.Groups)
 }
 
 func TestSessionACL_UnknownSessionWithVNC(t *testing.T) {

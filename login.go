@@ -14,8 +14,9 @@ type loginRequest struct {
 }
 
 type loginResponse struct {
-	User    string `json:"user"`
-	IsAdmin bool   `json:"isAdmin"`
+	User    string   `json:"user"`
+	IsAdmin bool     `json:"isAdmin"`
+	Groups  []string `json:"groups"`
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -58,10 +59,15 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		Secure:   isSecureRequest(r),
 	})
 
-	log.Printf("[-] [LOGIN] [%s] [admin=%v]", identity.User, identity.IsAdmin)
+	log.Printf("[-] [LOGIN] [%s] [admin=%v] [groups=%d]", identity.User, identity.IsAdmin, len(identity.Groups))
+	groups := identity.Groups
+	if groups == nil {
+		groups = []string{}
+	}
 	writeJSON(w, http.StatusOK, loginResponse{
 		User:    identity.User,
 		IsAdmin: identity.IsAdmin,
+		Groups:  groups,
 	})
 }
 

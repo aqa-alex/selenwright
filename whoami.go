@@ -8,10 +8,11 @@ import (
 )
 
 type whoamiResponse struct {
-	User          string `json:"user"`
-	IsAdmin       bool   `json:"isAdmin"`
-	AuthMode      string `json:"authMode"`
-	Authenticated bool   `json:"authenticated"`
+	User          string   `json:"user"`
+	IsAdmin       bool     `json:"isAdmin"`
+	AuthMode      string   `json:"authMode"`
+	Authenticated bool     `json:"authenticated"`
+	Groups        []string `json:"groups"`
 }
 
 // whoamiHandler is registered as an open path so the UI can call it before
@@ -21,12 +22,18 @@ type whoamiResponse struct {
 func whoamiHandler(w http.ResponseWriter, r *http.Request) {
 	identity, authenticated := tryAuthenticate(r)
 
+	groups := identity.Groups
+	if groups == nil {
+		groups = []string{}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(whoamiResponse{
 		User:          identity.User,
 		IsAdmin:       identity.IsAdmin,
 		AuthMode:      app.authModeFlag,
 		Authenticated: authenticated,
+		Groups:        groups,
 	})
 }
 

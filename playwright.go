@@ -291,6 +291,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 	}
 	sess := &session.Session{
 		Quota:                  owner,
+		OwnerGroups:            append([]string(nil), identity.Groups...),
 		Caps:                   caps,
 		URL:                    clonePlaywrightURL(upstreamURL),
 		Container:              startedService.Container,

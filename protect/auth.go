@@ -19,6 +19,7 @@ const (
 type Identity struct {
 	User    string
 	IsAdmin bool
+	Groups  []string
 }
 
 var AnonymousIdentity = Identity{User: "unknown", IsAdmin: false}
@@ -53,8 +54,9 @@ func (NoneAuthenticator) Authenticate(_ *http.Request) (Identity, error) {
 func (NoneAuthenticator) Realm() string { return "" }
 
 type TrustedProxyAuthenticator struct {
-	UserHeader  string
-	AdminHeader string
+	UserHeader   string
+	AdminHeader  string
+	GroupsHeader string
 }
 
 func (a *TrustedProxyAuthenticator) Authenticate(r *http.Request) (Identity, error) {
@@ -69,7 +71,41 @@ func (a *TrustedProxyAuthenticator) Authenticate(r *http.Request) (Identity, err
 	if a.AdminHeader != "" && strings.EqualFold(r.Header.Get(a.AdminHeader), "true") {
 		id.IsAdmin = true
 	}
+	if a.GroupsHeader != "" {
+		groups, err := parseGroupsHeader(r.Header.Get(a.GroupsHeader))
+		if err != nil {
+			return Identity{}, fmt.Errorf("%w: %v", ErrAuthFailed, err)
+		}
+		id.Groups = groups
+	}
 	return id, nil
+}
+
+func parseGroupsHeader(raw string) ([]string, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	if strings.ContainsAny(raw, "\r\n\t") {
+		return nil, errors.New("groups header contains control characters")
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, dup := seen[p]; dup {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
 }
 
 func (a *TrustedProxyAuthenticator) Realm() string { return "" }

@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added BrowserCatalog snapshot for /config endpoint; added ReloadStatus/Snapshot for artifact history; added Replace() for label-based discovery
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added BrowserCatalog snapshot for /config endpoint; added ReloadStatus/Snapshot for artifact history; added Replace() for label-based discovery; added OwnerGroups in session state for group-based ACL
 
 package config
 
@@ -26,6 +26,7 @@ type Session struct {
 	Screen        string             `json:"screen"`
 	Caps          session.Caps       `json:"caps"`
 	Started       time.Time          `json:"started"`
+	OwnerGroups   []string           `json:"ownerGroups,omitempty"`
 }
 
 // Sessions - used count and individual sessions for quota user
@@ -345,6 +346,7 @@ func (config *Config) State(sessions *session.Map, limit, queued, pending int) *
 			Screen:        session.Caps.ScreenResolution,
 			Caps:          session.Caps,
 			Started:       session.Started,
+			OwnerGroups:   session.OwnerGroups,
 		}
 		if ctr != nil {
 			sess.Container = ctr.ID
