@@ -102,6 +102,9 @@ The default mode described above. Uses an htpasswd file with bcrypt hashes.
 
 | `-admin-users`
 | Comma-separated list of admin usernames
+
+| `-groups-file`
+| Path to JSON group file (see <<Team/Group Sharing>>). Hot-reloaded on `SIGHUP`
 |===
 
 ==== `trusted-proxy` — Behind a Reverse Proxy
@@ -124,9 +127,12 @@ Use this when an upstream proxy (nginx, Envoy, OAuth2 Proxy) handles authenticat
 
 | `-admin-header` (default `X-Admin`)
 | Header whose value `"true"` marks the caller as admin
+
+| `-groups-header` (default `X-Groups`)
+| Header containing a comma-separated list of group names (see <<Team/Group Sharing>>). Set to empty to disable group reading
 |===
 
-WARNING: Without source trust validation (see below), any client can forge these headers. Always combine with at least one source trust check.
+WARNING: Without source trust validation (see below), any client can forge these headers — including `-groups-header`, which would let a caller escalate into any team's sessions. Always combine with at least one source trust check.
 
 ==== `none` — No Authentication
 
@@ -180,6 +186,66 @@ Regular users requesting these get a 400 error. Set `-caps-policy=permissive` to
 
 Every session is bound to the user who created it:
 
-* **Owner** — full access to their own sessions (VNC, logs, devtools, downloads)
+* **Owner** — full access to their own sessions (VNC, logs, devtools, downloads, terminate)
+* **Group-mate** — when the owner and the caller belong to at least one common group, the caller gets the same full access as the owner (see <<Team/Group Sharing>>)
 * **Admin** — full access to all sessions
 * **Other users** — 403 Forbidden
+
+Ownership is enforced uniformly for both Selenium (`DELETE /wd/hub/session/{id}`) and Playwright (`DELETE /playwright/session/{id}`) termination, as well as for VNC, devtools, downloads, clipboard and live log endpoints.
+
+=== Team/Group Sharing
+
+The default `user == owner` rule is too narrow when sessions are created by a shared service account — for example, `jenkins-bot` launching tests from CI. Without groups, no human user can terminate those sessions through the UI except the admin.
+
+Groups solve this. Members of the same group can manage each other's sessions (including sessions owned by service accounts in the group). Admin behavior is unchanged.
+
+==== Configuring Groups (embedded mode)
+
+Supply a JSON file mapping group name to list of member usernames:
+
+[source,json]
+----
+{
+  "qa-payments": ["alice", "bob", "jenkins-bot"],
+  "qa-growth":   ["carol"]
+}
+----
+
+Point to it with `-groups-file`:
+
+----
+./selenwright \
+  -htpasswd users.htpasswd \
+  -admin-users=root \
+  -groups-file=groups.json
+----
+
+The file is hot-reloaded on `SIGHUP` alongside the htpasswd file. Parse or validation errors are logged and the previous membership is kept.
+
+==== Configuring Groups (trusted-proxy mode)
+
+The upstream proxy passes the user's groups as a comma-separated list in the `-groups-header` header (default `X-Groups`):
+
+----
+./selenwright \
+  -auth-mode=trusted-proxy \
+  -user-header=X-Forwarded-User \
+  -admin-header=X-Admin \
+  -groups-header=X-Groups \
+  -trusted-proxy-secret=s3cret
+----
+
+Example request from a trusted proxy:
+
+----
+X-Forwarded-User: alice
+X-Groups: qa-payments,qa-growth
+----
+
+Set `-groups-header=""` to disable group reading entirely. `X-Groups` is always stripped from incoming requests before the application handlers run (same treatment as `X-Forwarded-User` and `X-Admin`), so downstream clients cannot forge it — provided at least one source trust check is configured.
+
+==== Snapshot Semantics
+
+The groups of a session's owner are **captured at session creation time** and stored on the session itself. Revoking group membership (editing the JSON file or changing the upstream's `X-Groups` output) does **not** retroactively change ACL for sessions that are already running. New sessions created after the change see the new membership immediately.
+
+This avoids race conditions mid-operation: a group-mate who is in the middle of terminating a session cannot lose access half-way through.

@@ -39,6 +39,7 @@ include::artifact-history.adoc[leveloffset=+1]
 include::browser-discovery.adoc[leveloffset=+1]
 include::stack-management.adoc[leveloffset=+1]
 include::metrics.adoc[leveloffset=+1]
+include::metadata.adoc[leveloffset=+1]
 
 == Security
 include::authentication.adoc[leveloffset=+1]

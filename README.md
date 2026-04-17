@@ -75,7 +75,7 @@ Playwright client and server versions must match on **major.minor** (e.g. client
 
 File uploads (`page.setInputFiles()`) and downloads (`page.download()`) work natively through the Playwright protocol — no additional configuration needed.
 
-See [docs/playwright.adoc](docs/playwright.adoc) for the full companion image contract and configuration details.
+See [Native Playwright Support](https://aqa-alex.github.io/selenwright/latest/#_native_playwright_support) for the full companion image contract and configuration details.
 
 ## Selenium WebDriver
 
@@ -110,7 +110,7 @@ Selenwright auto-discovers browser images on the Docker host by scanning image l
 
 Adoption state is persisted in `-state-dir` (default `state/`). Send `SIGHUP` or call `POST /browsers/rescan` to trigger a manual rescan.
 
-See [docs/browser-discovery.adoc](docs/browser-discovery.adoc) for the API reference.
+See [Browser Discovery](https://aqa-alex.github.io/selenwright/latest/#_browser_discovery) for the API reference.
 
 ### Manual `browsers.json` (legacy)
 
@@ -144,7 +144,7 @@ For environments where discovery is not practical, create a `browsers.json` and 
 
 Set `"protocol": "playwright"` for Playwright images. Version matching is prefix-based (e.g. `"126"` matches `"126.0"`).
 
-See [docs/browsers-configuration-file.adoc](docs/browsers-configuration-file.adoc) for all per-version fields (`tmpfs`, `volumes`, `env`, `shmSize`, `mem`, `cpu`, etc.).
+See [Browsers Configuration File](https://aqa-alex.github.io/selenwright/latest/#_browsers_configuration_file) for all per-version fields (`tmpfs`, `volumes`, `env`, `shmSize`, `mem`, `cpu`, etc.).
 
 ## Features
 
@@ -164,7 +164,7 @@ GET    http://host:4444/video/<filename>.mp4
 DELETE http://host:4444/video/<filename>.mp4
 ```
 
-See [docs/video.adoc](docs/video.adoc).
+See [Video Recording](https://aqa-alex.github.io/selenwright/latest/#_video_recording).
 
 ### Session Logs
 
@@ -180,7 +180,7 @@ Requires `-log-output-dir` flag. Use `-save-all-logs` to capture every session w
 GET http://host:4444/logs/<filename>.log
 ```
 
-See [docs/logs.adoc](docs/logs.adoc).
+See [Saving Session Logs](https://aqa-alex.github.io/selenwright/latest/#_saving_session_logs).
 
 ### VNC Live View
 
@@ -201,11 +201,11 @@ GET http://host:4444/devtools/<session-id>/browser
 GET http://host:4444/devtools/<session-id>/page
 ```
 
-See [docs/devtools.adoc](docs/devtools.adoc).
+See [Accessing Browser Developer Tools](https://aqa-alex.github.io/selenwright/latest/#_accessing_browser_developer_tools).
 
 ### File Upload / Download
 
-**Upload** works out of the box with Selenium clients that support `LocalFileDetector`. See [docs/file-upload.adoc](docs/file-upload.adoc).
+**Upload** works out of the box with Selenium clients that support `LocalFileDetector`. See [Uploading Files To Browser](https://aqa-alex.github.io/selenwright/latest/#_uploading_files_to_browser).
 
 **Download** files from sessions at:
 
@@ -213,7 +213,7 @@ See [docs/devtools.adoc](docs/devtools.adoc).
 GET http://host:4444/download/<session-id>/<filename>
 ```
 
-See [docs/file-download.adoc](docs/file-download.adoc).
+See [Downloading Files From Browser](https://aqa-alex.github.io/selenwright/latest/#_downloading_files_from_browser).
 
 ### Clipboard
 
@@ -302,6 +302,25 @@ Edit the htpasswd file and send `SIGHUP` to reload without restart:
 docker kill -s HUP selenwright
 ```
 
+#### Team/group sharing
+
+By default a non-admin user can only manage their own sessions. To let teammates manage sessions of a shared service account (e.g. `jenkins-bot` running tests from CI) supply a JSON group file and reference it with `-groups-file`:
+
+```json
+{
+  "qa-payments": ["alice", "bob", "jenkins-bot"],
+  "qa-growth":   ["carol"]
+}
+```
+
+```bash
+./selenwright -htpasswd users.htpasswd \
+    -admin-users=root \
+    -groups-file=groups.json
+```
+
+Any member of `qa-payments` can terminate, stream logs, view VNC, etc. of any session created by another member of `qa-payments`. Admin still bypasses all ACL. The file is hot-reloaded on `SIGHUP` alongside the htpasswd file. Group membership is snapshotted onto each session at creation time, so revoking membership does not retroactively change ACL for sessions already running.
+
 ### `trusted-proxy` — Behind a Reverse Proxy
 
 When nginx, Envoy, or OAuth2 Proxy handles authentication and passes identity via headers:
@@ -310,8 +329,11 @@ When nginx, Envoy, or OAuth2 Proxy handles authentication and passes identity vi
 ./selenwright \
     -auth-mode=trusted-proxy \
     -user-header=X-Forwarded-User \
-    -admin-header=X-Admin
+    -admin-header=X-Admin \
+    -groups-header=X-Groups
 ```
+
+Groups are read as a comma-separated list from `-groups-header` (default `X-Groups`). Members of the same group share session ACL as described in [Team/group sharing](#teamgroup-sharing). Set `-groups-header=""` to disable group reading entirely.
 
 **Important:** without source trust validation, any client can forge these headers. Add at least one check:
 
@@ -350,7 +372,7 @@ Also accepted on any network interface:
 
 `-caps-policy` (default: `strict`) restricts dangerous capabilities (`env`, `dnsServers`, `hostsEntries`, `additionalNetworks`, `applicationContainers`) to admin users only. Set `-caps-policy=permissive` for legacy behavior.
 
-See [docs/authentication.adoc](docs/authentication.adoc).
+See [Authentication and Authorization](https://aqa-alex.github.io/selenwright/latest/#_authentication_and_authorization).
 
 ## Docker Compose
 
@@ -377,7 +399,7 @@ services:
       - "4444:4444"
 ```
 
-For custom Docker network setups, see [docs/docker-compose.adoc](docs/docker-compose.adoc).
+For custom Docker network setups, see [Selenwright with Docker Compose](https://aqa-alex.github.io/selenwright/latest/#_selenwright_with_docker_compose).
 
 ## Observability
 
@@ -385,14 +407,14 @@ For custom Docker network setups, see [docs/docker-compose.adoc](docs/docker-com
 - **JSON logging** — enable with `-log-json` for structured one-line JSON output
 - **Status API** — `GET /status` returns live usage statistics (total/used/queued slots, per-browser breakdown)
 
-See [docs/metrics.adoc](docs/metrics.adoc) and [docs/log-files.adoc](docs/log-files.adoc).
+See [Metrics and Observability](https://aqa-alex.github.io/selenwright/latest/#_metrics_and_observability) and [Log Files](https://aqa-alex.github.io/selenwright/latest/#_log_files).
 
 ## Advanced Features
 
-- **S3 Upload** — upload videos, logs, and artifacts to S3-compatible storage. See [docs/s3.adoc](docs/s3.adoc).
-- **Artifact History** — track and retain session artifacts with automatic cleanup. See [docs/artifact-history.adoc](docs/artifact-history.adoc).
-- **Stack Management** — pull and recreate Docker Compose stacks without SSH. See [docs/stack-management.adoc](docs/stack-management.adoc).
-- **Metadata** — save session metadata as JSON. See [docs/metadata.adoc](docs/metadata.adoc).
+- **S3 Upload** — upload videos, logs, and artifacts to S3-compatible storage. See [Uploading Files To S3](https://aqa-alex.github.io/selenwright/latest/#_uploading_files_to_s3).
+- **Artifact History** — track and retain session artifacts with automatic cleanup. See [Artifact History](https://aqa-alex.github.io/selenwright/latest/#_artifact_history).
+- **Stack Management** — pull and recreate Docker Compose stacks without SSH. See [Docker Compose Stack Management](https://aqa-alex.github.io/selenwright/latest/#_docker_compose_stack_management).
+- **Metadata** — save session metadata as JSON. See [Saving Session Metadata](https://aqa-alex.github.io/selenwright/latest/#_saving_session_metadata).
 
 ## CLI Flags
 
@@ -455,7 +477,7 @@ See [docs/metrics.adoc](docs/metrics.adoc) and [docs/log-files.adoc](docs/log-fi
 
 </details>
 
-Full reference: [docs/cli-flags.adoc](docs/cli-flags.adoc).
+Full reference: [Selenwright CLI Flags](https://aqa-alex.github.io/selenwright/latest/#_selenwright_cli_flags).
 
 ## Selenwright UI
 

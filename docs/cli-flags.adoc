@@ -34,6 +34,16 @@ The following flags are supported by `selenwright` command.
 -admin-header string
     Header in -auth-mode=trusted-proxy whose value 'true' marks the
     request as administrative (default "X-Admin")
+-groups-file string
+    Path to JSON file mapping team/group name to list of member
+    usernames, e.g. {"qa-payments":["alice","jenkins-bot"]}. Members of
+    the same group can manage each other's sessions (useful for CI
+    service accounts). Hot-reloaded on SIGHUP. Used with
+    -auth-mode=embedded
+-groups-header string
+    Header to read CSV group names from in -auth-mode=trusted-proxy
+    (e.g. "qa-payments,qa-growth"). Empty disables reading groups from
+    headers (default "X-Groups")
 -caps-policy string
     Capability policy: 'strict' rejects dangerous caps (env, dnsServers,
     hostsEntries, additionalNetworks, applicationContainers) for
