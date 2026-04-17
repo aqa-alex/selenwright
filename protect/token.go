@@ -157,6 +157,57 @@ func (s *TokenStore) Create(owner, name string, groups []string) (string, string
 	return id, plaintext, nil
 }
 
+// SeedFromPlaintext inserts a token with a caller-supplied plaintext (hashed
+// before persistence). Used to honor a SELENWRIGHT_AUTH_TOKEN env var on
+// first-boot. If a record with the same plaintext already exists, the call is
+// a no-op and returns the existing id with matched=true. Owner and name are
+// trimmed; both must be non-empty.
+func (s *TokenStore) SeedFromPlaintext(owner, name, plaintext string, groups []string) (id string, matched bool, err error) {
+	owner = strings.TrimSpace(owner)
+	name = strings.TrimSpace(name)
+	if owner == "" {
+		return "", false, errors.New("owner required")
+	}
+	if name == "" {
+		return "", false, errors.New("name required")
+	}
+	if !strings.HasPrefix(plaintext, TokenPlaintextPrefix) {
+		return "", false, ErrTokenInvalid
+	}
+
+	if existingOwner, _, existingID, ok := s.Lookup(plaintext); ok {
+		_ = existingOwner
+		return existingID, true, nil
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(plaintext), bcrypt.DefaultCost)
+	if err != nil {
+		return "", false, fmt.Errorf("hash token: %w", err)
+	}
+	newID, err := generateID()
+	if err != nil {
+		return "", false, err
+	}
+	rec := TokenRecord{
+		ID:          newID,
+		HashPrefix:  hashPrefix(plaintext),
+		Hash:        string(hash),
+		Owner:       owner,
+		OwnerGroups: append([]string(nil), groups...),
+		Name:        name,
+		CreatedAt:   time.Now().UTC(),
+	}
+	s.mu.Lock()
+	s.tokens = append(s.tokens, rec)
+	s.rebuildIndexLocked()
+	err = s.persistLocked()
+	s.mu.Unlock()
+	if err != nil {
+		return "", false, err
+	}
+	return newID, false, nil
+}
+
 // Lookup validates a plaintext token and returns (owner, groups, true) on
 // match. Returns false for unknown or expired tokens.
 func (s *TokenStore) Lookup(plaintext string) (string, []string, string, bool) {

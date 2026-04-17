@@ -44,6 +44,7 @@ type Server struct {
 	maxWSMessageBytes        int64
 	allowedOriginsRaw        string
 	authModeFlag             string
+	noAuthFlag               bool
 	htpasswdPath             string
 	userHeaderFlag           string
 	adminHeaderFlag          string
@@ -76,6 +77,7 @@ type Server struct {
 	htpasswdAuth   *protect.HtpasswdAuthenticator
 	groupsProvider *protect.FileGroupsProvider
 	sessionStore   *protect.SessionStore
+	tokenStore     *protect.TokenStore
 	sourceTrust    *protect.SourceTrust
 	sessionTTLRaw string
 	ggrHost       *ggr.Host

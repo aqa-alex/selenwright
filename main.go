@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI; added label-based browser discovery; -auth-mode=none is permitted on any listen address (warning only; operator owns network-level protection); added -groups-file / -groups-header for team-based session ACL; wrapped /playwright/session/ DELETE in gateSessionOwner to close ownership-check gap
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI; added label-based browser discovery; -auth-mode=none is permitted on any listen address (warning only; operator owns network-level protection); added -groups-file / -groups-header for team-based session ACL; wrapped /playwright/session/ DELETE in gateSessionOwner to close ownership-check gap; added bearer-token auth (Authorization: Bearer / ?token= on WS paths) with admin-managed /api/admin/tokens store under <state-dir>/auth/tokens.json, --no-auth alias for -auth-mode=none, and SELENWRIGHT_AUTH_TOKEN env-seed / dev-fallback initial token
 
 package main
 
@@ -87,7 +87,8 @@ func init() {
 	flag.Int64Var(&app.maxWSMessageBytes, "max-ws-message-bytes", 64<<20, "Maximum single WebSocket message size in bytes for Playwright, DevTools, VNC and log streams. gorilla/websocket materializes each frame in memory before returning it to the handler, so without this limit a single multi-gigabyte frame can OOM the process. 0 disables the limit (legacy behavior). Default 64 MiB is ample for CDP screenshots and Playwright traces while capping the blast radius of a hostile peer.")
 	flag.StringVar(&app.allowedOriginsRaw, "allowed-origins", "", "Comma-separated list of allowed Origin values for WebSocket upgrades (devtools, playwright, vnc, logs). Empty (default) keeps the legacy permissive behavior; '*' is explicit allow-all. Recommended: configure to your CI/QA hosts to defend against Cross-Site WebSocket Hijacking")
 	flag.StringVar(&app.authModeFlag, "auth-mode", string(protect.ModeEmbedded), "Authentication mode: 'embedded' (built-in BasicAuth + htpasswd), 'trusted-proxy' (read pre-validated user from -user-header), 'none' (no auth; allowed on any listen address — operator owns network-level protection)")
-	flag.StringVar(&app.htpasswdPath, "htpasswd", "", "Path to bcrypt-format htpasswd file used by -auth-mode=embedded. Generate with `htpasswd -B users.htpasswd alice` (apache2-utils) or `docker run --rm httpd:alpine htpasswd -nbB alice pass`")
+	flag.BoolVar(&app.noAuthFlag, "no-auth", false, "Alias for -auth-mode=none. Disables authentication on every request, including WebSocket upgrades. Allowed on any listen address (operator owns network-level protection)")
+	flag.StringVar(&app.htpasswdPath, "htpasswd", "", "Path to bcrypt-format htpasswd file used by -auth-mode=embedded. Generate with `htpasswd -B users.htpasswd alice` (apache2-utils) or `docker run --rm httpd:alpine htpasswd -nbB alice pass`. When omitted and no htpasswd is supplied, selenwright boots in dev mode and prints a single admin bearer token to stdout (see SELENWRIGHT_AUTH_TOKEN env var to seed instead of generating)")
 	flag.StringVar(&app.userHeaderFlag, "user-header", "X-Forwarded-User", "Header to read for authenticated user identity in -auth-mode=trusted-proxy")
 	flag.StringVar(&app.adminHeaderFlag, "admin-header", "X-Admin", "Header in -auth-mode=trusted-proxy whose value 'true' marks the request as administrative")
 	flag.StringVar(&app.adminUsersRaw, "admin-users", "", "Comma-separated list of usernames treated as admin in -auth-mode=embedded")
@@ -123,6 +124,12 @@ func init() {
 	if app.originChecker.AllowsAll() {
 		log.Printf("[-] [INIT] [WARN] [WebSocket Origin check is permissive — set -allowed-origins to defend against Cross-Site WebSocket Hijacking]")
 	}
+	if app.noAuthFlag {
+		if app.authModeFlag != "" && app.authModeFlag != string(protect.ModeEmbedded) && app.authModeFlag != string(protect.ModeNone) {
+			log.Printf("[-] [INIT] [WARN] [--no-auth overrides -auth-mode=%s]", app.authModeFlag)
+		}
+		app.authModeFlag = string(protect.ModeNone)
+	}
 	authBuilt, err := buildAuthenticator(authBuildOptions{
 		mode:         app.authModeFlag,
 		htpasswd:     app.htpasswdPath,
@@ -156,6 +163,54 @@ func init() {
 			Fallback:   app.authenticator,
 		}
 		log.Printf("[-] [INIT] [Session auth: cookie %q, TTL %s]", protect.DefaultSessionCookieName, sessionTTL)
+	}
+	if app.authModeFlag != string(protect.ModeNone) {
+		tokenPath := filepath.Join(app.stateDir, "auth", "tokens.json")
+		ts, terr := protect.NewTokenStore(tokenPath)
+		if terr != nil {
+			if testHooksEnabled {
+				log.Printf("[-] [INIT] [Token store %s unavailable in test: %v]", tokenPath, terr)
+			} else {
+				log.Fatalf("[-] [INIT] [Token store %s: %v]", tokenPath, terr)
+			}
+		}
+		if ts != nil {
+			app.tokenStore = ts
+			if envTok := strings.TrimSpace(os.Getenv("SELENWRIGHT_AUTH_TOKEN")); envTok != "" {
+				if ts.Len() == 0 {
+					id, _, serr := ts.SeedFromPlaintext("admin", "env-seed", envTok, nil)
+					if serr != nil {
+						log.Fatalf("[-] [INIT] [seed SELENWRIGHT_AUTH_TOKEN: %v]", serr)
+					}
+					log.Printf("[-] [INIT] [Seeded admin token %s from SELENWRIGHT_AUTH_TOKEN]", id)
+				} else if _, _, _, ok := ts.Lookup(envTok); !ok {
+					log.Printf("[-] [INIT] [WARN] [SELENWRIGHT_AUTH_TOKEN differs from stored tokens — ignoring env var; revoke and restart with empty state-dir to re-seed]")
+				}
+			} else if app.htpasswdPath == "" && ts.Len() == 0 {
+				id, plaintext, cerr := ts.Create("admin", "initial", nil)
+				if cerr != nil {
+					log.Fatalf("[-] [INIT] [initial token: %v]", cerr)
+				}
+				logInitialTokenBox(id, plaintext, tokenPath)
+			}
+			admins := map[string]struct{}{}
+			for _, a := range splitCSV(app.adminUsersRaw) {
+				admins[a] = struct{}{}
+			}
+			// In dev-fallback (no htpasswd) the auto-generated token owner is
+			// "admin"; make sure that identity is recognised as admin even when
+			// the operator did not pass -admin-users.
+			if app.htpasswdPath == "" {
+				admins["admin"] = struct{}{}
+			}
+			app.authenticator = &protect.TokenAwareAuthenticator{
+				Store:            app.tokenStore,
+				Admins:           admins,
+				QueryAllowedPath: isTokenQueryAllowedPath,
+				Fallback:         app.authenticator,
+			}
+			log.Printf("[-] [INIT] [Token auth: store %s, %d token(s)]", tokenPath, ts.Len())
+		}
 	}
 	stCfg, err := buildSourceTrustConfig(app.authModeFlag, app.trustedProxySecretRaw, app.trustedProxyCIDRsRaw, app.trustedProxyMTLSCAPath, app.userHeaderFlag, app.adminHeaderFlag, app.groupsHeaderFlag)
 	if err != nil {
@@ -542,6 +597,37 @@ func loadCAPool(path string) (*x509.CertPool, error) {
 	return pool, nil
 }
 
+// isTokenQueryAllowedPath reports whether the given request path accepts a
+// ?token=<plaintext> query parameter as a bearer fallback. Restricted to
+// WebSocket-upgrade endpoints where header control is hard (e.g. wscat,
+// <img src>, browser-devtools clients).
+func isTokenQueryAllowedPath(p string) bool {
+	switch {
+	case strings.HasPrefix(p, paths.Playwright),
+		strings.HasPrefix(p, paths.WdHub+"/"),
+		strings.HasPrefix(p, paths.Devtools),
+		strings.HasPrefix(p, paths.VNC),
+		strings.HasPrefix(p, paths.Logs):
+		return true
+	}
+	return false
+}
+
+// logInitialTokenBox prints a highly visible banner advertising the
+// freshly-generated dev-fallback admin token. Intended for stdout inspection
+// by the operator; the value is never written to file beyond the hashed
+// record in tokens.json.
+func logInitialTokenBox(id, plaintext, storePath string) {
+	bar := strings.Repeat("─", 60)
+	log.Printf("[-] [INIT] [No htpasswd configured — generated initial admin token]")
+	log.Printf("[-] [INIT] ┌%s┐", bar)
+	log.Printf("[-] [INIT] │  %s", plaintext)
+	log.Printf("[-] [INIT] │  id=%s owner=admin name=initial", id)
+	log.Printf("[-] [INIT] │  Save it — won't be shown again.")
+	log.Printf("[-] [INIT] │  Hash stored at %s", storePath)
+	log.Printf("[-] [INIT] └%s┘", bar)
+}
+
 func isLoopbackListen(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -754,6 +840,9 @@ func handler() http.Handler {
 	root.HandleFunc(paths.Whoami, get(whoamiHandler))
 	root.HandleFunc(paths.Login, loginHandler)
 	root.HandleFunc(paths.Logout, logoutHandler)
+	root.HandleFunc(tokensAPIPath, tokensHandler)
+	root.HandleFunc(tokensAPIPrefix, tokenByIDHandler)
+	root.HandleFunc(usersAPIPath, tokenUsersHandler)
 	root.HandleFunc(paths.Welcome, welcome)
 	metricsOpen := openPaths
 	if app.enableMetrics {
@@ -834,6 +923,10 @@ func main() {
 
 	if err := event.Shutdown(ctx); err != nil {
 		log.Printf("[-] [SHUTTING_DOWN] [Event pool drain %v]", err)
+	}
+
+	if app.tokenStore != nil {
+		app.tokenStore.Stop()
 	}
 
 	if !app.disableDocker {
