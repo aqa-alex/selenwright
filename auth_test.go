@@ -145,31 +145,25 @@ func TestIsLoopbackListen(t *testing.T) {
 }
 
 func TestBuildAuthenticator_EmbeddedRequiresHtpasswd(t *testing.T) {
-	_, _, err := buildAuthenticator("embedded", "", nil, "X-Forwarded-User", "X-Admin", ":4444", false)
+	_, _, err := buildAuthenticator("embedded", "", nil, "X-Forwarded-User", "X-Admin", ":4444")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "-htpasswd")
 }
 
-func TestBuildAuthenticator_NoneRefusesPublicListen(t *testing.T) {
-	_, _, err := buildAuthenticator("none", "", nil, "", "", "0.0.0.0:4444", false)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "-allow-insecure-none")
-}
-
-func TestBuildAuthenticator_NoneAllowsLoopback(t *testing.T) {
-	a, _, err := buildAuthenticator("none", "", nil, "", "", "127.0.0.1:4444", false)
+func TestBuildAuthenticator_NoneOnLoopback(t *testing.T) {
+	a, _, err := buildAuthenticator("none", "", nil, "", "", "127.0.0.1:4444")
 	assert.NoError(t, err)
 	assert.NotNil(t, a)
 }
 
-func TestBuildAuthenticator_NoneAllowsPublicWithFlag(t *testing.T) {
-	a, _, err := buildAuthenticator("none", "", nil, "", "", "0.0.0.0:4444", true)
+func TestBuildAuthenticator_NoneOnPublicListen(t *testing.T) {
+	a, _, err := buildAuthenticator("none", "", nil, "", "", "0.0.0.0:4444")
 	assert.NoError(t, err)
 	assert.NotNil(t, a)
 }
 
 func TestBuildAuthenticator_UnknownMode(t *testing.T) {
-	_, _, err := buildAuthenticator("nonsense", "", nil, "", "", ":4444", false)
+	_, _, err := buildAuthenticator("nonsense", "", nil, "", "", ":4444")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "expected embedded|trusted-proxy|none")
 }

@@ -48,7 +48,6 @@ type Server struct {
 	userHeaderFlag           string
 	adminHeaderFlag          string
 	adminUsersRaw            string
-	allowInsecureNone        bool
 	trustedProxySecretRaw    string
 	trustedProxyCIDRsRaw     string
 	trustedProxyMTLSCAPath   string

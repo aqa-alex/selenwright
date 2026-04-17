@@ -1,4 +1,4 @@
-// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI; added label-based browser discovery
+// Modified by [Aleksander R], 2026: added Playwright protocol support; added /config and /history/settings endpoints for the operator UI; added label-based browser discovery; -auth-mode=none is permitted on any listen address (warning only; operator owns network-level protection)
 
 package main
 
@@ -86,12 +86,11 @@ func init() {
 	flag.Int64Var(&app.maxUploadExtractedBytes, "max-upload-extracted-bytes", 1<<30, "Maximum total extracted size for /file uploaded zip archives in bytes (default 1 GiB)")
 	flag.Int64Var(&app.maxWSMessageBytes, "max-ws-message-bytes", 64<<20, "Maximum single WebSocket message size in bytes for Playwright, DevTools, VNC and log streams. gorilla/websocket materializes each frame in memory before returning it to the handler, so without this limit a single multi-gigabyte frame can OOM the process. 0 disables the limit (legacy behavior). Default 64 MiB is ample for CDP screenshots and Playwright traces while capping the blast radius of a hostile peer.")
 	flag.StringVar(&app.allowedOriginsRaw, "allowed-origins", "", "Comma-separated list of allowed Origin values for WebSocket upgrades (devtools, playwright, vnc, logs). Empty (default) keeps the legacy permissive behavior; '*' is explicit allow-all. Recommended: configure to your CI/QA hosts to defend against Cross-Site WebSocket Hijacking")
-	flag.StringVar(&app.authModeFlag, "auth-mode", string(protect.ModeEmbedded), "Authentication mode: 'embedded' (built-in BasicAuth + htpasswd), 'trusted-proxy' (read pre-validated user from -user-header), 'none' (no auth — only allowed when -listen is bound to loopback unless -allow-insecure-none is set)")
+	flag.StringVar(&app.authModeFlag, "auth-mode", string(protect.ModeEmbedded), "Authentication mode: 'embedded' (built-in BasicAuth + htpasswd), 'trusted-proxy' (read pre-validated user from -user-header), 'none' (no auth; allowed on any listen address — operator owns network-level protection)")
 	flag.StringVar(&app.htpasswdPath, "htpasswd", "", "Path to bcrypt-format htpasswd file used by -auth-mode=embedded. Generate with `htpasswd -B users.htpasswd alice` (apache2-utils) or `docker run --rm httpd:alpine htpasswd -nbB alice pass`")
 	flag.StringVar(&app.userHeaderFlag, "user-header", "X-Forwarded-User", "Header to read for authenticated user identity in -auth-mode=trusted-proxy")
 	flag.StringVar(&app.adminHeaderFlag, "admin-header", "X-Admin", "Header in -auth-mode=trusted-proxy whose value 'true' marks the request as administrative")
 	flag.StringVar(&app.adminUsersRaw, "admin-users", "", "Comma-separated list of usernames treated as admin in -auth-mode=embedded")
-	flag.BoolVar(&app.allowInsecureNone, "allow-insecure-none", false, "Permit -auth-mode=none on a non-loopback listen address. Required acknowledgement that the service is reachable without authentication")
 	flag.StringVar(&app.trustedProxySecretRaw, "trusted-proxy-secret", "", "Shared secret expected in X-Router-Secret header. When set, every request must present this value or it is rejected with 401 — defends -auth-mode=trusted-proxy from clients that bypass the router")
 	flag.StringVar(&app.trustedProxyCIDRsRaw, "trusted-proxy-cidr", "", "Comma-separated CIDR allow-list for the source IP. When set, request must originate from one of the listed networks regardless of headers")
 	flag.StringVar(&app.trustedProxyMTLSCAPath, "trusted-proxy-mtls-ca", "", "Path to PEM bundle of CAs that issued the trusted client certificate. When set, the request must present a verified mTLS client certificate")
@@ -122,7 +121,7 @@ func init() {
 	if app.originChecker.AllowsAll() {
 		log.Printf("[-] [INIT] [WARN] [WebSocket Origin check is permissive — set -allowed-origins to defend against Cross-Site WebSocket Hijacking]")
 	}
-	app.authenticator, app.htpasswdAuth, err = buildAuthenticator(app.authModeFlag, app.htpasswdPath, splitCSV(app.adminUsersRaw), app.userHeaderFlag, app.adminHeaderFlag, app.listen, app.allowInsecureNone)
+	app.authenticator, app.htpasswdAuth, err = buildAuthenticator(app.authModeFlag, app.htpasswdPath, splitCSV(app.adminUsersRaw), app.userHeaderFlag, app.adminHeaderFlag, app.listen)
 	if err != nil {
 		if testHooksEnabled {
 			app.authenticator = protect.NoneAuthenticator{}
@@ -405,7 +404,7 @@ func gateSessionOwner(idIndex int, next http.Handler) http.Handler {
 	})
 }
 
-func buildAuthenticator(mode, htpasswd string, admins []string, userHeader, adminHeader, listenAddr string, allowInsecure bool) (protect.Authenticator, *protect.HtpasswdAuthenticator, error) {
+func buildAuthenticator(mode, htpasswd string, admins []string, userHeader, adminHeader, listenAddr string) (protect.Authenticator, *protect.HtpasswdAuthenticator, error) {
 	switch protect.AuthMode(mode) {
 	case protect.ModeEmbedded:
 		if htpasswd == "" {
@@ -424,13 +423,10 @@ func buildAuthenticator(mode, htpasswd string, admins []string, userHeader, admi
 		log.Printf("[-] [INIT] [Auth: trusted-proxy reading user from %q, admin from %q]", userHeader, adminHeader)
 		return &protect.TrustedProxyAuthenticator{UserHeader: userHeader, AdminHeader: adminHeader}, nil, nil
 	case protect.ModeNone:
-		if !isLoopbackListen(listenAddr) && !allowInsecure {
-			return nil, nil, fmt.Errorf("-auth-mode=none on non-loopback listen %q is refused; bind to 127.0.0.1 or set -allow-insecure-none to opt in", listenAddr)
-		}
-		if !isLoopbackListen(listenAddr) {
-			log.Printf("[-] [INIT] [WARN] [Auth: NONE on %s — service is reachable without authentication]", listenAddr)
+		if isLoopbackListen(listenAddr) {
+			log.Printf("[-] [INIT] [Auth: none on %s]", listenAddr)
 		} else {
-			log.Printf("[-] [INIT] [Auth: none (loopback only)]")
+			log.Printf("[-] [INIT] [WARN] [Auth: NONE on %s — service is reachable without authentication]", listenAddr)
 		}
 		return protect.NoneAuthenticator{}, nil, nil
 	default:
