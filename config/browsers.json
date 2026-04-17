@@ -1,23 +1,35 @@
 {
-	"firefox": {
-		"default": "latest",
-		"versions": {
-			"latest": {
-				"image": "selenwright/firefox",
-				"port": "4444",
-				"path": "/wd/hub",
-				"tmpfs": {"/tmp":"size=512m"}
-			}
-		}
-	},
-	"chrome": {
-		"default": "latest",
-		"versions": {
-			"latest": {
-				"image": "selenwright/chrome",
-				"port": "4444",
-				"tmpfs": {"/tmp":"size=512m"}
-			}
-		}
-	}
+    "chromium": {
+        "default": "latest",
+        "versions": {
+            "latest": {
+                "image": "selenwright/playwright-chromium:latest",
+                "port": "3000",
+                "path": "/",
+                "protocol": "playwright"
+            }
+        }
+    },
+    "firefox": {
+        "default": "latest",
+        "versions": {
+            "latest": {
+                "image": "selenwright/playwright-firefox:latest",
+                "port": "3000",
+                "path": "/",
+                "protocol": "playwright"
+            }
+        }
+    },
+    "webkit": {
+        "default": "latest",
+        "versions": {
+            "latest": {
+                "image": "selenwright/playwright-webkit:latest",
+                "port": "3000",
+                "path": "/",
+                "protocol": "playwright"
+            }
+        }
+    }
 }
