@@ -1,7 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -334,4 +337,89 @@ func TestPlaywrightLogSinkStreamsInRealTime(t *testing.T) {
 	}, time.Second, 10*time.Millisecond, "LogSink should contain protocol line before session ends")
 
 	conn.Close()
+}
+
+func TestResolvePlaywrightSessionID_UsesExternalHeader(t *testing.T) {
+	const externalID = "pw_router-supplied-id-01"
+	t.Cleanup(func() { app.sessions.Remove(externalID) })
+
+	r := httptest.NewRequest(http.MethodGet, "/playwright/chrome/stable", nil)
+	r.Header.Set(externalPlaywrightSessionIDHeader, externalID)
+
+	got, err := resolvePlaywrightSessionID(r)
+	assert.NoError(t, err)
+	assert.Equal(t, externalID, got)
+}
+
+func TestResolvePlaywrightSessionID_FallsBackWhenHeaderAbsent(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/playwright/chrome/stable", nil)
+
+	got, err := resolvePlaywrightSessionID(r)
+	assert.NoError(t, err)
+	t.Cleanup(func() { app.sessions.Remove(got) })
+
+	assert.Regexp(t, `^[0-9a-f]{32}$`, got,
+		"fallback must produce the auto-generated 32-hex ID")
+}
+
+func TestResolvePlaywrightSessionID_FallsBackWhenHeaderBlank(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/playwright/chrome/stable", nil)
+	r.Header.Set(externalPlaywrightSessionIDHeader, "   ")
+
+	got, err := resolvePlaywrightSessionID(r)
+	assert.NoError(t, err)
+	t.Cleanup(func() { app.sessions.Remove(got) })
+
+	assert.Regexp(t, `^[0-9a-f]{32}$`, got,
+		"whitespace-only header must trigger the random fallback")
+}
+
+func TestResolvePlaywrightSessionID_RejectsInvalidChars(t *testing.T) {
+	cases := []string{
+		"pw_../etc/passwd",
+		"pw id with spaces",
+		"pw/slash",
+		"pw:colon",
+		"",
+	}
+	for _, value := range cases {
+		value := value
+		t.Run(value, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/playwright/chrome/stable", nil)
+			if value != "" {
+				r.Header.Set(externalPlaywrightSessionIDHeader, value)
+			}
+			_, err := resolvePlaywrightSessionID(r)
+			if value == "" {
+				assert.NoError(t, err, "empty string header should fall back, not error")
+				return
+			}
+			assert.ErrorIs(t, err, errInvalidExternalSessionID)
+		})
+	}
+}
+
+func TestResolvePlaywrightSessionID_RejectsTooLong(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/playwright/chrome/stable", nil)
+	r.Header.Set(externalPlaywrightSessionIDHeader, strings.Repeat("a", 129))
+
+	_, err := resolvePlaywrightSessionID(r)
+	assert.ErrorIs(t, err, errInvalidExternalSessionID)
+}
+
+func TestResolvePlaywrightSessionID_RejectsCollision(t *testing.T) {
+	const externalID = "pw_existing-session"
+	app.sessions.Put(externalID, &session.Session{Quota: "alice"})
+	t.Cleanup(func() { app.sessions.Remove(externalID) })
+
+	r := httptest.NewRequest(http.MethodGet, "/playwright/chrome/stable", nil)
+	r.Header.Set(externalPlaywrightSessionIDHeader, externalID)
+
+	_, err := resolvePlaywrightSessionID(r)
+	assert.ErrorIs(t, err, errExternalSessionIDCollision)
+}
+
+func TestResolvePlaywrightSessionID_SentinelErrorsAreDistinct(t *testing.T) {
+	assert.False(t, errors.Is(errInvalidExternalSessionID, errExternalSessionIDCollision))
+	assert.False(t, errors.Is(errExternalSessionIDCollision, errInvalidExternalSessionID))
 }

@@ -153,3 +153,17 @@ ws://host:4444/playwright/chromium/1.56.1?enableVNC=true&name=myTest&screenResol
 Supported: `enableVNC`, `name`, `screenResolution`.
 
 Session logs (Playwright protocol messages) are captured automatically when artifact history is enabled.
+
+=== External Session IDs (Router Integration)
+
+Selenwright honors `X-Selenwright-External-Session-ID` on the Playwright upgrade request. When the header is present and valid, its value replaces the auto-generated session ID and is used as-is for:
+
+* the `app.sessions` key,
+* the path segment in side endpoints (`/vnc/<id>`, `/video/<id>.mp4`, `/logs/<id>`, `/devtools/<id>`, `/clipboard/<id>`),
+* log file names and artifact history entries.
+
+The header is intended for routers (e.g., link:https://github.com/aqa-alex/selenwright-gridlane[gridlane]) that need to encode routing metadata into the public session ID before the upgrade reaches selenwright — otherwise the router's advertised ID would not match the one selenwright stored, and side endpoints would 404.
+
+The value must match `[a-zA-Z0-9_-]{1,128}`; invalid values and collisions with existing sessions are rejected with `400 Bad Request` before any browser container is started.
+
+If the header is absent or blank, selenwright falls back to an internally generated 32-hex ID (the original behavior); standalone Playwright clients are unaffected.

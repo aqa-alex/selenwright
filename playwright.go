@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -261,10 +262,14 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 	applyWSReadLimit(upstreamConn)
 	earlyCleanup = append(earlyCleanup, func() { _ = upstreamConn.Close() })
 
-	sessionID, err := newPlaywrightSessionID()
+	sessionID, err := resolvePlaywrightSessionID(r)
 	if err != nil {
 		log.Printf("[%d] [PLAYWRIGHT_SESSION_ID_FAILED] [%v]", requestId, err)
-		jsonerror.SessionNotCreated(err).Encode(w)
+		if errors.Is(err, errInvalidExternalSessionID) || errors.Is(err, errExternalSessionIDCollision) {
+			jsonerror.InvalidArgument(err).Encode(w)
+		} else {
+			jsonerror.SessionNotCreated(err).Encode(w)
+		}
 		return
 	}
 
@@ -440,6 +445,41 @@ func newPlaywrightSessionID() (string, error) {
 		}
 		return sessionID, nil
 	}
+}
+
+// externalPlaywrightSessionIDHeader lets routers (e.g., gridlane) propose the
+// public session ID before the Playwright upgrade lands. When selenwright
+// accepts the value, side endpoints (/vnc, /video, /logs…) resolve against the
+// same ID that the router advertised to the client.
+const externalPlaywrightSessionIDHeader = "X-Selenwright-External-Session-ID"
+
+// externalSessionIDPattern constrains the external ID to a path-safe subset
+// (letters, digits, dash, underscore; 1..128 chars) to block traversal and
+// log-injection when the value flows into filenames and log lines.
+var externalSessionIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
+
+var (
+	errInvalidExternalSessionID   = errors.New("invalid " + externalPlaywrightSessionIDHeader + " header value")
+	errExternalSessionIDCollision = errors.New("session id from " + externalPlaywrightSessionIDHeader + " already exists")
+)
+
+// resolvePlaywrightSessionID returns the session ID for a new Playwright
+// upgrade. If the request carries a valid X-Selenwright-External-Session-ID
+// header, that value is used verbatim; otherwise a random ID is generated via
+// newPlaywrightSessionID. Invalid or colliding header values are rejected so
+// the caller can return 400 without starting the session.
+func resolvePlaywrightSessionID(r *http.Request) (string, error) {
+	external := strings.TrimSpace(r.Header.Get(externalPlaywrightSessionIDHeader))
+	if external == "" {
+		return newPlaywrightSessionID()
+	}
+	if !externalSessionIDPattern.MatchString(external) {
+		return "", errInvalidExternalSessionID
+	}
+	if _, exists := app.sessions.Get(external); exists {
+		return "", errExternalSessionIDCollision
+	}
+	return external, nil
 }
 
 func tunnelPlaywrightWebSocket(resultCh chan<- playwrightTunnelResult, source string, src *gwebsocket.Conn, dst *gwebsocket.Conn, sess *session.Session) {
