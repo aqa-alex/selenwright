@@ -177,6 +177,8 @@ When set, these checks are AND'd together — all configured conditions must pas
     File upload support
 ----
 
+See <<_uploading_files_to_browser>> for the `POST /file` request format and size limits.
+
 === Request Limits
 
 ----

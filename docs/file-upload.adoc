@@ -42,3 +42,29 @@ $("input[type='file']").setValue(remoteFilePath);
 Read the following note if you are using Selenwright **without Docker**.
 
 NOTE: This feature is supported in WebDriver protocol by sending zipped file contents to `/file` handle. However not all driver binaries support this feature (e.g. http://github.com/mozilla/geckodriver[Geckodriver]). When proxying requests **directly** to drivers (i.e. when **not using Docker**) you need to start Selenwright with `-enable-file-upload` flag. In that case Selenwright will provide the required API to tests. Firefox container images already include this parameter where needed.
+
+=== HTTP Endpoint
+
+When Selenwright is started with `-enable-file-upload`, an additional route is registered:
+
+[cols="1,3"]
+|===
+| Method, path | `POST /file`
+| Content-Type | `application/json`
+| Request body | `{"file": "<base64-encoded zip archive>"}`
+| Response | JSON `{"value": "<absolute path to the extracted file on the Selenwright host>"}` — the returned path is what the test client then passes to `sendKeys()` on the file input.
+| Auth | Same middleware as `/wd/hub/*` (secret auth, htpasswd, etc. — whatever `-users`/`-auth` is configured with).
+|===
+
+The zip archive must contain **exactly one file**. Selenwright extracts it into a per-session temp directory and returns that path.
+
+If the flag is **not** set the route is not registered and the server replies `404 Not Found`. Selenium clients that use `LocalFileDetector` will transparently fall back to the driver-level upload when that happens — you usually do not need to handle `404` yourself.
+
+.Request body size limits
+[cols="1,3"]
+|===
+| `-max-upload-body-bytes` | POST body cap, default 256 MiB. Affects the base64-wrapped payload size over the wire.
+| `-max-upload-extracted-bytes` | Cap on the uncompressed size of the archive contents, default 1 GiB. Protects against zip-bomb style payloads.
+|===
+
+Both limits reject over-sized requests with `400 Invalid Argument` and close the connection — the zip is never written to disk past the limit.
