@@ -609,6 +609,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_usage_examples">2.7.7. Usage Examples</a></li>
 <li><a href="#_file_operations">2.7.8. File Operations</a></li>
 <li><a href="#_capabilities">2.7.9. Capabilities</a></li>
+<li><a href="#_external_session_ids_router_integration">2.7.10. External Session IDs (Router Integration)</a></li>
 </ul>
 </li>
 <li><a href="#_special_capabilities">2.8. Special Capabilities</a>
@@ -2083,6 +2084,34 @@ The Selenwright-specific <code>/file</code> and <code>/download/</code> HTTP end
 </div>
 <div class="paragraph">
 <p>Session logs (Playwright protocol messages) are captured automatically when artifact history is enabled.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_external_session_ids_router_integration"><a class="anchor" href="#_external_session_ids_router_integration"></a>2.7.10. External Session IDs (Router Integration)</h4>
+<div class="paragraph">
+<p>Selenwright honors <code>X-Selenwright-External-Session-ID</code> on the Playwright upgrade request. When the header is present and valid, its value replaces the auto-generated session ID and is used as-is for:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>the <code>app.sessions</code> key,</p>
+</li>
+<li>
+<p>the path segment in side endpoints (<code>/vnc/&lt;id&gt;</code>, <code>/video/&lt;id&gt;.mp4</code>, <code>/logs/&lt;id&gt;</code>, <code>/devtools/&lt;id&gt;</code>, <code>/clipboard/&lt;id&gt;</code>),</p>
+</li>
+<li>
+<p>log file names and artifact history entries.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The header is intended for routers (e.g., <a href="https://github.com/aqa-alex/selenwright-gridlane">gridlane</a>) that need to encode routing metadata into the public session ID before the upgrade reaches selenwright — otherwise the router&#8217;s advertised ID would not match the one selenwright stored, and side endpoints would 404.</p>
+</div>
+<div class="paragraph">
+<p>The value must match <code>[a-zA-Z0-9_-]{1,128}</code>; invalid values and collisions with existing sessions are rejected with <code>400 Bad Request</code> before any browser container is started.</p>
+</div>
+<div class="paragraph">
+<p>If the header is absent or blank, selenwright falls back to an internally generated 32-hex ID (the original behavior); standalone Playwright clients are unaffected.</p>
 </div>
 </div>
 </div>
@@ -4721,7 +4750,7 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 <div id="footer">
 <div id="footer-text">
 Version latest<br>
-Last updated 2026-04-19 13:51:10 UTC
+Last updated 2026-04-19 15:09:43 UTC
 </div>
 </div>
 </body>
