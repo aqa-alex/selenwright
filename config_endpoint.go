@@ -132,14 +132,16 @@ func buildConfigResponse() configResponse {
 	downloadsDir := ""
 	historyAvailable := false
 	historyReason := ""
+	historyEnabledForNewSessions := false
 	if historyManager != nil {
 		downloadsDir = historyManager.downloadsDir()
 		historyAvailable, historyReason = historyManager.Availability()
+		historyEnabledForNewSessions = historyManager.IsEnabledForNewSessions()
 	}
 
 	response.Limits = buildConfigLimits()
 	response.Paths = buildConfigPaths(downloadsDir)
-	response.Logging = buildConfigLogging(configSnapshot.ContainerLogs)
+	response.Logging = buildConfigLogging(configSnapshot.ContainerLogs, historyEnabledForNewSessions)
 	response.FeatureAvailability = buildFeatureAvailability(configSnapshot.Browsers, historyAvailable, historyReason)
 	response.Raw.BrowserCatalog = buildBrowserCatalog(configSnapshot.Browsers)
 	response.Raw.ReloadStatus = buildReloadStatus(configSnapshot.ReloadStatus)
@@ -172,13 +174,26 @@ func buildConfigPaths(downloadsDir string) []configEntry {
 	}
 }
 
-func buildConfigLogging(logConfig *container.LogConfig) []configEntry {
+func buildConfigLogging(logConfig *container.LogConfig, historyEnabledForNewSessions bool) []configEntry {
 	return []configEntry{
 		newConfigEntry("containerLogDriver", "Container log driver", logConfigType(logConfig)),
 		newConfigEntry("containerLogOptions", "Container log options", stringifyStringMap(logConfigConfig(logConfig))),
 		newConfigEntry("captureDriverLogs", "Capture driver logs", boolLabel(app.captureDriverLogs)),
-		newConfigEntry("saveAllLogs", "Save all logs", boolLabel(app.saveAllLogs)),
+		newConfigEntry("logCaptureEffective", "Effective log capture", effectiveLogCaptureLabel(app.logOutputDir, app.saveAllLogs, historyEnabledForNewSessions)),
 	}
+}
+
+func effectiveLogCaptureLabel(logOutputDir string, saveAllLogs, historyEnabledForNewSessions bool) string {
+	if logOutputDir == "" {
+		return featureDisabled
+	}
+	if saveAllLogs {
+		return "Enabled (via -save-all-logs)"
+	}
+	if historyEnabledForNewSessions {
+		return "Enabled (via artifact history)"
+	}
+	return "Opt-in (enableLog capability)"
 }
 
 func buildFeatureAvailability(browsers map[string]config.Versions, historyAvailable bool, historyReason string) []configEntry {

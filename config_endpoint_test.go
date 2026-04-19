@@ -48,7 +48,7 @@ func TestConfigEndpointContract(t *testing.T) {
 	assert.Equal(t, []string{"maxSessions", "retryCount", "sessionTimeout", "maxTimeout", "sessionAttemptTimeout", "sessionDeleteTimeout", "serviceStartupTimeout", "gracefulPeriod"}, entryKeys(payload.Limits))
 	assert.Equal(t, []string{"Max sessions", "Retry count", "Session timeout", "Max timeout", "Session attempt timeout", "Session delete timeout", "Service startup timeout", "Graceful period"}, entryLabels(payload.Limits))
 	assert.Equal(t, []string{"browsersConfig", "logConfig", "videoOutputDir", "logOutputDir", "artifactHistoryDir", "artifactHistorySettings", "downloadsDir"}, entryKeys(payload.Paths))
-	assert.Equal(t, []string{"containerLogDriver", "containerLogOptions", "captureDriverLogs", "saveAllLogs"}, entryKeys(payload.Logging))
+	assert.Equal(t, []string{"containerLogDriver", "containerLogOptions", "captureDriverLogs", "logCaptureEffective"}, entryKeys(payload.Logging))
 	assert.Equal(t, []string{"dockerBackedSessions", "waitQueue", "fileUpload", "vncProxy", "videoRecording", "logCapture", "clipboardApi", "devtoolsProxy", "playwright", "artifactHistory", "persistedDownloads"}, entryKeys(payload.FeatureAvailability))
 
 	assert.Len(t, payload.Raw.BrowserCatalog, 3)
@@ -265,6 +265,29 @@ func newConfigEndpointTestServer(t *testing.T, opts configEndpointTestServerOpti
 	})
 
 	return server
+}
+
+func TestEffectiveLogCaptureLabel(t *testing.T) {
+	cases := []struct {
+		name           string
+		logOutputDir   string
+		saveAllLogs    bool
+		historyEnabled bool
+		want           string
+	}{
+		{"no log dir", "", false, false, "Disabled"},
+		{"no log dir overrides saveAllLogs", "", true, true, "Disabled"},
+		{"save-all-logs wins over history", "/logs", true, true, "Enabled (via -save-all-logs)"},
+		{"save-all-logs only", "/logs", true, false, "Enabled (via -save-all-logs)"},
+		{"history only", "/logs", false, true, "Enabled (via artifact history)"},
+		{"fallback to opt-in", "/logs", false, false, "Opt-in (enableLog capability)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := effectiveLogCaptureLabel(tc.logOutputDir, tc.saveAllLogs, tc.historyEnabled)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }
 
 func entryKeys(entries []configEntry) []string {
