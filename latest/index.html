@@ -585,7 +585,11 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_deleting_log_files">2.2.2. Deleting Log Files</a></li>
 </ul>
 </li>
-<li><a href="#_uploading_files_to_browser">2.3. Uploading Files To Browser</a></li>
+<li><a href="#_uploading_files_to_browser">2.3. Uploading Files To Browser</a>
+<ul class="sectlevel3">
+<li><a href="#_http_endpoint">2.3.1. HTTP Endpoint</a></li>
+</ul>
+</li>
 <li><a href="#_downloading_files_from_browser">2.4. Downloading Files From Browser</a>
 <ul class="sectlevel3">
 <li><a href="#_downloading_files_in_different_browsers">2.4.1. Downloading Files in Different Browsers</a></li>
@@ -1502,6 +1506,66 @@ This feature is supported in WebDriver protocol by sending zipped file contents 
 </tr>
 </table>
 </div>
+<div class="sect3">
+<h4 id="_http_endpoint"><a class="anchor" href="#_http_endpoint"></a>2.3.1. HTTP Endpoint</h4>
+<div class="paragraph">
+<p>When Selenwright is started with <code>-enable-file-upload</code>, an additional route is registered:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Method, path</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>POST /file</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Content-Type</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>application/json</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Request body</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>{"file": "&lt;base64-encoded zip archive&gt;"}</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Response</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">JSON <code>{"value": "&lt;absolute path to the extracted file on the Selenwright host&gt;"}</code> — the returned path is what the test client then passes to <code>sendKeys()</code> on the file input.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Auth</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Same middleware as <code>/wd/hub/*</code> (secret auth, htpasswd, etc. — whatever <code>-users</code>/<code>-auth</code> is configured with).</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The zip archive must contain <strong>exactly one file</strong>. Selenwright extracts it into a per-session temp directory and returns that path.</p>
+</div>
+<div class="paragraph">
+<p>If the flag is <strong>not</strong> set the route is not registered and the server replies <code>404 Not Found</code>. Selenium clients that use <code>LocalFileDetector</code> will transparently fall back to the driver-level upload when that happens — you usually do not need to handle <code>404</code> yourself.</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 1. Request body size limits</caption>
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>-max-upload-body-bytes</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">POST body cap, default 256 MiB. Affects the base64-wrapped payload size over the wire.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>-max-upload-extracted-bytes</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cap on the uncompressed size of the archive contents, default 1 GiB. Protects against zip-bomb style payloads.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Both limits reject over-sized requests with <code>400 Invalid Argument</code> and close the connection — the zip is never written to disk past the limit.</p>
+</div>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_downloading_files_from_browser"><a class="anchor" href="#_downloading_files_from_browser"></a>2.4. Downloading Files From Browser</h3>
@@ -1694,7 +1758,7 @@ some-clipboard-value</code></pre>
 <p>Here <code>&lt;method&gt;</code> is one of the following:</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 1. Supported Developer Tools Methods</caption>
+<caption class="title">Table 2. Supported Developer Tools Methods</caption>
 <colgroup>
 <col style="width: 33.3333%;">
 <col style="width: 33.3333%;">
@@ -1843,7 +1907,7 @@ some-clipboard-value</code></pre>
 </ul>
 </div>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 2. Required Docker labels for Browser Discovery</caption>
+<caption class="title">Table 3. Required Docker labels for Browser Discovery</caption>
 <colgroup>
 <col style="width: 25%;">
 <col style="width: 75%;">
@@ -2566,7 +2630,7 @@ If you omit <code>-s3-access-key</code> and <code>-s3-secret-key</code> flags th
 <p>By default uploaded file name is preserved, i.e. S3 path is <code>/&lt;session-id&gt;.log</code> or <code>/myCustomVideo.mp4</code>. You can optionally provide your custom key pattern using <code>-s3-key-pattern</code> flag and a set of placeholders:</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 3. S3 Key Placeholders</caption>
+<caption class="title">Table 4. S3 Key Placeholders</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -4526,6 +4590,9 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
     File upload support</pre>
 </div>
 </div>
+<div class="paragraph">
+<p>See <a href="#_uploading_files_to_browser">Uploading Files To Browser</a> for the <code>POST /file</code> request format and size limits.</p>
+</div>
 </div>
 <div class="sect3">
 <h4 id="_request_limits"><a class="anchor" href="#_request_limits"></a>5.9.11. Request Limits</h4>
@@ -4654,7 +4721,7 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 <div id="footer">
 <div id="footer-text">
 Version latest<br>
-Last updated 2026-04-17 14:51:51 UTC
+Last updated 2026-04-19 13:51:10 UTC
 </div>
 </div>
 </body>
