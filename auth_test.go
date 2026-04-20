@@ -102,13 +102,29 @@ func TestOpenPathsBypassAuth(t *testing.T) {
 	assert.NoError(t, err)
 	withAuthenticator(t, a)
 
-	for _, p := range []string{paths.Ping, paths.Status, paths.Welcome} {
+	for _, p := range []string{paths.Ping, paths.Welcome, paths.Whoami} {
 		t.Run(p, func(t *testing.T) {
 			resp, err := http.Get(srv.URL + p)
 			assert.NoError(t, err)
 			defer resp.Body.Close()
 			assert.NotEqual(t, http.StatusUnauthorized, resp.StatusCode,
 				"open path %s must not require authentication", p)
+		})
+	}
+}
+
+func TestSensitiveEndpointsRequireAuth(t *testing.T) {
+	a, err := protect.NewHtpasswdAuthenticator(writeTestHtpasswd(t, "alice", "pw"), nil)
+	assert.NoError(t, err)
+	withAuthenticator(t, a)
+
+	for _, p := range []string{paths.Status, paths.Config, paths.HistorySettings, paths.StackStatus} {
+		t.Run(p, func(t *testing.T) {
+			resp, err := http.Get(srv.URL + p)
+			assert.NoError(t, err)
+			defer resp.Body.Close()
+			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
+				"sensitive path %s must not be anonymously reachable", p)
 		})
 	}
 }

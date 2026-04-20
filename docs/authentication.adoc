@@ -181,6 +181,37 @@ You can disable auth entirely with either spelling:
 
 `--no-auth` is a convenience alias for `-auth-mode=none`. Both are accepted on any listen address, including `:4444`. When the listen address is not a loopback interface, selenwright logs a warning that the service is reachable without authentication — the operator is responsible for network-level protection (firewall, overlay network, bastion, reverse proxy).
 
+=== What Is Reachable Anonymously
+
+When authentication is enabled (`-auth-mode=embedded` or `-auth-mode=trusted-proxy`), these endpoints are deliberately left open and do not require a credential:
+
+[cols="1,3"]
+|===
+| Path | Purpose
+
+| `GET /ping`
+| Liveness probe. Returns `{"uptime":..., "version":...}` — no session or user data
+
+| `GET /error`
+| Selenium WebDriver invalid-session error JSON. Used as a proxy fall-through target
+
+| `GET /`
+| Plain-text build banner (e.g. `You are using Selenwright <git-rev>!`)
+
+| `GET /whoami`
+| Returns the authenticated identity or `{"authenticated":false,"authMode":"embedded"}` for anonymous callers. Required so the UI can decide whether to render the login page
+
+| `POST /login`, `POST /logout`
+| Embedded-mode cookie login/logout
+
+| `GET /metrics` (only when `-enable-metrics` is set)
+| Prometheus scrape target. Listed in a separate open-paths set so it tracks the flag and stays gated otherwise
+|===
+
+Everything else — `/status`, `/config`, `/history/settings`, `/downloads/`, `/stack/status`, `/wd/hub/*`, `/playwright/*`, `/vnc/*`, `/video/*`, `/logs/*`, `/download/*`, `/clipboard/*`, `/devtools/*`, the admin token REST surface — requires a valid BasicAuth header, bearer token, or session cookie. An anonymous scrape of `/status` was previously possible and leaked live session IDs, container IPs, and owner quotas; it now returns 401.
+
+Human-readable Prometheus/Grafana setups still work: Prometheus scrapes `/metrics` (the open one), which carries lifecycle counters and queue depth gauges but none of the per-session detail that `/status` exposes.
+
 === Authentication Modes
 
 Controlled by `-auth-mode` (default: `embedded`).

@@ -810,7 +810,20 @@ var paths = struct {
 	Logout:             "/logout",
 }
 
-var openPaths = []string{paths.Ping, paths.Status, paths.Error, paths.Welcome, paths.Config, paths.HistorySettings, paths.Downloads, paths.StackStatus, paths.Whoami, paths.Login, paths.Logout}
+// openPaths bypass AuthMiddleware. Keep this list minimal: every entry here
+// is reachable anonymously from any client that can connect to the listen
+// address. Admitted endpoints are limited to liveness (/ping), the welcome
+// banner (/), the generic Selenium error JSON (/error) and the auth-bootstrap
+// triad required by the UI (/whoami, /login, /logout).
+//
+// Anything that exposes session IDs, container IPs, owner quotas, the browser
+// catalog, retention settings or downloads listings is deliberately left OUT —
+// an unauthenticated scrape of /status was an information-disclosure gap that
+// also let the UI render a populated dashboard for logged-out users.
+//
+// Prometheus is unaffected: /metrics is gated by a separate `metricsOpen` list
+// only when `-enable-metrics` is set.
+var openPaths = []string{paths.Ping, paths.Error, paths.Welcome, paths.Whoami, paths.Login, paths.Logout}
 
 func handler() http.Handler {
 	ensureArtifactHistoryManager()
