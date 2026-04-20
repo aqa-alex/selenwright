@@ -15,7 +15,7 @@ To use this feature you should:
 . Pull video recorder image once:
 +
 ```
-$ docker pull selenwright-video-recorder:latest
+$ docker pull selenwright-video-recorder:latest-release
 ```
 
 . When running Selenwright **in Docker container**:

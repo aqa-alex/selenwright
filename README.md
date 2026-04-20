@@ -464,7 +464,7 @@ See [Metrics and Observability](https://aqa-alex.github.io/selenwright/latest/#_
 | Flag | Default | Description |
 |---|---|---|
 | `-video-output-dir` | `video` | Directory to save recorded video |
-| `-video-recorder-image` | `selenwright-video-recorder:latest` | Video recorder Docker image |
+| `-video-recorder-image` | `selenwright-video-recorder:latest-release` | Video recorder Docker image |
 | `-log-output-dir` | (empty) | Directory to save session logs |
 | `-save-all-logs` | `false` | Save all logs regardless of capabilities |
 | `-log-json` | `false` | Emit structured JSON logs |

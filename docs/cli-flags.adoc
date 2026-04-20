@@ -141,7 +141,7 @@ When set, these checks are AND'd together — all configured conditions must pas
     Directory to save recorded video to (default "video")
 -video-recorder-image string
     Image to use as video recorder
-    (default "selenwright-video-recorder:latest")
+    (default "selenwright-video-recorder:latest-release")
 ----
 
 === Logs
