@@ -80,6 +80,12 @@ Playwright client and server versions must match on **major.minor** (e.g. client
 
 File uploads (`page.setInputFiles()`) and downloads (`page.download()`) work natively through the Playwright protocol — no additional configuration needed.
 
+Ready-to-use companion Playwright images are published on Docker Hub:
+
+- [`selenwright/playwright-chromium`](https://hub.docker.com/r/selenwright/playwright-chromium)
+- [`selenwright/playwright-firefox`](https://hub.docker.com/r/selenwright/playwright-firefox)
+- [`selenwright/playwright-webkit`](https://hub.docker.com/r/selenwright/playwright-webkit)
+
 See [Native Playwright Support](https://aqa-alex.github.io/selenwright/latest/#_native_playwright_support) for the full companion image contract and configuration details.
 
 ## Selenium WebDriver
