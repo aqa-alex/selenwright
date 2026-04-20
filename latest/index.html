@@ -683,11 +683,12 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_making_a_user_an_admin">4.1.3. Making a User an Admin</a></li>
 <li><a href="#_updating_users_without_restart">4.1.4. Updating Users Without Restart</a></li>
 <li><a href="#_disabling_authentication">4.1.5. Disabling Authentication</a></li>
-<li><a href="#_authentication_modes">4.1.6. Authentication Modes</a></li>
-<li><a href="#_source_trust_protecting_the_proxy">4.1.7. Source Trust (Protecting the Proxy)</a></li>
-<li><a href="#_capability_policy">4.1.8. Capability Policy</a></li>
-<li><a href="#_session_ownership">4.1.9. Session Ownership</a></li>
-<li><a href="#_teamgroup_sharing">4.1.10. Team/Group Sharing</a></li>
+<li><a href="#_what_is_reachable_anonymously">4.1.6. What Is Reachable Anonymously</a></li>
+<li><a href="#_authentication_modes">4.1.7. Authentication Modes</a></li>
+<li><a href="#_source_trust_protecting_the_proxy">4.1.8. Source Trust (Protecting the Proxy)</a></li>
+<li><a href="#_capability_policy">4.1.9. Capability Policy</a></li>
+<li><a href="#_session_ownership">4.1.10. Session Ownership</a></li>
+<li><a href="#_teamgroup_sharing">4.1.11. Team/Group Sharing</a></li>
 </ul>
 </li>
 </ul>
@@ -3436,7 +3437,57 @@ docker run --rm httpd:alpine htpasswd -nbB bob AnotherPass456 &gt;&gt; users.htp
 </div>
 </div>
 <div class="sect3">
-<h4 id="_authentication_modes"><a class="anchor" href="#_authentication_modes"></a>4.1.6. Authentication Modes</h4>
+<h4 id="_what_is_reachable_anonymously"><a class="anchor" href="#_what_is_reachable_anonymously"></a>4.1.6. What Is Reachable Anonymously</h4>
+<div class="paragraph">
+<p>When authentication is enabled (<code>-auth-mode=embedded</code> or <code>-auth-mode=trusted-proxy</code>), these endpoints are deliberately left open and do not require a credential:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Path</th>
+<th class="tableblock halign-left valign-top">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /ping</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Liveness probe. Returns <code>{"uptime":&#8230;&#8203;, "version":&#8230;&#8203;}</code> — no session or user data</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /error</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Selenium WebDriver invalid-session error JSON. Used as a proxy fall-through target</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Plain-text build banner (e.g. <code>You are using Selenwright &lt;git-rev&gt;!</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /whoami</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Returns the authenticated identity or <code>{"authenticated":false,"authMode":"embedded"}</code> for anonymous callers. Required so the UI can decide whether to render the login page</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>POST /login</code>, <code>POST /logout</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Embedded-mode cookie login/logout</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /metrics</code> (only when <code>-enable-metrics</code> is set)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Prometheus scrape target. Listed in a separate open-paths set so it tracks the flag and stays gated otherwise</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Everything else — <code>/status</code>, <code>/config</code>, <code>/history/settings</code>, <code>/downloads/</code>, <code>/stack/status</code>, <code>/wd/hub/<strong></code>, <code>/playwright/</strong></code>, <code>/vnc/<strong></code>, <code>/video/</strong></code>, <code>/logs/<strong></code>, <code>/download/</strong></code>, <code>/clipboard/<strong></code>, <code>/devtools/</strong></code>, the admin token REST surface — requires a valid BasicAuth header, bearer token, or session cookie. An anonymous scrape of <code>/status</code> was previously possible and leaked live session IDs, container IPs, and owner quotas; it now returns 401.</p>
+</div>
+<div class="paragraph">
+<p>Human-readable Prometheus/Grafana setups still work: Prometheus scrapes <code>/metrics</code> (the open one), which carries lifecycle counters and queue depth gauges but none of the per-session detail that <code>/status</code> exposes.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_authentication_modes"><a class="anchor" href="#_authentication_modes"></a>4.1.7. Authentication Modes</h4>
 <div class="paragraph">
 <p>Controlled by <code>-auth-mode</code> (default: <code>embedded</code>).</p>
 </div>
@@ -3532,7 +3583,7 @@ Without source trust validation (see below), any client can forge these headers 
 </div>
 </div>
 <div class="sect3">
-<h4 id="_source_trust_protecting_the_proxy"><a class="anchor" href="#_source_trust_protecting_the_proxy"></a>4.1.7. Source Trust (Protecting the Proxy)</h4>
+<h4 id="_source_trust_protecting_the_proxy"><a class="anchor" href="#_source_trust_protecting_the_proxy"></a>4.1.8. Source Trust (Protecting the Proxy)</h4>
 <div class="paragraph">
 <p>When using <code>trusted-proxy</code> mode, you need to ensure that only your proxy can reach Selenwright — otherwise anyone can set the <code>X-Forwarded-User</code> header. Source trust adds that protection. When multiple checks are configured, <strong>all</strong> must pass.</p>
 </div>
@@ -3578,7 +3629,7 @@ Without source trust validation (see below), any client can forge these headers 
 </div>
 </div>
 <div class="sect3">
-<h4 id="_capability_policy"><a class="anchor" href="#_capability_policy"></a>4.1.8. Capability Policy</h4>
+<h4 id="_capability_policy"><a class="anchor" href="#_capability_policy"></a>4.1.9. Capability Policy</h4>
 <div class="paragraph">
 <p>Controlled by <code>-caps-policy</code> (default: <code>strict</code>).</p>
 </div>
@@ -3609,7 +3660,7 @@ Without source trust validation (see below), any client can forge these headers 
 </div>
 </div>
 <div class="sect3">
-<h4 id="_session_ownership"><a class="anchor" href="#_session_ownership"></a>4.1.9. Session Ownership</h4>
+<h4 id="_session_ownership"><a class="anchor" href="#_session_ownership"></a>4.1.10. Session Ownership</h4>
 <div class="paragraph">
 <p>Every session is bound to the user who created it:</p>
 </div>
@@ -3634,7 +3685,7 @@ Without source trust validation (see below), any client can forge these headers 
 </div>
 </div>
 <div class="sect3">
-<h4 id="_teamgroup_sharing"><a class="anchor" href="#_teamgroup_sharing"></a>4.1.10. Team/Group Sharing</h4>
+<h4 id="_teamgroup_sharing"><a class="anchor" href="#_teamgroup_sharing"></a>4.1.11. Team/Group Sharing</h4>
 <div class="paragraph">
 <p>The default <code>user == owner</code> rule is too narrow when sessions are created by a shared service account — for example, <code>jenkins-bot</code> launching tests from CI. Without groups, no human user can terminate those sessions through the UI except the admin.</p>
 </div>
@@ -4750,7 +4801,7 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 <div id="footer">
 <div id="footer-text">
 Version latest<br>
-Last updated 2026-04-19 15:18:03 UTC
+Last updated 2026-04-20 08:42:49 UTC
 </div>
 </div>
 </body>
