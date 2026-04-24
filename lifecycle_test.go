@@ -228,6 +228,7 @@ func TestCopyWithWatchdogTouchesWatchdog(t *testing.T) {
 	wd := session.NewWatchdog(200*time.Millisecond, func() {
 		atomic.AddInt32(&touches, -1000) // sentinel: would mean timeout fired
 	})
+	wd.Start()
 	defer wd.Stop()
 	sess := &session.Session{Watchdog: wd}
 

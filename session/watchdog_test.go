@@ -14,6 +14,7 @@ func TestWatchdogTimeoutFiresOnce(t *testing.T) {
 	done := callbackDone(&calls)
 
 	watchdog := NewWatchdog(20*time.Millisecond, done.callback)
+	watchdog.Start()
 
 	waitForCallback(t, done.ch)
 	time.Sleep(40 * time.Millisecond)
@@ -29,6 +30,7 @@ func TestWatchdogTouchDelaysExpiration(t *testing.T) {
 	done := callbackDone(&calls)
 
 	watchdog := NewWatchdog(40*time.Millisecond, done.callback)
+	watchdog.Start()
 
 	time.Sleep(15 * time.Millisecond)
 	require.True(t, watchdog.Touch())
@@ -50,6 +52,7 @@ func TestWatchdogStopCancelsExpiration(t *testing.T) {
 	done := callbackDone(&calls)
 
 	watchdog := NewWatchdog(20*time.Millisecond, done.callback)
+	watchdog.Start()
 
 	require.True(t, watchdog.Stop())
 	require.False(t, watchdog.Stop())
@@ -66,6 +69,7 @@ func TestWatchdogExpireFiresImmediately(t *testing.T) {
 	done := callbackDone(&calls)
 
 	watchdog := NewWatchdog(time.Second, done.callback)
+	watchdog.Start()
 
 	require.True(t, watchdog.Expire())
 	waitForCallback(t, done.ch)
@@ -82,6 +86,7 @@ func TestWatchdogConcurrentTouchAndStop(t *testing.T) {
 	done := callbackDone(&calls)
 
 	watchdog := NewWatchdog(15*time.Millisecond, done.callback)
+	watchdog.Start()
 
 	var wg sync.WaitGroup
 	for i := 0; i < 16; i++ {
@@ -108,6 +113,20 @@ func TestWatchdogConcurrentTouchAndStop(t *testing.T) {
 	time.Sleep(40 * time.Millisecond)
 
 	require.True(t, calls.Load() <= 1)
+}
+
+func TestWatchdogDoesNotRunBeforeStart(t *testing.T) {
+	var calls atomic.Int32
+	done := callbackDone(&calls)
+
+	watchdog := NewWatchdog(20*time.Millisecond, done.callback)
+
+	time.Sleep(40 * time.Millisecond)
+	require.Zero(t, calls.Load())
+
+	watchdog.Start()
+	waitForCallback(t, done.ch)
+	require.Equal(t, int32(1), calls.Load())
 }
 
 type callbackSignal struct {

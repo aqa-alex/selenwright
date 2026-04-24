@@ -358,6 +358,7 @@ func playwright(w http.ResponseWriter, r *http.Request) {
 
 	app.sessions.Put(sessionID, sess)
 	app.queue.Create()
+	sess.Watchdog.Start()
 	metrics.SessionCreated("playwright")
 	log.Printf("[%d] [PLAYWRIGHT_SESSION_CREATED] [%s] [%s] [%s] [%.2fs]", requestId, sessionID, browserName, playwrightVersion, info.SecondsSince(sessionStartTime))
 

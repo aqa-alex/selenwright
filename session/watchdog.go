@@ -20,9 +20,10 @@ type Watchdog struct {
 	state    atomic.Int32
 	deadline atomic.Int64
 
-	ctx      context.Context
-	cancel   context.CancelFunc
-	fireOnce sync.Once
+	ctx       context.Context
+	cancel    context.CancelFunc
+	fireOnce  sync.Once
+	startOnce sync.Once
 }
 
 func NewWatchdog(timeout time.Duration, onExpire func()) *Watchdog {
@@ -36,9 +37,17 @@ func NewWatchdog(timeout time.Duration, onExpire func()) *Watchdog {
 		ctx:      ctx,
 		cancel:   cancel,
 	}
-	w.deadline.Store(time.Now().Add(timeout).UnixNano())
-	go w.run()
 	return w
+}
+
+func (w *Watchdog) Start() {
+	if w == nil {
+		return
+	}
+	w.startOnce.Do(func() {
+		w.deadline.Store(time.Now().Add(w.timeout).UnixNano())
+		go w.run()
+	})
 }
 
 func (w *Watchdog) Touch() bool {

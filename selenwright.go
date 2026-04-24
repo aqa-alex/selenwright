@@ -331,21 +331,21 @@ func create(w http.ResponseWriter, r *http.Request) {
 		owner = user
 	}
 	sess := &session.Session{
-		Quota:        owner,
-		OwnerGroups:  append([]string(nil), identity.Groups...),
-		Caps:         caps,
-		URL:          u,
-		Container:    startedService.Container,
-		HostPort:     startedService.HostPort,
-		Origin:       startedService.Origin,
-		DownloadsDir: startedService.DownloadsDir,
-		Timeout:      sessionTimeout,
-		Watchdog: session.NewWatchdog(sessionTimeout, func() {
-			request{r}.session(s.ID).Delete(requestId)
-		}),
+		Quota:                  owner,
+		OwnerGroups:            append([]string(nil), identity.Groups...),
+		Caps:                   caps,
+		URL:                    u,
+		Container:              startedService.Container,
+		HostPort:               startedService.HostPort,
+		Origin:                 startedService.Origin,
+		DownloadsDir:           startedService.DownloadsDir,
+		Timeout:                sessionTimeout,
 		Started:                time.Now(),
 		ArtifactHistoryEnabled: historyEnabled,
 	}
+	sess.Watchdog = session.NewWatchdog(sessionTimeout, func() {
+		request{r}.session(s.ID).Delete(requestId)
+	})
 	cancelAndRenameFiles := func() {
 		// Capture downloads from the browser container while it's still alive —
 		// cancel() below will remove it and a post-cancel docker cp from an
@@ -414,6 +414,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 	sess.Cancel = cancelAndRenameFiles
 	app.sessions.Put(s.ID, sess)
 	app.queue.Create()
+	sess.Watchdog.Start()
 	metrics.SessionCreated("selenium")
 	log.Printf("[%d] [SESSION_CREATED] [%s] [%d] [%.2fs]", requestId, s.ID, i, info.SecondsSince(sessionStartTime))
 }
