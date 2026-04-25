@@ -8,12 +8,12 @@
 :icons: font
 :source-highlighter: coderay
 :docinfo: shared
-:title: Selenwright - A cross browser Selenium solution for Docker
-:description: A Selenium testing platform running browsers and mobile platforms in Docker containers. Fully compatible with Selenium Webdriver protocol. Live and automated testing are supported. Runs on your own hardware and on virtual machines in any popular cloud platform.
+:title: Selenwright - Native Playwright and Selenium browser grid for Docker
+:description: Run native Playwright WebSocket sessions and Selenium WebDriver tests in Docker containers. Selenwright launches isolated browser containers, supports VNC, video, logs, artifacts, authentication, and works on your own hardware or cloud VMs.
 :favicon: img/favicon.png
 
-Selenwright is a fork of https://github.com/aerokube/selenoid[Selenoid] with native Playwright WebSocket support in addition to Selenium WebDriver.
-It is using Docker to launch browsers. Please refer to https://github.com/aqa-alex/selenwright[GitHub repository] if you need source code.
+Selenwright is a Docker-native browser automation grid with first-class Playwright WebSocket support and Selenium WebDriver compatibility.
+It launches isolated browser containers for each session and keeps Playwright and Selenium workloads in one operational model. Please refer to https://github.com/aqa-alex/selenwright[GitHub repository] if you need source code.
 
 == Getting Started
 include::quick-start-guide.adoc[leveloffset=+1]
@@ -21,13 +21,13 @@ include::starting-selenwright-manually.adoc[leveloffset=+1]
 include::faq.adoc[leveloffset=+1]
 
 == Main Features
+include::playwright.adoc[leveloffset=+1]
 include::video.adoc[leveloffset=+1]
 include::logs.adoc[leveloffset=+1]
 include::file-upload.adoc[leveloffset=+1]
 include::file-download.adoc[leveloffset=+1]
 include::clipboard.adoc[leveloffset=+1]
 include::devtools.adoc[leveloffset=+1]
-include::playwright.adoc[leveloffset=+1]
 include::special-capabilities.adoc[leveloffset=+1]
 
 == Advanced Features

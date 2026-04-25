@@ -1,9 +1,10 @@
 # Selenwright
 
-Selenoid fork with native Playwright WebSocket support.
+Native Playwright and Selenium browser grid for Docker.
 Based on [aerokube/selenoid](https://github.com/aerokube/selenoid) — Apache 2.0 license.
 
-- **Dual protocol** — Selenium WebDriver (HTTP) and Playwright (WebSocket) in a single server
+- **First-class Playwright** — native Playwright WebSocket sessions in Docker-managed browser containers
+- **Dual protocol** — Playwright (WebSocket) and Selenium WebDriver (HTTP) in a single server
 - **Lightweight** — ~6 MB static binary, 10x less memory than Java-based Selenium Grid
 - **Docker-managed browsers** — isolated containers per session, no manual driver setup
 - **Video, VNC, logs** — record sessions, watch live, capture logs automatically
@@ -22,7 +23,13 @@ chmod +x selenwright
 
 Selenwright prints a single admin bearer token to stdout on first boot — copy it. Pass it as `Authorization: Bearer <token>` from your tests, or run with `--no-auth` for an open local instance. For multi-user setups create a bcrypt htpasswd file and pass `-htpasswd`; see [Authentication](https://aqa-alex.github.io/selenwright/latest/#_authentication_and_authorization) for minting tokens to team members.
 
-4. Point your tests at the Selenium endpoint:
+4. Point Playwright at the native WebSocket endpoint:
+
+```
+ws://localhost:4444/playwright/chromium/<playwright-version>
+```
+
+Or point Selenium tests at the WebDriver endpoint:
 
 ```
 http://localhost:4444/wd/hub
