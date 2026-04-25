@@ -1,7 +1,6 @@
 # Selenwright
 
-Native Playwright and Selenium browser grid for Docker.
-Based on [aerokube/selenoid](https://github.com/aerokube/selenoid) — Apache 2.0 license.
+Native Playwright browser grid for Docker, with Selenium WebDriver compatibility.
 
 - **First-class Playwright** — native Playwright WebSocket sessions in Docker-managed browser containers
 - **Dual protocol** — Playwright (WebSocket) and Selenium WebDriver (HTTP) in a single server
@@ -43,7 +42,11 @@ http://localhost:4444/status
 
 6. Optionally start [Selenwright UI](https://github.com/aqa-alex/selenwright-ui) at `http://localhost:8080` to watch live sessions.
 
-### Docker
+## Project Background
+
+Selenwright started as a fork of [aerokube/selenoid](https://github.com/aerokube/selenoid) and keeps the lightweight Docker-based WebDriver model, while adding native Playwright support and production-oriented operations around both protocols. Apache 2.0 license.
+
+## Docker
 
 ```bash
 docker run -d --name selenwright                  \

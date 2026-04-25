@@ -8,12 +8,20 @@
 :icons: font
 :source-highlighter: coderay
 :docinfo: shared
-:title: Selenwright - Native Playwright and Selenium browser grid for Docker
-:description: Run native Playwright WebSocket sessions and Selenium WebDriver tests in Docker containers. Selenwright launches isolated browser containers, supports VNC, video, logs, artifacts, authentication, and works on your own hardware or cloud VMs.
+:title: Selenwright - Native Playwright browser grid for Docker
+:description: Run native Playwright WebSocket sessions in Docker browser containers, with Selenium WebDriver compatibility, VNC, video, logs, artifacts, authentication, and CI-friendly browser management.
 :favicon: img/favicon.png
 
-Selenwright is a Docker-native browser automation grid with first-class Playwright WebSocket support and Selenium WebDriver compatibility.
-It launches isolated browser containers for each session and keeps Playwright and Selenium workloads in one operational model. Please refer to https://github.com/aqa-alex/selenwright[GitHub repository] if you need source code.
+Selenwright is a Docker-native browser automation grid built for first-class Playwright WebSocket sessions, with Selenium WebDriver compatibility when you need it.
+It starts an isolated browser container for every session, exposes Playwright through a native `/playwright/<browser>/<version>` WebSocket endpoint, and gives teams the operational pieces missing from raw browser containers: queueing, VNC, video, logs, artifacts, authentication, browser discovery, and a web UI. Please refer to https://github.com/aqa-alex/selenwright[GitHub repository] if you need source code.
+
+== Why Selenwright
+
+* **Native Playwright in Docker** - connect Playwright clients directly over WebSocket without Selenium compatibility mode.
+* **One grid for Playwright and Selenium** - run modern Playwright suites and existing WebDriver tests from the same service.
+* **Ephemeral browser containers** - every session gets an isolated Docker browser with predictable cleanup.
+* **Debuggable CI browser automation** - capture VNC, video, logs, downloads, metadata, and session artifacts.
+* **Operator-friendly by default** - use authentication, quotas, browser discovery, metrics, and Selenwright UI in production-style environments.
 
 == Getting Started
 include::quick-start-guide.adoc[leveloffset=+1]

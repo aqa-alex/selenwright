@@ -34,28 +34,55 @@ $ sudo usermod -aG docker $USER
 
 . Optionally start https://github.com/aqa-alex/selenwright-ui[Selenwright UI] to see live browser sessions.
 
-=== Run Your Tests
+=== Connect Playwright
 
-. Run your tests against Selenwright like you do with regular Selenium hub:
-+
-.Tests Endpoint
+Connect Playwright to Selenwright's native WebSocket endpoint:
+
+.Playwright WebSocket endpoint
+----
+ws://localhost:4444/playwright/chromium/1.56.1
+----
+
+.Playwright example
+[source,javascript]
+----
+const { chromium } = require("playwright");
+
+const browser = await chromium.connect(
+  "ws://localhost:4444/playwright/chromium/1.56.1",
+  {
+    headers: {
+      Authorization: `Bearer ${process.env.SELENWRIGHT_TOKEN}`,
+    },
+  }
+);
+----
+
+The Playwright client version and browser image version must match on major and minor version. For example, Playwright `1.56.x` should connect to a Selenwright browser entry built for `1.56.x`.
+
+=== Connect Selenium WebDriver
+
+Run existing Selenium tests against the WebDriver compatibility endpoint:
+
+.Selenium WebDriver endpoint
 ----
 http://localhost:4444/wd/hub
 ----
-+
-If something does not work, you can easily check that Selenwright is running with opening *status* url:
-+
+
+=== Check Status and UI
+
+If something does not work, you can check that Selenwright is running by opening the *status* URL:
+
 .Current Selenwright Status
 ----
 http://localhost:4444/status
 ----
-+
-A successful request should return a JSON with browser usage statistics.
 
-. To open Selenwright UI navigate to the following page in your browser:
-+
+A successful request should return JSON with browser usage statistics.
+
+To open Selenwright UI navigate to the following page in your browser:
+
 .UI Default URL
 ----
 http://localhost:4173/
 ----
-
