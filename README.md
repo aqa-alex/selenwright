@@ -9,6 +9,20 @@ Native Playwright browser grid for Docker, with Selenium WebDriver compatibility
 - **Video, VNC, logs** — record sessions, watch live, capture logs automatically
 - **Authentication** — htpasswd, trusted-proxy, or no-auth modes with role-based access
 
+## Why Selenwright
+
+Selenwright is a self-hosted Playwright-first browser automation platform with Selenium WebDriver compatibility.
+
+It gives you a Docker-native grid where native Playwright tests connect to `/playwright/<browser>/<version>`, while legacy Selenium WebDriver tests can still connect to `/wd/hub`. Both protocols share the same session lifecycle, browser catalog, queue, authentication, VNC, live logs, videos, downloads, clipboard, DevTools proxy, metrics, and operator visibility.
+
+This is especially valuable for teams moving from Selenium to Playwright: start new tests on native Playwright immediately, keep existing Selenium suites running on the same infrastructure, and migrate gradually without maintaining Selenium Grid and a separate Playwright server stack side by side.
+
+Raw Playwright server gives you a remote WebSocket endpoint. Selenwright gives you the production layer around it: isolated browser containers, cleanup, quotas, auth, artifacts, browser discovery, observability, and CI-friendly operations.
+
+The wider Selenwright ecosystem unlocks the full platform: `selenwright-browsers` provides ready-to-run Playwright browser images for Chromium, Firefox, WebKit, Chrome, and Edge; `selenwright-ui` gives operators a live console for sessions, VNC, logs, videos, downloads, browsers, and system health; `selenwright-video-recorder` records browser sessions through a dedicated sidecar; and `selenwright-gridlane` adds routing, health checks, quotas, session affinity, and horizontal scaling across multiple Selenwright backends.
+
+In short: Playwright server is a browser endpoint. Selenwright is a free, self-hosted Playwright browser cloud with a practical migration path for Selenium teams.
+
 ## Quick Start
 
 1. Install [Docker](https://www.docker.com/).
