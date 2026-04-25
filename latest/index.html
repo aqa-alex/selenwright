@@ -5,9 +5,9 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="generator" content="Asciidoctor 2.0.26">
-<meta name="description" content="A Selenium testing platform running browsers and mobile platforms in Docker containers. Fully compatible with Selenium Webdriver protocol. Live and automated testing are supported. Runs on your own hardware and on virtual machines in any popular cloud platform.">
+<meta name="description" content="Run native Playwright WebSocket sessions and Selenium WebDriver tests in Docker containers. Selenwright launches isolated browser containers, supports VNC, video, logs, artifacts, authentication, and works on your own hardware or cloud VMs.">
 <link rel="icon" type="image/png" href="img/favicon.png">
-<title>Selenwright - A cross browser Selenium solution for Docker</title>
+<title>Selenwright - Native Playwright and Selenium browser grid for Docker</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
 <style>
 /*! Asciidoctor default stylesheet | MIT License | https://asciidoctor.org */
@@ -525,24 +525,24 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 .CodeRay .change .change{color:#66f}
 .CodeRay .head .head{color:#f4f}
 </style>
-<base href="https://aqa-alex.github.io/selenwright/v1.0.1/">
+<base href="https://aqa-alex.github.io/selenwright/latest/">
 <meta name="google-site-verification" content="googlee3277fcbaf86231e.html">
 <meta property="og:image:height" content="1106">
 <meta property="og:image:width" content="2113">
 <meta property="og:title"
-      content="Selenwright | A cross browser Selenium solution for Docker">
+      content="Selenwright | Native Playwright and Selenium browser grid for Docker">
 <meta property="og:description"
-      content="Live and automated cross browser Selenium testing in Docker containers">
-<meta property="og:url" content="https://aqa-alex.github.io/selenwright/v1.0.1">
+      content="Run native Playwright WebSocket sessions and Selenium WebDriver tests in isolated Docker browser containers.">
+<meta property="og:url" content="https://aqa-alex.github.io/selenwright/latest">
 <meta property="og:image"
-      content="https://aqa-alex.github.io/selenwright/v1.0.1/img/og-image.jpg">
+      content="https://aqa-alex.github.io/selenwright/latest/img/og-image.jpg">
 <meta name="twitter:site" content="@aqa_alex">
 </head>
 <body class="article toc2 toc-left">
 <div id="header">
 <h1>Selenwright</h1>
 <div class="details">
-<span id="revnumber">version v1.0.1,</span>
+<span id="revnumber">version latest,</span>
 <span id="revdate">2026-04-16</span>
 </div>
 <div id="toc" class="toc2">
@@ -574,45 +574,45 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 </li>
 <li><a href="#_main_features">2. Main Features</a>
 <ul class="sectlevel2">
-<li><a href="#_video_recording">2.1. Video Recording</a>
+<li><a href="#_native_playwright_support">2.1. Native Playwright Support</a>
 <ul class="sectlevel3">
-<li><a href="#_downloading_video_files_from_selenwright">2.1.1. Downloading Video Files from Selenwright</a></li>
-<li><a href="#_deleting_video_files">2.1.2. Deleting Video Files</a></li>
+<li><a href="#_what_selenwright_supports">2.1.1. What Selenwright Supports</a></li>
+<li><a href="#_endpoint_format">2.1.2. Endpoint Format</a></li>
+<li><a href="#_session_lifecycle_and_cleanup">2.1.3. Session Lifecycle And Cleanup</a></li>
+<li><a href="#_companion_image_contract">2.1.4. Companion Image Contract</a></li>
+<li><a href="#_version_matching_rule">2.1.5. Version Matching Rule</a></li>
+<li><a href="#_configuration_example">2.1.6. Configuration Example</a></li>
+<li><a href="#_usage_examples">2.1.7. Usage Examples</a></li>
+<li><a href="#_file_operations">2.1.8. File Operations</a></li>
+<li><a href="#_capabilities">2.1.9. Capabilities</a></li>
+<li><a href="#_external_session_ids_router_integration">2.1.10. External Session IDs (Router Integration)</a></li>
 </ul>
 </li>
-<li><a href="#_saving_session_logs">2.2. Saving Session Logs</a>
+<li><a href="#_video_recording">2.2. Video Recording</a>
 <ul class="sectlevel3">
-<li><a href="#_downloading_log_files_from_selenwright">2.2.1. Downloading Log Files from Selenwright</a></li>
-<li><a href="#_deleting_log_files">2.2.2. Deleting Log Files</a></li>
+<li><a href="#_downloading_video_files_from_selenwright">2.2.1. Downloading Video Files from Selenwright</a></li>
+<li><a href="#_deleting_video_files">2.2.2. Deleting Video Files</a></li>
 </ul>
 </li>
-<li><a href="#_uploading_files_to_browser">2.3. Uploading Files To Browser</a>
+<li><a href="#_saving_session_logs">2.3. Saving Session Logs</a>
 <ul class="sectlevel3">
-<li><a href="#_http_endpoint">2.3.1. HTTP Endpoint</a></li>
+<li><a href="#_downloading_log_files_from_selenwright">2.3.1. Downloading Log Files from Selenwright</a></li>
+<li><a href="#_deleting_log_files">2.3.2. Deleting Log Files</a></li>
 </ul>
 </li>
-<li><a href="#_downloading_files_from_browser">2.4. Downloading Files From Browser</a>
+<li><a href="#_uploading_files_to_browser">2.4. Uploading Files To Browser</a>
 <ul class="sectlevel3">
-<li><a href="#_downloading_files_in_different_browsers">2.4.1. Downloading Files in Different Browsers</a></li>
-<li><a href="#_accessing_files_downloaded_with_browser">2.4.2. Accessing Files Downloaded with Browser</a></li>
+<li><a href="#_http_endpoint">2.4.1. HTTP Endpoint</a></li>
 </ul>
 </li>
-<li><a href="#_accessing_clipboard">2.5. Accessing Clipboard</a></li>
-<li><a href="#_accessing_browser_developer_tools">2.6. Accessing Browser Developer Tools</a></li>
-<li><a href="#_native_playwright_support">2.7. Native Playwright Support</a>
+<li><a href="#_downloading_files_from_browser">2.5. Downloading Files From Browser</a>
 <ul class="sectlevel3">
-<li><a href="#_what_selenwright_supports">2.7.1. What Selenwright Supports</a></li>
-<li><a href="#_endpoint_format">2.7.2. Endpoint Format</a></li>
-<li><a href="#_session_lifecycle_and_cleanup">2.7.3. Session Lifecycle And Cleanup</a></li>
-<li><a href="#_companion_image_contract">2.7.4. Companion Image Contract</a></li>
-<li><a href="#_version_matching_rule">2.7.5. Version Matching Rule</a></li>
-<li><a href="#_configuration_example">2.7.6. Configuration Example</a></li>
-<li><a href="#_usage_examples">2.7.7. Usage Examples</a></li>
-<li><a href="#_file_operations">2.7.8. File Operations</a></li>
-<li><a href="#_capabilities">2.7.9. Capabilities</a></li>
-<li><a href="#_external_session_ids_router_integration">2.7.10. External Session IDs (Router Integration)</a></li>
+<li><a href="#_downloading_files_in_different_browsers">2.5.1. Downloading Files in Different Browsers</a></li>
+<li><a href="#_accessing_files_downloaded_with_browser">2.5.2. Accessing Files Downloaded with Browser</a></li>
 </ul>
 </li>
+<li><a href="#_accessing_clipboard">2.6. Accessing Clipboard</a></li>
+<li><a href="#_accessing_browser_developer_tools">2.7. Accessing Browser Developer Tools</a></li>
 <li><a href="#_special_capabilities">2.8. Special Capabilities</a>
 <ul class="sectlevel3">
 <li><a href="#_live_browser_screen_enablevnc">2.8.1. Live Browser Screen: enableVNC</a></li>
@@ -760,8 +760,8 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <div id="preamble">
 <div class="sectionbody">
 <div class="paragraph">
-<p>Selenwright is a fork of <a href="https://github.com/aerokube/selenoid">Selenoid</a> with native Playwright WebSocket support in addition to Selenium WebDriver.
-It is using Docker to launch browsers. Please refer to <a href="https://github.com/aqa-alex/selenwright">GitHub repository</a> if you need source code.</p>
+<p>Selenwright is a Docker-native browser automation grid with first-class Playwright WebSocket support and Selenium WebDriver compatibility.
+It launches isolated browser containers for each session and keeps Playwright and Selenium workloads in one operational model. Please refer to <a href="https://github.com/aqa-alex/selenwright">GitHub repository</a> if you need source code.</p>
 </div>
 </div>
 </div>
@@ -1228,7 +1228,315 @@ If you use a manual <code>browsers.json</code> (Option B above), mount it as a v
 <h2 id="_main_features"><a class="anchor" href="#_main_features"></a>2. Main Features</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_video_recording"><a class="anchor" href="#_video_recording"></a>2.1. Video Recording</h3>
+<h3 id="_native_playwright_support"><a class="anchor" href="#_native_playwright_support"></a>2.1. Native Playwright Support</h3>
+<div class="paragraph">
+<p>Selenwright can proxy native Playwright WebSocket connections through a dedicated endpoint. This support is for direct Playwright clients and companion Playwright server images. It is not Selenium Grid compatibility mode.</p>
+</div>
+<div class="sect3">
+<h4 id="_what_selenwright_supports"><a class="anchor" href="#_what_selenwright_supports"></a>2.1.1. What Selenwright Supports</h4>
+<div class="ulist">
+<ul>
+<li>
+<p>One Playwright WebSocket connection maps to one Selenwright-managed browser session.</p>
+</li>
+<li>
+<p>Selenwright starts the configured browser container, connects the client to the Playwright server running inside it, and tracks the session in the same queue and <code>/status</code> model as existing sessions.</p>
+</li>
+<li>
+<p>Idle timeout and disconnect cleanup stop the container and remove the session from Selenwright state.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_endpoint_format"><a class="anchor" href="#_endpoint_format"></a>2.1.2. Endpoint Format</h4>
+<div class="paragraph">
+<p>Use the following endpoint:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>ws://&lt;host&gt;:4444/playwright/&lt;browser&gt;/&lt;playwright-version&gt;</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Where:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>&lt;browser&gt;</code> matches a top-level browser name in the browser catalog (e.g. <code>chromium</code>, <code>firefox</code>, <code>webkit</code>).</p>
+</li>
+<li>
+<p><code>&lt;playwright-version&gt;</code> matches the configured browser version entry.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>This route accepts WebSocket connections only.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_session_lifecycle_and_cleanup"><a class="anchor" href="#_session_lifecycle_and_cleanup"></a>2.1.3. Session Lifecycle And Cleanup</h4>
+<div class="paragraph">
+<p>When a client connects to <code>/playwright/&lt;browser&gt;/&lt;playwright-version&gt;</code>, Selenwright resolves the matching browser entry, starts the container, and registers a session after the WebSocket tunnel is established.</p>
+</div>
+<div class="paragraph">
+<p>Playwright sessions follow the same operational model as WebDriver sessions:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Queue admission and release behave the same way as for regular Selenwright sessions.</p>
+</li>
+<li>
+<p>Active sessions are visible in <code>/status</code>.</p>
+</li>
+<li>
+<p>If the client disconnects, the upstream Playwright server disconnects, or the idle timeout expires, Selenwright stops the container and removes the session.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_companion_image_contract"><a class="anchor" href="#_companion_image_contract"></a>2.1.4. Companion Image Contract</h4>
+<div class="paragraph">
+<p>Companion Playwright images are external to this repository. To work with Selenwright they should follow this contract:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Pin the image tag to a Playwright version.</p>
+</li>
+<li>
+<p>Run a Playwright server, not Selenium.</p>
+</li>
+<li>
+<p>Expose one fixed port and declare that same port in the browser catalog.</p>
+</li>
+<li>
+<p>Expose one fixed WebSocket path. The default path is <code>/</code>.</p>
+</li>
+<li>
+<p>Run under <code>--init</code> or an equivalent init process so child processes are reaped correctly.</p>
+</li>
+<li>
+<p>Define Docker <code>HEALTHCHECK</code>.</p>
+</li>
+<li>
+<p>For <a href="#_browser_discovery">Browser Discovery</a> pickup, carry the <code>io.selenwright.*</code> labels described below. Without them the image is invisible to discovery and must be registered via <code>browsers.json</code>.</p>
+</li>
+</ul>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 1. Required Docker labels for Browser Discovery</caption>
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Label</th>
+<th class="tableblock halign-left valign-top">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.browser</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Browser name (<code>chromium</code>, <code>firefox</code>, <code>webkit</code>, &#8230;&#8203;). Required.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.version</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Version entry used in the catalog and connection URL. Required.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.port</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Port exposed by the image. Required unless <code>io.selenwright.config</code> is used.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.protocol</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Set to <code>playwright</code> for Playwright images.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.path</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">WebSocket path (default <code>/</code>).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.default</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>true</code> to mark this version as default for the browser.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Optional labels mirror the per-field names in <code>browsers.json</code>: <code>tmpfs</code>, <code>env</code>, <code>volumes</code>, <code>hosts</code>, <code>shmSize</code>, <code>mem</code>, <code>cpu</code>, <code>labels</code>, <code>sysctl</code>. As an escape hatch, <code>io.selenwright.config</code> accepts a full Browser JSON blob; when present, per-field labels are ignored. See <a href="https://github.com/aqa-alex/selenwright-browsers">selenwright-browsers</a> for a working example.</p>
+</div>
+<div class="paragraph">
+<p>At startup Selenwright prefers Docker <code>HEALTHCHECK</code> when the image provides one. If health status is unavailable, Selenwright falls back to protocol-specific probing. For Playwright images that fallback is a TCP probe against the configured Playwright endpoint.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_version_matching_rule"><a class="anchor" href="#_version_matching_rule"></a>2.1.5. Version Matching Rule</h4>
+<div class="paragraph">
+<p>Playwright client and server versions must match on major and minor version.</p>
+</div>
+<div class="paragraph">
+<p>For example, a client from Playwright <code>1.56.x</code> should connect to an image built for Playwright <code>1.56.x</code>. Keep the image tag, the configured Selenwright version entry, and the client connection URL aligned.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_configuration_example"><a class="anchor" href="#_configuration_example"></a>2.1.6. Configuration Example</h4>
+<div class="paragraph">
+<p>An example browser catalog entry for a native Playwright image (via <code>browsers.json</code> or <a href="#_browser_discovery">Browser Discovery</a>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="javascript">{
+  <span class="key"><span class="delimiter">&quot;</span><span class="content">chromium</span><span class="delimiter">&quot;</span></span>: {
+    <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>,
+    <span class="key"><span class="delimiter">&quot;</span><span class="content">versions</span><span class="delimiter">&quot;</span></span>: {
+      <span class="key"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>: {
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">selenwright/playwright-chromium:latest</span><span class="delimiter">&quot;</span></span>,
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">port</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">3000</span><span class="delimiter">&quot;</span></span>,
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">path</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span>,
+        <span class="key"><span class="delimiter">&quot;</span><span class="content">protocol</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">playwright</span><span class="delimiter">&quot;</span></span>
+      }
+    }
+  }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Selenwright publishes matching companion images — see <a href="#_browser_images">Browser Images</a> for the full list.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_usage_examples"><a class="anchor" href="#_usage_examples"></a>2.1.7. Usage Examples</h4>
+<div class="paragraph">
+<p>Connect from Playwright with the dedicated Selenwright WebSocket endpoint:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect(
+  <span class="string"><span class="delimiter">&quot;</span><span class="content">ws://selenwright.example.com:4444/playwright/chromium/1.56.1</span><span class="delimiter">&quot;</span></span>
+);</code></pre>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_passing_an_api_token"><a class="anchor" href="#_passing_an_api_token"></a>Passing an API Token</h5>
+<div class="paragraph">
+<p>When selenwright has authentication enabled (the default), pass the bearer token in the <code>Authorization</code> header:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect({
+  <span class="key">wsEndpoint</span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">wss://selenwright.example.com/playwright/chromium/1.56.1</span><span class="delimiter">&quot;</span></span>,
+  <span class="key">headers</span>: { <span class="key">Authorization</span>: <span class="error">`</span>Bearer <span class="predefined">$</span>{process.env.SELENWRIGHT_TOKEN}<span class="error">`</span> },
+});</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For clients that cannot set custom WebSocket headers, selenwright also accepts a <code>?token=&lt;plaintext&gt;</code> query fallback:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect(
+  <span class="error">`</span>wss:<span class="comment">//selenwright.example.com/playwright/chromium/1.56.1?token=${process.env.SELENWRIGHT_TOKEN}`</span>
+);</code></pre>
+</div>
+</div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+The query form puts the token in URL-shaped surfaces — shell history, CI logs, the browser&#8217;s reverse-proxy access log — even though selenwright strips the parameter before forwarding the request upstream. Prefer the header form whenever your client supports it.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>See <a href="#_api_tokens_for_machine_clients">API Tokens (for Machine Clients)</a> in the Authentication chapter for how tokens are minted and revoked.</p>
+</div>
+<div class="paragraph">
+<p>If your test bootstrap reads an environment variable to choose the remote endpoint, you can pass the same URL through it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="bash">PW_TEST_CONNECT_WS_ENDPOINT=ws://selenwright.example.com:4444/playwright/chromium/1.56.1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>PW_TEST_CONNECT_WS_ENDPOINT</code> is only a user-side convention for your own Playwright config or test launcher. It is not a built-in Selenwright environment variable.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_file_operations"><a class="anchor" href="#_file_operations"></a>2.1.8. File Operations</h4>
+<div class="paragraph">
+<p>File uploads (<code>page.setInputFiles()</code>) and downloads (<code>page.download()</code>) work natively through the Playwright WebSocket protocol. Selenwright proxies the connection transparently — no additional configuration is needed.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+The Selenwright-specific <code>/file</code> and <code>/download/</code> HTTP endpoints are WebDriver-only and are not used by Playwright sessions. Use native Playwright APIs for file operations.
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_capabilities"><a class="anchor" href="#_capabilities"></a>2.1.9. Capabilities</h4>
+<div class="paragraph">
+<p>A subset of <a href="#_special_capabilities">Special Capabilities</a> can be passed as query parameters on the WebSocket URL:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>ws://host:4444/playwright/chromium/1.56.1?enableVNC=true&amp;name=myTest&amp;screenResolution=1280x1024</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Supported: <code>enableVNC</code>, <code>name</code>, <code>screenResolution</code>.</p>
+</div>
+<div class="paragraph">
+<p>Session logs (Playwright protocol messages) are captured automatically when artifact history is enabled.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_external_session_ids_router_integration"><a class="anchor" href="#_external_session_ids_router_integration"></a>2.1.10. External Session IDs (Router Integration)</h4>
+<div class="paragraph">
+<p>Selenwright honors <code>X-Selenwright-External-Session-ID</code> on the Playwright upgrade request. When the header is present and valid, its value replaces the auto-generated session ID and is used as-is for:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>the <code>app.sessions</code> key,</p>
+</li>
+<li>
+<p>the path segment in side endpoints (<code>/vnc/&lt;id&gt;</code>, <code>/video/&lt;id&gt;.mp4</code>, <code>/logs/&lt;id&gt;</code>, <code>/devtools/&lt;id&gt;</code>, <code>/clipboard/&lt;id&gt;</code>),</p>
+</li>
+<li>
+<p>log file names and artifact history entries.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The header is intended for routers (e.g., <a href="https://github.com/aqa-alex/selenwright-gridlane">gridlane</a>) that need to encode routing metadata into the public session ID before the upgrade reaches selenwright — otherwise the router&#8217;s advertised ID would not match the one selenwright stored, and side endpoints would 404.</p>
+</div>
+<div class="paragraph">
+<p>The value must match <code>[a-zA-Z0-9_-]{1,128}</code>; invalid values and collisions with existing sessions are rejected with <code>400 Bad Request</code> before any browser container is started.</p>
+</div>
+<div class="paragraph">
+<p>If the header is absent or blank, selenwright falls back to an internally generated 32-hex ID (the original behavior); standalone Playwright clients are unaffected.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_video_recording"><a class="anchor" href="#_video_recording"></a>2.2. Video Recording</h3>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -1301,7 +1609,7 @@ selenwright/hub:latest-release</pre>
 </ol>
 </div>
 <div class="sect3">
-<h4 id="_downloading_video_files_from_selenwright"><a class="anchor" href="#_downloading_video_files_from_selenwright"></a>2.1.1. Downloading Video Files from Selenwright</h4>
+<h4 id="_downloading_video_files_from_selenwright"><a class="anchor" href="#_downloading_video_files_from_selenwright"></a>2.2.1. Downloading Video Files from Selenwright</h4>
 <div class="paragraph">
 <p>You can access recorded video files using the following URL:</p>
 </div>
@@ -1334,7 +1642,7 @@ Direct link will work only after session has finished because Selenwright rename
 </div>
 </div>
 <div class="sect3">
-<h4 id="_deleting_video_files"><a class="anchor" href="#_deleting_video_files"></a>2.1.2. Deleting Video Files</h4>
+<h4 id="_deleting_video_files"><a class="anchor" href="#_deleting_video_files"></a>2.2.2. Deleting Video Files</h4>
 <div class="paragraph">
 <p>When <a href="#_artifact_history">Artifact History</a> is enabled, video files are automatically cleaned up by the retention janitor. Otherwise, to limit storage space consumption you have two alternatives:</p>
 </div>
@@ -1366,7 +1674,7 @@ Direct link will work only after session has finished because Selenwright rename
 </div>
 </div>
 <div class="sect2">
-<h3 id="_saving_session_logs"><a class="anchor" href="#_saving_session_logs"></a>2.2. Saving Session Logs</h3>
+<h3 id="_saving_session_logs"><a class="anchor" href="#_saving_session_logs"></a>2.3. Saving Session Logs</h3>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -1407,7 +1715,7 @@ selenwright/hub:latest-release -log-output-dir /opt/selenwright/logs</pre>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_downloading_log_files_from_selenwright"><a class="anchor" href="#_downloading_log_files_from_selenwright"></a>2.2.1. Downloading Log Files from Selenwright</h4>
+<h4 id="_downloading_log_files_from_selenwright"><a class="anchor" href="#_downloading_log_files_from_selenwright"></a>2.3.1. Downloading Log Files from Selenwright</h4>
 <div class="paragraph">
 <p>You can access saved log files using the following URL:</p>
 </div>
@@ -1440,7 +1748,7 @@ Direct link will work only after session has finished because Selenwright rename
 </div>
 </div>
 <div class="sect3">
-<h4 id="_deleting_log_files"><a class="anchor" href="#_deleting_log_files"></a>2.2.2. Deleting Log Files</h4>
+<h4 id="_deleting_log_files"><a class="anchor" href="#_deleting_log_files"></a>2.3.2. Deleting Log Files</h4>
 <div class="paragraph">
 <p>When <a href="#_artifact_history">Artifact History</a> is enabled, log files are automatically cleaned up by the retention janitor. Otherwise, either remove log files from the directory using a scheduled job or send log removal requests:</p>
 </div>
@@ -1453,7 +1761,7 @@ Direct link will work only after session has finished because Selenwright rename
 </div>
 </div>
 <div class="sect2">
-<h3 id="_uploading_files_to_browser"><a class="anchor" href="#_uploading_files_to_browser"></a>2.3. Uploading Files To Browser</h3>
+<h3 id="_uploading_files_to_browser"><a class="anchor" href="#_uploading_files_to_browser"></a>2.4. Uploading Files To Browser</h3>
 <div class="paragraph">
 <p>Some tests require to upload files. This feature works out of the box in the majority of Selenium clients. A typical Java code snippet look like the following:</p>
 </div>
@@ -1510,7 +1818,7 @@ This feature is supported in WebDriver protocol by sending zipped file contents 
 </table>
 </div>
 <div class="sect3">
-<h4 id="_http_endpoint"><a class="anchor" href="#_http_endpoint"></a>2.3.1. HTTP Endpoint</h4>
+<h4 id="_http_endpoint"><a class="anchor" href="#_http_endpoint"></a>2.4.1. HTTP Endpoint</h4>
 <div class="paragraph">
 <p>When Selenwright is started with <code>-enable-file-upload</code>, an additional route is registered:</p>
 </div>
@@ -1549,7 +1857,7 @@ This feature is supported in WebDriver protocol by sending zipped file contents 
 <p>If the flag is <strong>not</strong> set the route is not registered and the server replies <code>404 Not Found</code>. Selenium clients that use <code>LocalFileDetector</code> will transparently fall back to the driver-level upload when that happens — you usually do not need to handle <code>404</code> yourself.</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 1. Request body size limits</caption>
+<caption class="title">Table 2. Request body size limits</caption>
 <colgroup>
 <col style="width: 25%;">
 <col style="width: 75%;">
@@ -1571,7 +1879,7 @@ This feature is supported in WebDriver protocol by sending zipped file contents 
 </div>
 </div>
 <div class="sect2">
-<h3 id="_downloading_files_from_browser"><a class="anchor" href="#_downloading_files_from_browser"></a>2.4. Downloading Files From Browser</h3>
+<h3 id="_downloading_files_from_browser"><a class="anchor" href="#_downloading_files_from_browser"></a>2.5. Downloading Files From Browser</h3>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -1585,7 +1893,7 @@ The <code>RemoteWebDriver</code> examples below assume anonymous access for read
 </table>
 </div>
 <div class="sect3">
-<h4 id="_downloading_files_in_different_browsers"><a class="anchor" href="#_downloading_files_in_different_browsers"></a>2.4.1. Downloading Files in Different Browsers</h4>
+<h4 id="_downloading_files_in_different_browsers"><a class="anchor" href="#_downloading_files_in_different_browsers"></a>2.5.1. Downloading Files in Different Browsers</h4>
 <div class="sect4">
 <h5 id="_chrome"><a class="anchor" href="#_chrome"></a>Chrome</h5>
 <div class="listingblock">
@@ -1637,7 +1945,7 @@ driver.navigate().to(<span class="string"><span class="delimiter">&quot;</span><
 </div>
 </div>
 <div class="sect3">
-<h4 id="_accessing_files_downloaded_with_browser"><a class="anchor" href="#_accessing_files_downloaded_with_browser"></a>2.4.2. Accessing Files Downloaded with Browser</h4>
+<h4 id="_accessing_files_downloaded_with_browser"><a class="anchor" href="#_accessing_files_downloaded_with_browser"></a>2.5.2. Accessing Files Downloaded with Browser</h4>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -1681,7 +1989,7 @@ driver.navigate().to(<span class="string"><span class="delimiter">&quot;</span><
 </div>
 </div>
 <div class="sect2">
-<h3 id="_accessing_clipboard"><a class="anchor" href="#_accessing_clipboard"></a>2.5. Accessing Clipboard</h3>
+<h3 id="_accessing_clipboard"><a class="anchor" href="#_accessing_clipboard"></a>2.6. Accessing Clipboard</h3>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -1724,7 +2032,7 @@ some-clipboard-value</code></pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_accessing_browser_developer_tools"><a class="anchor" href="#_accessing_browser_developer_tools"></a>2.6. Accessing Browser Developer Tools</h3>
+<h3 id="_accessing_browser_developer_tools"><a class="anchor" href="#_accessing_browser_developer_tools"></a>2.7. Accessing Browser Developer Tools</h3>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -1761,7 +2069,7 @@ some-clipboard-value</code></pre>
 <p>Here <code>&lt;method&gt;</code> is one of the following:</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 2. Supported Developer Tools Methods</caption>
+<caption class="title">Table 3. Supported Developer Tools Methods</caption>
 <colgroup>
 <col style="width: 33.3333%;">
 <col style="width: 33.3333%;">
@@ -1806,314 +2114,6 @@ some-clipboard-value</code></pre>
 <div class="listingblock">
 <div class="content">
 <pre class="CodeRay highlight"><code>ws://selenwright.example.com:4444/devtools/&lt;session-id&gt;/page</code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_native_playwright_support"><a class="anchor" href="#_native_playwright_support"></a>2.7. Native Playwright Support</h3>
-<div class="paragraph">
-<p>Selenwright can proxy native Playwright WebSocket connections through a dedicated endpoint. This support is for direct Playwright clients and companion Playwright server images. It is not Selenium Grid compatibility mode.</p>
-</div>
-<div class="sect3">
-<h4 id="_what_selenwright_supports"><a class="anchor" href="#_what_selenwright_supports"></a>2.7.1. What Selenwright Supports</h4>
-<div class="ulist">
-<ul>
-<li>
-<p>One Playwright WebSocket connection maps to one Selenwright-managed browser session.</p>
-</li>
-<li>
-<p>Selenwright starts the configured browser container, connects the client to the Playwright server running inside it, and tracks the session in the same queue and <code>/status</code> model as existing sessions.</p>
-</li>
-<li>
-<p>Idle timeout and disconnect cleanup stop the container and remove the session from Selenwright state.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_endpoint_format"><a class="anchor" href="#_endpoint_format"></a>2.7.2. Endpoint Format</h4>
-<div class="paragraph">
-<p>Use the following endpoint:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>ws://&lt;host&gt;:4444/playwright/&lt;browser&gt;/&lt;playwright-version&gt;</pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Where:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><code>&lt;browser&gt;</code> matches a top-level browser name in the browser catalog (e.g. <code>chromium</code>, <code>firefox</code>, <code>webkit</code>).</p>
-</li>
-<li>
-<p><code>&lt;playwright-version&gt;</code> matches the configured browser version entry.</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>This route accepts WebSocket connections only.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_session_lifecycle_and_cleanup"><a class="anchor" href="#_session_lifecycle_and_cleanup"></a>2.7.3. Session Lifecycle And Cleanup</h4>
-<div class="paragraph">
-<p>When a client connects to <code>/playwright/&lt;browser&gt;/&lt;playwright-version&gt;</code>, Selenwright resolves the matching browser entry, starts the container, and registers a session after the WebSocket tunnel is established.</p>
-</div>
-<div class="paragraph">
-<p>Playwright sessions follow the same operational model as WebDriver sessions:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Queue admission and release behave the same way as for regular Selenwright sessions.</p>
-</li>
-<li>
-<p>Active sessions are visible in <code>/status</code>.</p>
-</li>
-<li>
-<p>If the client disconnects, the upstream Playwright server disconnects, or the idle timeout expires, Selenwright stops the container and removes the session.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_companion_image_contract"><a class="anchor" href="#_companion_image_contract"></a>2.7.4. Companion Image Contract</h4>
-<div class="paragraph">
-<p>Companion Playwright images are external to this repository. To work with Selenwright they should follow this contract:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Pin the image tag to a Playwright version.</p>
-</li>
-<li>
-<p>Run a Playwright server, not Selenium.</p>
-</li>
-<li>
-<p>Expose one fixed port and declare that same port in the browser catalog.</p>
-</li>
-<li>
-<p>Expose one fixed WebSocket path. The default path is <code>/</code>.</p>
-</li>
-<li>
-<p>Run under <code>--init</code> or an equivalent init process so child processes are reaped correctly.</p>
-</li>
-<li>
-<p>Define Docker <code>HEALTHCHECK</code>.</p>
-</li>
-<li>
-<p>For <a href="#_browser_discovery">Browser Discovery</a> pickup, carry the <code>io.selenwright.*</code> labels described below. Without them the image is invisible to discovery and must be registered via <code>browsers.json</code>.</p>
-</li>
-</ul>
-</div>
-<table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 3. Required Docker labels for Browser Discovery</caption>
-<colgroup>
-<col style="width: 25%;">
-<col style="width: 75%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Label</th>
-<th class="tableblock halign-left valign-top">Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.browser</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Browser name (<code>chromium</code>, <code>firefox</code>, <code>webkit</code>, &#8230;&#8203;). Required.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.version</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Version entry used in the catalog and connection URL. Required.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.port</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Port exposed by the image. Required unless <code>io.selenwright.config</code> is used.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.protocol</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Set to <code>playwright</code> for Playwright images.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.path</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">WebSocket path (default <code>/</code>).</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>io.selenwright.default</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>true</code> to mark this version as default for the browser.</p></td>
-</tr>
-</tbody>
-</table>
-<div class="paragraph">
-<p>Optional labels mirror the per-field names in <code>browsers.json</code>: <code>tmpfs</code>, <code>env</code>, <code>volumes</code>, <code>hosts</code>, <code>shmSize</code>, <code>mem</code>, <code>cpu</code>, <code>labels</code>, <code>sysctl</code>. As an escape hatch, <code>io.selenwright.config</code> accepts a full Browser JSON blob; when present, per-field labels are ignored. See <a href="https://github.com/aqa-alex/selenwright-browsers">selenwright-browsers</a> for a working example.</p>
-</div>
-<div class="paragraph">
-<p>At startup Selenwright prefers Docker <code>HEALTHCHECK</code> when the image provides one. If health status is unavailable, Selenwright falls back to protocol-specific probing. For Playwright images that fallback is a TCP probe against the configured Playwright endpoint.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_version_matching_rule"><a class="anchor" href="#_version_matching_rule"></a>2.7.5. Version Matching Rule</h4>
-<div class="paragraph">
-<p>Playwright client and server versions must match on major and minor version.</p>
-</div>
-<div class="paragraph">
-<p>For example, a client from Playwright <code>1.56.x</code> should connect to an image built for Playwright <code>1.56.x</code>. Keep the image tag, the configured Selenwright version entry, and the client connection URL aligned.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_configuration_example"><a class="anchor" href="#_configuration_example"></a>2.7.6. Configuration Example</h4>
-<div class="paragraph">
-<p>An example browser catalog entry for a native Playwright image (via <code>browsers.json</code> or <a href="#_browser_discovery">Browser Discovery</a>):</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="javascript">{
-  <span class="key"><span class="delimiter">&quot;</span><span class="content">chromium</span><span class="delimiter">&quot;</span></span>: {
-    <span class="key"><span class="delimiter">&quot;</span><span class="content">default</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>,
-    <span class="key"><span class="delimiter">&quot;</span><span class="content">versions</span><span class="delimiter">&quot;</span></span>: {
-      <span class="key"><span class="delimiter">&quot;</span><span class="content">1.56.1</span><span class="delimiter">&quot;</span></span>: {
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">image</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">selenwright/playwright-chromium:latest</span><span class="delimiter">&quot;</span></span>,
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">port</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">3000</span><span class="delimiter">&quot;</span></span>,
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">path</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span>,
-        <span class="key"><span class="delimiter">&quot;</span><span class="content">protocol</span><span class="delimiter">&quot;</span></span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">playwright</span><span class="delimiter">&quot;</span></span>
-      }
-    }
-  }
-}</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Selenwright publishes matching companion images — see <a href="#_browser_images">Browser Images</a> for the full list.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_usage_examples"><a class="anchor" href="#_usage_examples"></a>2.7.7. Usage Examples</h4>
-<div class="paragraph">
-<p>Connect from Playwright with the dedicated Selenwright WebSocket endpoint:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect(
-  <span class="string"><span class="delimiter">&quot;</span><span class="content">ws://selenwright.example.com:4444/playwright/chromium/1.56.1</span><span class="delimiter">&quot;</span></span>
-);</code></pre>
-</div>
-</div>
-<div class="sect4">
-<h5 id="_passing_an_api_token"><a class="anchor" href="#_passing_an_api_token"></a>Passing an API Token</h5>
-<div class="paragraph">
-<p>When selenwright has authentication enabled (the default), pass the bearer token in the <code>Authorization</code> header:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect({
-  <span class="key">wsEndpoint</span>: <span class="string"><span class="delimiter">&quot;</span><span class="content">wss://selenwright.example.com/playwright/chromium/1.56.1</span><span class="delimiter">&quot;</span></span>,
-  <span class="key">headers</span>: { <span class="key">Authorization</span>: <span class="error">`</span>Bearer <span class="predefined">$</span>{process.env.SELENWRIGHT_TOKEN}<span class="error">`</span> },
-});</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>For clients that cannot set custom WebSocket headers, selenwright also accepts a <code>?token=&lt;plaintext&gt;</code> query fallback:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="javascript">const browser = await browserType.connect(
-  <span class="error">`</span>wss:<span class="comment">//selenwright.example.com/playwright/chromium/1.56.1?token=${process.env.SELENWRIGHT_TOKEN}`</span>
-);</code></pre>
-</div>
-</div>
-<div class="admonitionblock warning">
-<table>
-<tr>
-<td class="icon">
-<i class="fa icon-warning" title="Warning"></i>
-</td>
-<td class="content">
-The query form puts the token in URL-shaped surfaces — shell history, CI logs, the browser&#8217;s reverse-proxy access log — even though selenwright strips the parameter before forwarding the request upstream. Prefer the header form whenever your client supports it.
-</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>See <a href="#_api_tokens_for_machine_clients">API Tokens (for Machine Clients)</a> in the Authentication chapter for how tokens are minted and revoked.</p>
-</div>
-<div class="paragraph">
-<p>If your test bootstrap reads an environment variable to choose the remote endpoint, you can pass the same URL through it:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="bash">PW_TEST_CONNECT_WS_ENDPOINT=ws://selenwright.example.com:4444/playwright/chromium/1.56.1</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p><code>PW_TEST_CONNECT_WS_ENDPOINT</code> is only a user-side convention for your own Playwright config or test launcher. It is not a built-in Selenwright environment variable.</p>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_file_operations"><a class="anchor" href="#_file_operations"></a>2.7.8. File Operations</h4>
-<div class="paragraph">
-<p>File uploads (<code>page.setInputFiles()</code>) and downloads (<code>page.download()</code>) work natively through the Playwright WebSocket protocol. Selenwright proxies the connection transparently — no additional configuration is needed.</p>
-</div>
-<div class="admonitionblock note">
-<table>
-<tr>
-<td class="icon">
-<i class="fa icon-note" title="Note"></i>
-</td>
-<td class="content">
-The Selenwright-specific <code>/file</code> and <code>/download/</code> HTTP endpoints are WebDriver-only and are not used by Playwright sessions. Use native Playwright APIs for file operations.
-</td>
-</tr>
-</table>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_capabilities"><a class="anchor" href="#_capabilities"></a>2.7.9. Capabilities</h4>
-<div class="paragraph">
-<p>A subset of <a href="#_special_capabilities">Special Capabilities</a> can be passed as query parameters on the WebSocket URL:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>ws://host:4444/playwright/chromium/1.56.1?enableVNC=true&amp;name=myTest&amp;screenResolution=1280x1024</pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Supported: <code>enableVNC</code>, <code>name</code>, <code>screenResolution</code>.</p>
-</div>
-<div class="paragraph">
-<p>Session logs (Playwright protocol messages) are captured automatically when artifact history is enabled.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_external_session_ids_router_integration"><a class="anchor" href="#_external_session_ids_router_integration"></a>2.7.10. External Session IDs (Router Integration)</h4>
-<div class="paragraph">
-<p>Selenwright honors <code>X-Selenwright-External-Session-ID</code> on the Playwright upgrade request. When the header is present and valid, its value replaces the auto-generated session ID and is used as-is for:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>the <code>app.sessions</code> key,</p>
-</li>
-<li>
-<p>the path segment in side endpoints (<code>/vnc/&lt;id&gt;</code>, <code>/video/&lt;id&gt;.mp4</code>, <code>/logs/&lt;id&gt;</code>, <code>/devtools/&lt;id&gt;</code>, <code>/clipboard/&lt;id&gt;</code>),</p>
-</li>
-<li>
-<p>log file names and artifact history entries.</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>The header is intended for routers (e.g., <a href="https://github.com/aqa-alex/selenwright-gridlane">gridlane</a>) that need to encode routing metadata into the public session ID before the upgrade reaches selenwright — otherwise the router&#8217;s advertised ID would not match the one selenwright stored, and side endpoints would 404.</p>
-</div>
-<div class="paragraph">
-<p>The value must match <code>[a-zA-Z0-9_-]{1,128}</code>; invalid values and collisions with existing sessions are rejected with <code>400 Bad Request</code> before any browser container is started.</p>
-</div>
-<div class="paragraph">
-<p>If the header is absent or blank, selenwright falls back to an internally generated 32-hex ID (the original behavior); standalone Playwright clients are unaffected.</p>
 </div>
 </div>
 </div>
@@ -4801,8 +4801,8 @@ A <code>browsers.json</code> file is not required — Selenwright discovers brow
 </div>
 <div id="footer">
 <div id="footer-text">
-Version v1.0.1<br>
-Last updated 2026-04-24 16:23:12 UTC
+Version latest<br>
+Last updated 2026-04-25 10:52:59 UTC
 </div>
 </div>
 </body>
