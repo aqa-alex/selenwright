@@ -201,14 +201,14 @@ func TestRenderOverrideYAML(t *testing.T) {
 
 func TestBuildUpdaterShellSnippet(t *testing.T) {
 	yaml := "services:\n  selenwright:\n    image: selenwright/hub:v1.1.0\n"
-	snippet := buildUpdaterShellSnippet(yaml)
+	snippet := buildUpdaterShellSnippet(yaml, []string{"selenwright"})
 
 	assert.Contains(t, snippet, "set -e")
 	assert.Contains(t, snippet, `cat > "$OVERRIDE_PATH" <<'__SELENWRIGHT_OVERRIDE_EOF__'`)
 	assert.Contains(t, snippet, `services:`)
 	assert.Contains(t, snippet, `image: selenwright/hub:v1.1.0`)
 	assert.Contains(t, snippet,
-		`docker compose -f "$CONFIG_FILE" -f "$OVERRIDE_PATH" --project-directory "$WORKING_DIR" up -d`)
+		`docker compose -f "$CONFIG_FILE" -f "$OVERRIDE_PATH" --project-directory "$WORKING_DIR" up -d --force-recreate 'selenwright'`)
 	// Single-quoted heredoc is intentional — body must NOT be shell-expanded.
 	assert.Contains(t, snippet, `<<'__SELENWRIGHT_OVERRIDE_EOF__'`)
 }
@@ -216,10 +216,91 @@ func TestBuildUpdaterShellSnippet(t *testing.T) {
 func TestBuildUpdaterShellSnippet_RewritesCollidingDelimiter(t *testing.T) {
 	// Adversarial: an operator-controlled string contains the delimiter.
 	yaml := "services:\n  evil:\n    image: __SELENWRIGHT_OVERRIDE_EOF__\n"
-	snippet := buildUpdaterShellSnippet(yaml)
+	snippet := buildUpdaterShellSnippet(yaml, nil)
 	assert.Contains(t, snippet, "__SELENWRIGHT_OVERRIDE_EOF_SAFE__")
 	count := strings.Count(snippet, "__SELENWRIGHT_OVERRIDE_EOF__")
 	assert.Equal(t, 2, count, "delimiter appears exactly twice (open + close)")
+}
+
+func TestBuildUpdaterShellSnippet_ForceRecreate(t *testing.T) {
+	t.Run("multiple services sorted alphabetically", func(t *testing.T) {
+		snippet := buildUpdaterShellSnippet("services:\n", []string{"selenwright-ui", "selenwright"})
+		assert.Contains(t, snippet, `up -d --force-recreate 'selenwright' 'selenwright-ui'`)
+	})
+	t.Run("empty changedServices omits flag", func(t *testing.T) {
+		snippet := buildUpdaterShellSnippet("services:\n", nil)
+		assert.NotContains(t, snippet, "--force-recreate")
+		assert.True(t, strings.HasSuffix(snippet, `up -d`),
+			"snippet should end with bare `up -d` when no services changed; got: %q", snippet)
+	})
+	t.Run("service name with embedded single quote is escaped", func(t *testing.T) {
+		snippet := buildUpdaterShellSnippet("services:\n", []string{`weird'name`})
+		// Single-quote close, escaped quote, single-quote open: 'weird'\''name'
+		assert.Contains(t, snippet, `--force-recreate 'weird'\''name'`)
+	})
+}
+
+func TestExtendPlanWithCurrentPins(t *testing.T) {
+	t.Run("preserves running version-aware services not in request", func(t *testing.T) {
+		serviceRefs := map[string]imageRef{
+			"selenwright":    {Namespace: "selenwright", Repo: "hub", Tag: "v1.0.2"},
+			"selenwright-ui": {Namespace: "selenwright", Repo: "selenwright-ui", Tag: "v.1.0.0"},
+			"proxy":          {Namespace: "library", Repo: "nginx", Tag: "1.27-alpine"},
+		}
+		requested := map[string]string{"selenwright-ui": "v1.0.3"}
+		plan := []stackUpdatePlanEntry{
+			{Service: "selenwright-ui", Image: "selenwright/selenwright-ui:v1.0.3", Tag: "v1.0.3"},
+		}
+
+		out := extendPlanWithCurrentPins(plan, serviceRefs, requested)
+
+		// hub is preserved at its CURRENT tag — operator only asked to upgrade ui.
+		var hub *stackUpdatePlanEntry
+		for i := range out {
+			if out[i].Service == "selenwright" {
+				hub = &out[i]
+			}
+		}
+		require.NotNil(t, hub, "hub must be in extended plan")
+		assert.Equal(t, "selenwright/hub:v1.0.2", hub.Image)
+		assert.Equal(t, "v1.0.2", hub.Tag)
+
+		// proxy (non-selenwright namespace) is NOT pinned — base compose owns it.
+		for _, p := range out {
+			assert.NotEqual(t, "proxy", p.Service)
+		}
+
+		// ui entry from caller is preserved as-is.
+		var ui *stackUpdatePlanEntry
+		for i := range out {
+			if out[i].Service == "selenwright-ui" {
+				ui = &out[i]
+			}
+		}
+		require.NotNil(t, ui)
+		assert.Equal(t, "selenwright/selenwright-ui:v1.0.3", ui.Image)
+	})
+
+	t.Run("skips services with empty tag", func(t *testing.T) {
+		serviceRefs := map[string]imageRef{
+			"selenwright": {Namespace: "selenwright", Repo: "hub", Tag: ""},
+		}
+		out := extendPlanWithCurrentPins(nil, serviceRefs, nil)
+		assert.Empty(t, out)
+	})
+
+	t.Run("handles dotted-v Hub quirk by preserving original tag", func(t *testing.T) {
+		// "v.1.0.0" must be written to the override file VERBATIM — that's
+		// the only string `docker pull` will resolve. Canonicalisation is
+		// internal, never on-disk.
+		serviceRefs := map[string]imageRef{
+			"selenwright-ui": {Namespace: "selenwright", Repo: "selenwright-ui", Tag: "v.1.0.0"},
+		}
+		out := extendPlanWithCurrentPins(nil, serviceRefs, nil)
+		require.Len(t, out, 1)
+		assert.Equal(t, "selenwright/selenwright-ui:v.1.0.0", out[0].Image)
+		assert.Equal(t, "v.1.0.0", out[0].Tag)
+	})
 }
 
 func TestFindCandidateByCanonical(t *testing.T) {

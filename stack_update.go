@@ -507,8 +507,28 @@ func stackUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Pre-pull each target image; surface failures here before touching compose.
+	// Services that the operator actually asked to upgrade. We pre-pull and
+	// force-recreate exactly these. The plan is then extended below with
+	// already-running version-aware services pinned at their current tag, so
+	// a single-service click never silently drops pins set by a prior click.
+	changedServices := make([]string, 0, len(plan))
 	for _, p := range plan {
+		changedServices = append(changedServices, p.Service)
+	}
+
+	plan = extendPlanWithCurrentPins(plan, serviceRefs, req.Services)
+
+	// Pre-pull each NEW target image; surface failures before touching compose.
+	// Pins for unchanged services are already local — re-pulling them is wasteful
+	// and could fail spuriously if the Hub tag was rotated in the meantime.
+	changedSet := make(map[string]bool, len(changedServices))
+	for _, s := range changedServices {
+		changedSet[s] = true
+	}
+	for _, p := range plan {
+		if !changedSet[p.Service] {
+			continue
+		}
 		pullCtx, cancel := context.WithTimeout(ctx, stackPullTimeout)
 		reader, perr := app.cli.ImagePull(pullCtx, p.Image, image.PullOptions{})
 		if perr != nil {
@@ -532,7 +552,7 @@ func stackUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	overrideYAML := renderOverrideYAML(plan)
-	shellSnippet := buildUpdaterShellSnippet(overrideYAML)
+	shellSnippet := buildUpdaterShellSnippet(overrideYAML, changedServices)
 
 	removeCtx, removeCancel := context.WithTimeout(ctx, 5*time.Second)
 	_ = app.cli.ContainerRemove(removeCtx, updaterContainerName, ctr.RemoveOptions{Force: true})
@@ -611,12 +631,26 @@ func renderOverrideYAML(plan []stackUpdatePlanEntry) string {
 // (via heredoc, no shell substitution inside the body) and then runs
 // `docker compose up -d` with both compose files. Paths come from env vars
 // set on the updater container (WORKING_DIR, CONFIG_FILE).
-func buildUpdaterShellSnippet(overrideYAML string) string {
+//
+// changedServices, if non-empty, are appended after `up -d --force-recreate`
+// so compose unconditionally recreates them even when the resolved local
+// image_id is unchanged (e.g. when two tags published to Hub point at the
+// same content via manifest aliasing).
+func buildUpdaterShellSnippet(overrideYAML string, changedServices []string) string {
 	const eof = "__SELENWRIGHT_OVERRIDE_EOF__"
 	body := overrideYAML
 	// Defense: ensure the heredoc delimiter doesn't appear in the body.
 	if strings.Contains(body, eof) {
 		body = strings.ReplaceAll(body, eof, "__SELENWRIGHT_OVERRIDE_EOF_SAFE__")
+	}
+	composeCmd := `docker compose -f "$CONFIG_FILE" -f "$OVERRIDE_PATH" --project-directory "$WORKING_DIR" up -d`
+	if len(changedServices) > 0 {
+		sorted := append([]string(nil), changedServices...)
+		sort.Strings(sorted)
+		composeCmd += " --force-recreate"
+		for _, s := range sorted {
+			composeCmd += " " + shellSingleQuote(s)
+		}
 	}
 	return strings.Join([]string{
 		`set -e`,
@@ -624,8 +658,42 @@ func buildUpdaterShellSnippet(overrideYAML string) string {
 		`cat > "$OVERRIDE_PATH" <<'` + eof + `'`,
 		strings.TrimRight(body, "\n"),
 		eof,
-		`docker compose -f "$CONFIG_FILE" -f "$OVERRIDE_PATH" --project-directory "$WORKING_DIR" up -d`,
+		composeCmd,
 	}, "\n")
+}
+
+// shellSingleQuote wraps s in single quotes, escaping any embedded single
+// quotes by closing/escaping/reopening the literal. Suitable for safe sh
+// argument injection. Compose service names are normally restricted to
+// [a-zA-Z0-9._-], but defensive quoting costs nothing.
+func shellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// extendPlanWithCurrentPins appends entries for every running version-aware
+// service that wasn't in requestedServices, pinning them at their currently
+// running tag. This way the override file always represents the full pinning
+// state of the version-aware stack — clicking Update on one service can't
+// silently drop a pin set by an earlier click on a different service.
+func extendPlanWithCurrentPins(plan []stackUpdatePlanEntry, serviceRefs map[string]imageRef, requestedServices map[string]string) []stackUpdatePlanEntry {
+	for svc, ref := range serviceRefs {
+		if _, requested := requestedServices[svc]; requested {
+			continue
+		}
+		if !strings.EqualFold(ref.Namespace, selenwrightNS) {
+			continue
+		}
+		if ref.Tag == "" {
+			continue
+		}
+		plan = append(plan, stackUpdatePlanEntry{
+			Service:  svc,
+			Image:    fmt.Sprintf("%s/%s:%s", ref.Namespace, ref.Repo, ref.Tag),
+			Tag:      ref.Tag,
+			Original: ref.Tag,
+		})
+	}
+	return plan
 }
 
 // findCandidateByCanonical returns the original tag in cands whose normalized
