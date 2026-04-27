@@ -8,6 +8,7 @@ import (
 	ggr "github.com/aerokube/ggr/config"
 	"github.com/aqa-alex/selenwright/config"
 	"github.com/aqa-alex/selenwright/discovery"
+	"github.com/aqa-alex/selenwright/discovery/registry"
 	"github.com/aqa-alex/selenwright/protect"
 	"github.com/aqa-alex/selenwright/service"
 	"github.com/aqa-alex/selenwright/session"
@@ -66,14 +67,15 @@ type Server struct {
 	artifactHistoryDir          string
 	artifactHistorySettingsPath string
 
-	sessions      *session.Map
-	queue         *protect.Queue
-	manager       service.Manager
-	cli           *client.Client
-	conf          *config.Config
-	adoptedStore  *discovery.AdoptedStore
-	rescanMu      sync.Mutex
-	originChecker *protect.OriginChecker
+	sessions       *session.Map
+	queue          *protect.Queue
+	manager        service.Manager
+	cli            *client.Client
+	conf           *config.Config
+	adoptedStore   *discovery.AdoptedStore
+	rescanMu       sync.Mutex
+	originChecker  *protect.OriginChecker
+	registryClient *registry.Client
 	// authenticatorPtr is swapped at startup and in tests; request handlers
 	// read it concurrently, so access is synchronised via atomic.Pointer.
 	// Use currentAuthenticator() / setAuthenticator() — do not touch directly.
@@ -90,8 +92,9 @@ type Server struct {
 }
 
 var app = &Server{
-	sessions:  session.NewMap(),
-	startTime: time.Now(),
+	sessions:       session.NewMap(),
+	startTime:      time.Now(),
+	registryClient: registry.NewClient(),
 }
 
 func (s *Server) currentAuthenticator() protect.Authenticator {

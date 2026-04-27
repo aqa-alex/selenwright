@@ -780,6 +780,7 @@ var paths = struct {
 	Video, VNC, Logs, Devtools, Playwright, Download, Downloads, Clipboard, File, Ping, Status, Error, WdHub, Welcome, Config, HistorySettings string
 	DiscoveredBrowsers, AdoptBrowser, DismissBrowser, RescanBrowsers                                                                         string
 	StackStatus, StackPull, StackRecreate, StackCheckUpdates, StackUpdate                                                                    string
+	RegistryList, RegistryPull                                                                                                                string
 	Whoami, Login, Logout                                                                                                                    string
 }{
 	Video:              "/video/",
@@ -807,6 +808,8 @@ var paths = struct {
 	StackRecreate:      "/stack/recreate",
 	StackCheckUpdates:  "/stack/check-updates",
 	StackUpdate:        "/stack/update",
+	RegistryList:       "/registry/list",
+	RegistryPull:       "/registry/pull",
 	Whoami:             "/whoami",
 	Login:              "/login",
 	Logout:             "/logout",
@@ -869,6 +872,8 @@ func handler() http.Handler {
 	root.HandleFunc(paths.StackRecreate, post(stackRecreateHandler))
 	root.HandleFunc(paths.StackCheckUpdates, post(stackCheckUpdatesHandler))
 	root.HandleFunc(paths.StackUpdate, post(stackUpdateHandler))
+	root.HandleFunc(paths.RegistryList, get(registryListHandler))
+	root.HandleFunc(paths.RegistryPull, post(registryPullHandler))
 	root.HandleFunc(paths.Whoami, get(whoamiHandler))
 	root.HandleFunc(paths.Login, loginHandler)
 	root.HandleFunc(paths.Logout, logoutHandler)
