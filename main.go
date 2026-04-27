@@ -779,7 +779,7 @@ func deleteFileIfExists(requestId uint64, w http.ResponseWriter, r *http.Request
 var paths = struct {
 	Video, VNC, Logs, Devtools, Playwright, Download, Downloads, Clipboard, File, Ping, Status, Error, WdHub, Welcome, Config, HistorySettings string
 	DiscoveredBrowsers, AdoptBrowser, DismissBrowser, RescanBrowsers                                                                         string
-	StackStatus, StackPull, StackRecreate                                                                                                    string
+	StackStatus, StackPull, StackRecreate, StackCheckUpdates, StackUpdate                                                                    string
 	Whoami, Login, Logout                                                                                                                    string
 }{
 	Video:              "/video/",
@@ -805,6 +805,8 @@ var paths = struct {
 	StackStatus:        "/stack/status",
 	StackPull:          "/stack/pull",
 	StackRecreate:      "/stack/recreate",
+	StackCheckUpdates:  "/stack/check-updates",
+	StackUpdate:        "/stack/update",
 	Whoami:             "/whoami",
 	Login:              "/login",
 	Logout:             "/logout",
@@ -865,6 +867,8 @@ func handler() http.Handler {
 	root.HandleFunc(paths.StackStatus, get(stackStatusHandler))
 	root.HandleFunc(paths.StackPull, post(stackPullHandler))
 	root.HandleFunc(paths.StackRecreate, post(stackRecreateHandler))
+	root.HandleFunc(paths.StackCheckUpdates, post(stackCheckUpdatesHandler))
+	root.HandleFunc(paths.StackUpdate, post(stackUpdateHandler))
 	root.HandleFunc(paths.Whoami, get(whoamiHandler))
 	root.HandleFunc(paths.Login, loginHandler)
 	root.HandleFunc(paths.Logout, logoutHandler)

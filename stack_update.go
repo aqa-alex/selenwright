@@ -379,6 +379,271 @@ func stackRecreateHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- POST /stack/update ---
+
+type stackUpdateRequest struct {
+	Services map[string]string `json:"services"`
+}
+
+type stackUpdatePlanEntry struct {
+	Service  string
+	Image    string // "<ns>/<repo>:<canonicalTag>"
+	Tag      string // canonical (e.g. "v1.1.0")
+	Original string // tag string the operator selected (preserved when valid)
+}
+
+func stackUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	ok, reason := stackUpdateAvailable()
+	if !ok {
+		writeJSONResponse(w, http.StatusConflict, stackRecreateResponse{Message: reason})
+		return
+	}
+
+	var req stackUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Services) == 0 {
+		writeJSONResponse(w, http.StatusBadRequest, map[string]string{
+			"error":   "bad_request",
+			"message": "services map required",
+		})
+		return
+	}
+
+	ctx := r.Context()
+	meta, err := getComposeMetadata(ctx, app.cli)
+	if err != nil {
+		writeJSONResponse(w, http.StatusConflict, stackRecreateResponse{Message: err.Error()})
+		return
+	}
+
+	containers, err := getProjectContainers(ctx, app.cli, meta.Project)
+	if err != nil {
+		writeJSONResponse(w, http.StatusInternalServerError, map[string]string{
+			"error":   "container_list",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Map: service-name -> parsed imageRef of the running container.
+	serviceRefs := map[string]imageRef{}
+	for _, c := range containers {
+		svc := c.Labels[composeServiceLabel]
+		if svc == "" {
+			svc = strings.TrimPrefix(firstOrEmpty(c.Names), "/")
+		}
+		imgRef := c.Image
+		if strings.HasPrefix(imgRef, "sha256:") {
+			if orig := resolveContainerImageRef(ctx, app.cli, c.ID); orig != "" {
+				imgRef = orig
+			}
+		}
+		ref, perr := parseImageRef(imgRef)
+		if perr != nil {
+			continue
+		}
+		serviceRefs[svc] = ref
+	}
+
+	plan := make([]stackUpdatePlanEntry, 0, len(req.Services))
+	for svc, requested := range req.Services {
+		ref, ok := serviceRefs[svc]
+		if !ok {
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{
+				"error":   "unknown_service",
+				"message": fmt.Sprintf("service %q not in stack", svc),
+			})
+			return
+		}
+		if !strings.EqualFold(ref.Namespace, selenwrightNS) {
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{
+				"error":   "unsupported_namespace",
+				"message": fmt.Sprintf("service %q image namespace %q is not version-aware", svc, ref.Namespace),
+			})
+			return
+		}
+		canonical := normalizeTag(requested)
+		if canonical == "" {
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{
+				"error":   "invalid_tag",
+				"message": fmt.Sprintf("tag %q for service %q is not a valid semver", requested, svc),
+			})
+			return
+		}
+		// Defense-in-depth: tag must be in the current candidate list from Hub.
+		tags, herr := fetchHubTags(ctx, ref.Namespace, ref.Repo)
+		if herr != nil {
+			writeJSONResponse(w, http.StatusBadGateway, map[string]string{
+				"error":   "hub_unavailable",
+				"message": fmt.Sprintf("unable to query Docker Hub for %s/%s: %v", ref.Namespace, ref.Repo, herr),
+			})
+			return
+		}
+		names := make([]string, 0, len(tags))
+		for _, t := range tags {
+			names = append(names, t.Name)
+		}
+		// Wide candidate window for validation (50) so an operator can select
+		// any tag the UI showed even if N=5 in the dropdown.
+		cand := pickCandidateVersions(ref.Tag, names, 50)
+		published, ok := findCandidateByCanonical(cand, canonical)
+		if !ok {
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{
+				"error":   "invalid_tag",
+				"message": fmt.Sprintf("tag %q is not an available newer version for %s/%s", requested, ref.Namespace, ref.Repo),
+			})
+			return
+		}
+		// Use the tag string Hub actually publishes (e.g. "v.1.0.0") for the
+		// pull/override — `docker pull <ns>/<repo>:<canonical>` would 404 if
+		// the publisher uses a non-canonical tag form.
+		plan = append(plan, stackUpdatePlanEntry{
+			Service:  svc,
+			Image:    fmt.Sprintf("%s/%s:%s", ref.Namespace, ref.Repo, published),
+			Tag:      published,
+			Original: strings.TrimSpace(requested),
+		})
+	}
+
+	// Pre-pull each target image; surface failures here before touching compose.
+	for _, p := range plan {
+		pullCtx, cancel := context.WithTimeout(ctx, stackPullTimeout)
+		reader, perr := app.cli.ImagePull(pullCtx, p.Image, image.PullOptions{})
+		if perr != nil {
+			cancel()
+			writeJSONResponse(w, http.StatusBadGateway, map[string]string{
+				"error":   "pull_failed",
+				"message": fmt.Sprintf("failed to pull %s: %v", p.Image, perr),
+			})
+			return
+		}
+		_, _ = io.Copy(io.Discard, reader)
+		_ = reader.Close()
+		cancel()
+	}
+
+	if err := ensureUpdaterImage(ctx, app.cli); err != nil {
+		writeJSONResponse(w, http.StatusInternalServerError, stackRecreateResponse{
+			Message: fmt.Sprintf("Failed to prepare updater image %s: %v", updaterImage, err),
+		})
+		return
+	}
+
+	overrideYAML := renderOverrideYAML(plan)
+	shellSnippet := buildUpdaterShellSnippet(overrideYAML)
+
+	removeCtx, removeCancel := context.WithTimeout(ctx, 5*time.Second)
+	_ = app.cli.ContainerRemove(removeCtx, updaterContainerName, ctr.RemoveOptions{Force: true})
+	removeCancel()
+
+	createCtx, createCancel := context.WithTimeout(ctx, stackRecreateTimeout)
+	defer createCancel()
+
+	resp, err := app.cli.ContainerCreate(createCtx,
+		&ctr.Config{
+			Image:      updaterImage,
+			Entrypoint: []string{"/bin/sh", "-c"},
+			Cmd:        []string{shellSnippet},
+			Env: []string{
+				"WORKING_DIR=" + meta.WorkingDir,
+				"CONFIG_FILE=" + meta.ConfigFile,
+			},
+			Labels: map[string]string{
+				"io.selenwright.role": "stack-updater",
+			},
+		},
+		&ctr.HostConfig{
+			AutoRemove: true,
+			Binds: []string{
+				"/var/run/docker.sock:/var/run/docker.sock",
+				meta.WorkingDir + ":" + meta.WorkingDir + ":rw",
+			},
+		},
+		nil, nil, updaterContainerName,
+	)
+	if err != nil {
+		writeJSONResponse(w, http.StatusInternalServerError, stackRecreateResponse{
+			Message: fmt.Sprintf("Failed to create updater container: %v", err),
+		})
+		return
+	}
+	if err := app.cli.ContainerStart(createCtx, resp.ID, ctr.StartOptions{}); err != nil {
+		writeJSONResponse(w, http.StatusInternalServerError, stackRecreateResponse{
+			Message: fmt.Sprintf("Failed to start updater container: %v", err),
+		})
+		return
+	}
+
+	planSummary := make([]string, 0, len(plan))
+	for _, p := range plan {
+		planSummary = append(planSummary, p.Service+"="+p.Tag)
+	}
+	log.Printf("[-] [STACK_UPDATE] [updater=%s] [compose=%s] [plan=%s]",
+		resp.ID[:12], meta.ConfigFile, strings.Join(planSummary, ","))
+
+	writeJSONResponse(w, http.StatusAccepted, stackRecreateResponse{
+		Accepted: true,
+		Message:  "Stack update started. The UI will reconnect when services are back.",
+	})
+}
+
+// renderOverrideYAML emits a minimal docker-compose override that pins each
+// service's image. The structure is fixed and small — we hand-format rather
+// than pull in a YAML library.
+func renderOverrideYAML(plan []stackUpdatePlanEntry) string {
+	// Stable ordering for reproducible output (helpful for tests + diffs).
+	ordered := make([]stackUpdatePlanEntry, len(plan))
+	copy(ordered, plan)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Service < ordered[j].Service })
+
+	var b strings.Builder
+	b.WriteString("# Generated by selenwright stack update — do not edit by hand.\n")
+	b.WriteString("services:\n")
+	for _, p := range ordered {
+		fmt.Fprintf(&b, "  %s:\n    image: %s\n", p.Service, p.Image)
+	}
+	return b.String()
+}
+
+// buildUpdaterShellSnippet writes the override YAML into the working dir
+// (via heredoc, no shell substitution inside the body) and then runs
+// `docker compose up -d` with both compose files. Paths come from env vars
+// set on the updater container (WORKING_DIR, CONFIG_FILE).
+func buildUpdaterShellSnippet(overrideYAML string) string {
+	const eof = "__SELENWRIGHT_OVERRIDE_EOF__"
+	body := overrideYAML
+	// Defense: ensure the heredoc delimiter doesn't appear in the body.
+	if strings.Contains(body, eof) {
+		body = strings.ReplaceAll(body, eof, "__SELENWRIGHT_OVERRIDE_EOF_SAFE__")
+	}
+	return strings.Join([]string{
+		`set -e`,
+		`OVERRIDE_PATH="$WORKING_DIR/docker-compose.override.yml"`,
+		`cat > "$OVERRIDE_PATH" <<'` + eof + `'`,
+		strings.TrimRight(body, "\n"),
+		eof,
+		`docker compose -f "$CONFIG_FILE" -f "$OVERRIDE_PATH" --project-directory "$WORKING_DIR" up -d`,
+	}, "\n")
+}
+
+// findCandidateByCanonical returns the original tag in cands whose normalized
+// form equals canon, plus whether such an entry was found. The caller uses
+// the original — `docker pull` must use the exact tag string the registry
+// publishes, even when it deviates from semver canonical form.
+func findCandidateByCanonical(cands []string, canon string) (string, bool) {
+	for _, c := range cands {
+		if c == canon {
+			return c, true
+		}
+		if normalizeTag(c) == canon {
+			return c, true
+		}
+	}
+	return "", false
+}
+
 // --- helpers ---
 
 func ensureUpdaterImage(ctx context.Context, cli *client.Client) error {
