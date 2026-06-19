@@ -527,3 +527,5 @@ Published HTML reference: **https://aqa-alex.github.io/selenwright/** (generated
 Apache 2.0 — see [LICENSE](LICENSE).
 
 This project is a fork of [aerokube/selenoid](https://github.com/aerokube/selenoid).
+
+<!-- maintenance: ; -->
